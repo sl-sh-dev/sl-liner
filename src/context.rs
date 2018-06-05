@@ -68,13 +68,12 @@ impl Context {
     /// The output is stdout.
     /// The returned line has the newline removed.
     /// Before returning, will revert all changes to the history buffers.
-    pub fn read_line<'a, P: Into<String>, F: 'static>(
+    pub fn read_line<'a, P: Into<String>>(
         &mut self,
         prompt: P,
-        f: F,
+        f: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
-    ) -> io::Result<String> 
-    where F: Fn(&'a str) -> Cow<'a, str> {
+    ) -> io::Result<String> {
         self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
     }
 
@@ -86,17 +85,16 @@ impl Context {
     /// let line =
     ///     context.read_line_with_init_buffer("[prompt]$ ",
     ///                                        &mut |_| {},
-    ///                                        |s| {String::from(s)},
+    ///                                        Box::new(|s| s.into()),
     ///                                        "some initial buffer");
     /// ```
-    pub fn read_line_with_init_buffer<'a, P: Into<String>, B: Into<Buffer>, F: 'static>(
+    pub fn read_line_with_init_buffer<'a, P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
-        f: F,
+        f: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>,
         buffer: B,
-    ) -> io::Result<String> 
-    where F: Fn(&'a str) -> Cow<'a, str> {
+    ) -> io::Result<String> {
         let res = {
             let stdout = stdout().into_raw_mode().unwrap();
             let ed = try!(Editor::new_with_init_buffer(stdout, prompt, f, self, buffer));
