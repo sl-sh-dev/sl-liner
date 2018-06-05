@@ -11,7 +11,7 @@ use liner::{Context, CursorPosition, Event, EventKind, FilenameCompleter};
 use termion::color;
 use regex::Regex;
 
-fn highlight_dodo<'r>(s: &'r str) -> Cow<'_, str> {
+fn highlight_dodo(s: &str) -> Cow<str> {
     let reg_exp = Regex::new("(?P<k>dodo)").unwrap();
     let format = format!("{}$k{}", color::Fg(color::Red), color::Fg(color::Reset));
     reg_exp.replace_all(s, format.as_str()).into()

@@ -71,7 +71,7 @@ impl Context {
     pub fn read_line<P: Into<String>>(
         &mut self,
         prompt: P,
-        f: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>,
+        f:Box<Fn(&str) -> Cow<str>>,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
     ) -> io::Result<String> {
         self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
@@ -92,7 +92,7 @@ impl Context {
         &mut self,
         prompt: P,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
-        f: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>,
+        f:Box<Fn(&str) -> Cow<str>>,
         buffer: B,
     ) -> io::Result<String> {
         let res = {

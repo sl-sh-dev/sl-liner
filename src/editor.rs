@@ -63,7 +63,7 @@ pub struct Editor<'a, W: Write> {
 
     // A closure that is evaluated just before we write to out.
     // This allows us to do custom syntax highlighting and other fun stuff.
-    closure: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>,
+    closure: Box<Fn(&str) -> Cow<str>>,
 
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
@@ -114,7 +114,7 @@ impl<'a, W: Write> Editor<'a, W> {
     pub fn new<P: Into<String>>(
         out: W, 
         prompt: P, 
-        f: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>, 
+        f:Box<Fn(&str) -> Cow<str>>, 
         context: &'a mut Context
     ) -> io::Result<Self> {
         Editor::new_with_init_buffer(out, prompt, f, context, Buffer::new())
@@ -123,7 +123,7 @@ impl<'a, W: Write> Editor<'a, W> {
     pub fn new_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         out: W,
         prompt: P,
-        f: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>,
+        f: Box<Fn(&str) -> Cow<str>>,
         context: &'a mut Context,
         buffer: B,
     ) -> io::Result<Self> {
