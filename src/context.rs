@@ -68,7 +68,7 @@ impl Context {
     /// The output is stdout.
     /// The returned line has the newline removed.
     /// Before returning, will revert all changes to the history buffers.
-    pub fn read_line<'a, P: Into<String>>(
+    pub fn read_line<P: Into<String>>(
         &mut self,
         prompt: P,
         f: Box<for<'r> Fn(&'r str) -> Cow<'_, str>>,
@@ -88,7 +88,7 @@ impl Context {
     ///                                        Box::new(|s| s.into()),
     ///                                        "some initial buffer");
     /// ```
-    pub fn read_line_with_init_buffer<'a, P: Into<String>, B: Into<Buffer>>(
+    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,

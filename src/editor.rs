@@ -110,7 +110,7 @@ macro_rules! cur_buf {
     }
 }
 
-impl<'a, 'b, W: Write> Editor<'a, W> {
+impl<'a, W: Write> Editor<'a, W> {
     pub fn new<P: Into<String>>(
         out: W, 
         prompt: P, 

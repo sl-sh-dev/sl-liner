@@ -30,7 +30,7 @@ fn main() {
     if con.history.file_name().is_some() {
         con.history.load_history().unwrap();
     }
-
+    
     loop {
         let res = con.read_line("[prompt]$ ",
                                 Box::new(highlight_dodo),
