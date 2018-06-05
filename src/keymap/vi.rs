@@ -3728,7 +3728,7 @@ mod tests {
     fn repeat_char_move_no_char() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), Box::new(|s| s.into()), &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
