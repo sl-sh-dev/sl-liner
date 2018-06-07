@@ -811,7 +811,7 @@ mod tests {
     fn delete_all_after_cursor_undo() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), Some(Box::new(|s| String::from(s))), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("delete all of this").unwrap();
         ed.move_cursor_to_start_of_line().unwrap();
         ed.delete_all_after_cursor().unwrap();
@@ -824,7 +824,7 @@ mod tests {
         let mut context = Context::new();
         let closure = |s: &str| {String::from(s)};
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), Some(Box::new(|s| String::from(s))), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor, 3);
 
@@ -840,7 +840,7 @@ mod tests {
     fn cursor_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), Some(Box::new(|s| String::from(s))), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -853,7 +853,7 @@ mod tests {
     fn delete_until_backwards() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), Some(Box::new(|s| String::from(s))), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -866,7 +866,7 @@ mod tests {
     fn delete_until_forwards() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), Some(Box::new(|s| String::from(s))), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 0;
 
@@ -879,7 +879,7 @@ mod tests {
     fn delete_until() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), Some(Box::new(|s| String::from(s))), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 
@@ -892,7 +892,7 @@ mod tests {
     fn delete_until_inclusive() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), Some(Box::new(|s| String::from(s))), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 
