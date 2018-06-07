@@ -1,10 +1,11 @@
 use std::io::{self, stdin, stdout, Stdout, Write};
-use std::borrow::Cow;
 use termion::input::TermRead;
 use termion::raw::{IntoRawMode, RawTerminal};
 
 use super::*;
 use keymap;
+
+pub type ColorClosure = Box<Fn(&str) -> String>;
 
 /// The default for `Context.word_divider_fn`.
 pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
@@ -71,7 +72,7 @@ impl Context {
     pub fn read_line<P: Into<String>>(
         &mut self,
         prompt: P,
-        f:Box<Fn(&str) -> Cow<str>>,
+        f: Option<ColorClosure>,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
     ) -> io::Result<String> {
         self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
@@ -85,14 +86,14 @@ impl Context {
     /// let line =
     ///     context.read_line_with_init_buffer("[prompt]$ ",
     ///                                        &mut |_| {},
-    ///                                        Box::new(|s| s.into()),
+    ///                                        Some(Box::new(|s| String::from(s))),
     ///                                        "some initial buffer");
     /// ```
     pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
-        f:Box<Fn(&str) -> Cow<str>>,
+        f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
         let res = {

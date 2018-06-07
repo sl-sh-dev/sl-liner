@@ -3,7 +3,6 @@ extern crate termion;
 extern crate regex;
 
 use std::mem::replace;
-use std::borrow::Cow;
 use std::env::{args, current_dir};
 use std::io;
 
@@ -11,10 +10,10 @@ use liner::{Context, CursorPosition, Event, EventKind, FilenameCompleter};
 use termion::color;
 use regex::Regex;
 
-fn highlight_dodo(s: &str) -> Cow<str> {
+fn highlight_dodo(s: &str) -> String {
     let reg_exp = Regex::new("(?P<k>dodo)").unwrap();
     let format = format!("{}$k{}", color::Fg(color::Red), color::Fg(color::Reset));
-    reg_exp.replace_all(s, format.as_str()).into()
+    reg_exp.replace_all(s, format.as_str()).to_string()
 }
 
 fn main() {
@@ -33,7 +32,7 @@ fn main() {
 
     loop {
         let res = con.read_line("[prompt]$ ",
-                                Box::new(highlight_dodo),
+                                Some(Box::new(highlight_dodo)),
                                 &mut |Event { editor, kind }| {
             if let EventKind::BeforeComplete = kind {
                 let (_, pos) = editor.get_words_and_cursor_position();
