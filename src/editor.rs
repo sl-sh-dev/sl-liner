@@ -2,6 +2,7 @@ use std::cmp;
 use std::io::{self, Write};
 use termion::{self, clear, color, cursor};
 
+use context::ColorClosure;
 use Context;
 use Buffer;
 use event::*;
@@ -60,6 +61,10 @@ pub struct Editor<'a, W: Write> {
     out: W,
     context: &'a mut Context,
 
+    // A closure that is evaluated just before we write to out.
+    // This allows us to do custom syntax highlighting and other fun stuff.
+    closure: Option<ColorClosure>,
+
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
     // and if `cursor == 1` ten the cursor is after the first char and before the second char.
@@ -106,13 +111,19 @@ macro_rules! cur_buf {
 }
 
 impl<'a, W: Write> Editor<'a, W> {
-    pub fn new<P: Into<String>>(out: W, prompt: P, context: &'a mut Context) -> io::Result<Self> {
-        Editor::new_with_init_buffer(out, prompt, context, Buffer::new())
+    pub fn new<P: Into<String>>(
+        out: W, 
+        prompt: P, 
+        f: Option<ColorClosure>,
+        context: &'a mut Context
+    ) -> io::Result<Self> {
+        Editor::new_with_init_buffer(out, prompt, f, context, Buffer::new())
     }
 
     pub fn new_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         out: W,
         prompt: P,
+        f: Option<ColorClosure>,
         context: &'a mut Context,
         buffer: B,
     ) -> io::Result<Self> {
@@ -120,6 +131,7 @@ impl<'a, W: Write> Editor<'a, W> {
             prompt: prompt.into(),
             cursor: 0,
             out: out,
+            closure: f,
             new_buf: buffer.into(),
             cur_history_loc: None,
             context: context,
@@ -132,7 +144,6 @@ impl<'a, W: Write> Editor<'a, W> {
         if !ed.new_buf.is_empty() {
             ed.move_cursor_to_end_of_line()?;
         }
-
         try!(ed.display());
         Ok(ed)
     }
@@ -227,7 +238,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
         // XXX wide character support
         let max_word_size = completions.iter().fold(1, |m, x| max(m, x.chars().count()));
-        let cols = max(1, (w as usize / (max_word_size)));
+        let cols = max(1, w as usize / (max_word_size));
         let col_width = 2 + w as usize / cols;
         let cols = max(1, w as usize / col_width);
 
@@ -726,7 +737,10 @@ impl<'a, W: Write> Editor<'a, W> {
                 buf_num_remaining_bytes = 0;
             } else {
                 buf_num_remaining_bytes -= line.len();
-                write!(self.out, "{}", line)?;
+                match self.closure {
+                    Some(ref f) => write!(self.out, "{}", f(line))?,
+                    None => write!(self.out, "{}", line)?,
+                }
             }
 
             if i + 1 < lines.len() {
@@ -797,7 +811,7 @@ mod tests {
     fn delete_all_after_cursor_undo() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("delete all of this").unwrap();
         ed.move_cursor_to_start_of_line().unwrap();
         ed.delete_all_after_cursor().unwrap();
@@ -808,8 +822,9 @@ mod tests {
     #[test]
     fn move_cursor_left() {
         let mut context = Context::new();
+        let closure = |s: &str| {String::from(s)};
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor, 3);
 
@@ -825,7 +840,7 @@ mod tests {
     fn cursor_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -838,7 +853,7 @@ mod tests {
     fn delete_until_backwards() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -851,7 +866,7 @@ mod tests {
     fn delete_until_forwards() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 0;
 
@@ -864,7 +879,7 @@ mod tests {
     fn delete_until() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 
@@ -877,7 +892,7 @@ mod tests {
     fn delete_until_inclusive() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 

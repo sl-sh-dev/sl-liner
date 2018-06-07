@@ -1056,11 +1056,13 @@ mod tests {
         false
     }
 
+    // Editor::new(out, "prompt".to_owned(), &mut context).unwrap()
+
     #[test]
     fn enter_is_done() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("done").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1077,7 +1079,7 @@ mod tests {
     fn move_cursor_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.editor_mut().insert_str_after_cursor("let").unwrap();
         assert_eq!(map.ed.cursor(), 3);
@@ -1095,7 +1097,7 @@ mod tests {
     fn cursor_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(map.ed.cursor(), 5);
@@ -1113,7 +1115,7 @@ mod tests {
     fn vi_initial_insert() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1133,7 +1135,7 @@ mod tests {
     fn vi_left_right_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1160,7 +1162,7 @@ mod tests {
     fn vi_no_eol() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1181,7 +1183,7 @@ mod tests {
     fn vi_switch_from_insert() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1208,7 +1210,7 @@ mod tests {
         context.history.push("history".into()).unwrap();
         context.history.push("history".into()).unwrap();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1227,7 +1229,7 @@ mod tests {
         context.history.push("history".into()).unwrap();
         context.history.push("history".into()).unwrap();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1245,7 +1247,7 @@ mod tests {
     fn vi_substitute_command() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1264,7 +1266,7 @@ mod tests {
     fn substitute_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(map.ed.cursor(), 4);
@@ -1284,7 +1286,7 @@ mod tests {
     fn substitute_with_count_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("data data").unwrap();
 
@@ -1309,7 +1311,7 @@ mod tests {
     fn vi_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1342,7 +1344,7 @@ mod tests {
     fn vi_count_overflow() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         // make sure large counts don't overflow our u32
@@ -1370,7 +1372,7 @@ mod tests {
     fn vi_count_overflow_zero() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         // make sure large counts don't overflow our u32
@@ -1397,7 +1399,7 @@ mod tests {
     fn vi_count_cancel() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1415,7 +1417,7 @@ mod tests {
     fn vi_count_simple() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1437,7 +1439,7 @@ mod tests {
     fn vi_dot_command() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1455,7 +1457,7 @@ mod tests {
     fn vi_dot_command_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1473,7 +1475,7 @@ mod tests {
     fn vi_dot_command_repeat_multiple() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1492,7 +1494,7 @@ mod tests {
     fn vi_dot_command_append() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1512,7 +1514,7 @@ mod tests {
     fn vi_dot_command_append_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1532,7 +1534,7 @@ mod tests {
     fn vi_dot_command_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1557,7 +1559,7 @@ mod tests {
     fn move_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         assert_eq!(map.move_count(), 1);
@@ -1572,7 +1574,7 @@ mod tests {
     fn vi_count_movement_reset() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -1594,7 +1596,7 @@ mod tests {
     fn movement_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(map.ed.cursor(), 5);
@@ -1613,7 +1615,7 @@ mod tests {
     fn movement_with_count_then_insert() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(map.ed.cursor(), 5);
@@ -1634,7 +1636,7 @@ mod tests {
     fn count_at_buffer_edge() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1655,7 +1657,7 @@ mod tests {
     fn basic_replace() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1673,7 +1675,7 @@ mod tests {
     fn replace_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1695,7 +1697,7 @@ mod tests {
     fn replace_with_count_eol() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1716,7 +1718,7 @@ mod tests {
     fn replace_then_normal() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1736,7 +1738,7 @@ mod tests {
     fn dot_replace() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1759,7 +1761,7 @@ mod tests {
     fn dot_replace_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1784,7 +1786,7 @@ mod tests {
     fn dot_replace_eol() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("test").unwrap();
 
@@ -1805,7 +1807,7 @@ mod tests {
     fn dot_replace_eol_multiple() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("this is a test").unwrap();
 
@@ -1829,7 +1831,7 @@ mod tests {
     fn move_count_right() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1850,7 +1852,7 @@ mod tests {
     fn move_count_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1871,7 +1873,7 @@ mod tests {
     fn dot_x_delete() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(map.ed.cursor(), 7);
@@ -1891,7 +1893,7 @@ mod tests {
     fn delete_line() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -1909,7 +1911,7 @@ mod tests {
     fn delete_line_normal() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -1932,7 +1934,7 @@ mod tests {
     fn delete_abort() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("don't delete").unwrap();
 
@@ -1954,7 +1956,7 @@ mod tests {
     fn delete_char_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -1972,7 +1974,7 @@ mod tests {
     fn delete_chars_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -1991,7 +1993,7 @@ mod tests {
     fn delete_char_right() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -2010,7 +2012,7 @@ mod tests {
     fn delete_chars_right() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -2030,7 +2032,7 @@ mod tests {
     fn delete_and_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -2050,7 +2052,7 @@ mod tests {
     fn delete_until_end() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -2069,7 +2071,7 @@ mod tests {
     fn delete_until_end_shift_d() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -2087,7 +2089,7 @@ mod tests {
     fn delete_until_start() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -2106,7 +2108,7 @@ mod tests {
     fn delete_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete").unwrap();
 
@@ -2127,7 +2129,7 @@ mod tests {
     fn delete_with_count_and_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete delete").unwrap();
 
@@ -2148,7 +2150,7 @@ mod tests {
     fn move_to_end_of_word_simple() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here are").unwrap();
         let start_pos = ed.cursor();
@@ -2165,7 +2167,7 @@ mod tests {
     fn move_to_end_of_word_comma() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ar").unwrap();
         let start_pos = ed.cursor();
@@ -2186,7 +2188,7 @@ mod tests {
     fn move_to_end_of_word_nonkeywords() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ar").unwrap();
         let start_pos = ed.cursor();
@@ -2207,7 +2209,7 @@ mod tests {
     fn move_to_end_of_word_whitespace() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         assert_eq!(ed.cursor(), 0);
         ed.insert_str_after_cursor("here are").unwrap();
@@ -2228,7 +2230,7 @@ mod tests {
     fn move_to_end_of_word_whitespace_nonkeywords() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ar").unwrap();
         let start_pos = ed.cursor();
@@ -2249,7 +2251,7 @@ mod tests {
     fn move_to_end_of_word_ws_simple() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here are").unwrap();
         let start_pos = ed.cursor();
@@ -2266,7 +2268,7 @@ mod tests {
     fn move_to_end_of_word_ws_comma() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ar").unwrap();
         let start_pos = ed.cursor();
@@ -2287,7 +2289,7 @@ mod tests {
     fn move_to_end_of_word_ws_nonkeywords() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ar").unwrap();
         let start_pos = ed.cursor();
@@ -2303,7 +2305,7 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here are").unwrap();
         let start_pos = ed.cursor();
@@ -2320,7 +2322,7 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace_nonkeywords() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ar").unwrap();
         let start_pos = ed.cursor();
@@ -2341,7 +2343,7 @@ mod tests {
     fn move_word_simple() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ").unwrap();
         let pos1 = ed.cursor();
@@ -2366,7 +2368,7 @@ mod tests {
     fn move_word_whitespace() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("   ").unwrap();
         let pos1 = ed.cursor();
@@ -2390,7 +2392,7 @@ mod tests {
     fn move_word_nonkeywords() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("...").unwrap();
         let pos1 = ed.cursor();
@@ -2412,7 +2414,7 @@ mod tests {
     fn move_word_whitespace_nonkeywords() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("...   ").unwrap();
         let pos1 = ed.cursor();
@@ -2438,7 +2440,7 @@ mod tests {
     fn move_word_and_back() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ").unwrap();
         let pos1 = ed.cursor();
@@ -2500,7 +2502,7 @@ mod tests {
     fn move_word_and_back_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here ").unwrap();
         ed.insert_str_after_cursor("are ").unwrap();
@@ -2539,7 +2541,7 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
         ed.insert_str_after_cursor("here are").unwrap();
         let start_pos = ed.cursor();
@@ -2558,7 +2560,7 @@ mod tests {
     fn delete_word() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("delete some words").unwrap();
 
@@ -2577,7 +2579,7 @@ mod tests {
     fn change_line() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2599,7 +2601,7 @@ mod tests {
     fn change_char_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2619,7 +2621,7 @@ mod tests {
     fn change_chars_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2639,7 +2641,7 @@ mod tests {
     fn change_char_right() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2659,7 +2661,7 @@ mod tests {
     fn change_chars_right() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2684,7 +2686,7 @@ mod tests {
     fn change_and_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2709,7 +2711,7 @@ mod tests {
     fn change_until_end() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2731,7 +2733,7 @@ mod tests {
     fn change_until_end_shift_c() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2751,7 +2753,7 @@ mod tests {
     fn change_until_end_from_middle_shift_c() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2774,7 +2776,7 @@ mod tests {
     fn change_until_start() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2799,7 +2801,7 @@ mod tests {
     fn change_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change").unwrap();
 
@@ -2826,7 +2828,7 @@ mod tests {
     fn change_with_count_and_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change change").unwrap();
 
@@ -2850,7 +2852,7 @@ mod tests {
     fn change_word() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change some words").unwrap();
 
@@ -2874,7 +2876,7 @@ mod tests {
     fn test_count_reset_around_insert_and_delete() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("these are some words").unwrap();
 
@@ -2903,7 +2905,7 @@ mod tests {
     fn test_t_not_found() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -2921,7 +2923,7 @@ mod tests {
     fn test_t_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -2939,7 +2941,7 @@ mod tests {
     fn test_t_movement_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg d").unwrap();
 
@@ -2958,7 +2960,7 @@ mod tests {
     fn test_t_movement_then_normal() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -2977,7 +2979,7 @@ mod tests {
     fn test_t_movement_with_delete() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -2997,7 +2999,7 @@ mod tests {
     fn test_t_movement_with_change() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -3020,7 +3022,7 @@ mod tests {
     fn test_f_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -3038,7 +3040,7 @@ mod tests {
     fn test_cap_t_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -3056,7 +3058,7 @@ mod tests {
     fn test_cap_f_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 
@@ -3074,7 +3076,7 @@ mod tests {
     fn test_semi_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc abc").unwrap();
 
@@ -3093,7 +3095,7 @@ mod tests {
     fn test_comma_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc abc").unwrap();
 
@@ -3113,7 +3115,7 @@ mod tests {
     fn test_semi_delete() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc abc").unwrap();
 
@@ -3134,7 +3136,7 @@ mod tests {
     fn test_semi_delete_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc abc abc abc").unwrap();
 
@@ -3156,7 +3158,7 @@ mod tests {
     fn test_find_char() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
         assert_eq!(super::find_char(ed.current_buffer(), 0, 'd', 1), Some(3));
     }
@@ -3166,7 +3168,7 @@ mod tests {
     fn test_find_char_with_start() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
         assert_eq!(super::find_char(ed.current_buffer(), 1, 'a', 1), Some(3));
     }
@@ -3176,7 +3178,7 @@ mod tests {
     fn test_find_char_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
         assert_eq!(super::find_char(ed.current_buffer(), 0, 'a', 2), Some(3));
     }
@@ -3186,7 +3188,7 @@ mod tests {
     fn test_find_char_not_found() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
         assert_eq!(super::find_char(ed.current_buffer(), 0, 'z', 1), None);
     }
@@ -3196,7 +3198,7 @@ mod tests {
     fn test_find_char_rev() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
         assert_eq!(super::find_char_rev(ed.current_buffer(), 6, 'd', 1), Some(3));
     }
@@ -3206,7 +3208,7 @@ mod tests {
     fn test_find_char_rev_with_start() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
         assert_eq!(super::find_char_rev(ed.current_buffer(), 5, 'c', 1), Some(2));
     }
@@ -3216,7 +3218,7 @@ mod tests {
     fn test_find_char_rev_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
         assert_eq!(super::find_char_rev(ed.current_buffer(), 6, 'c', 2), Some(2));
     }
@@ -3226,7 +3228,7 @@ mod tests {
     fn test_find_char_rev_not_found() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
         assert_eq!(super::find_char_rev(ed.current_buffer(), 6, 'z', 1), None);
     }
@@ -3236,7 +3238,7 @@ mod tests {
     fn test_undo_with_counts() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abcdefg").unwrap();
 
@@ -3256,7 +3258,7 @@ mod tests {
     fn test_redo_with_counts() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abcdefg").unwrap();
 
@@ -3279,7 +3281,7 @@ mod tests {
     fn change_word_ge_ws() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("change some words").unwrap();
 
@@ -3304,7 +3306,7 @@ mod tests {
     fn undo_insert() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -3325,7 +3327,7 @@ mod tests {
     fn undo_insert2() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -3349,7 +3351,7 @@ mod tests {
         let mut context = Context::new();
         context.history.push(Buffer::from("")).unwrap();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -3387,7 +3389,7 @@ mod tests {
         let mut context = Context::new();
         context.history.push(Buffer::from("")).unwrap();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -3412,7 +3414,7 @@ mod tests {
     fn undo_insert_with_movement_reset() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -3443,7 +3445,7 @@ mod tests {
     fn undo_3x() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("rm some words").unwrap();
 
@@ -3462,7 +3464,7 @@ mod tests {
     fn undo_insert_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -3492,7 +3494,7 @@ mod tests {
     fn undo_insert_with_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
 
         simulate_keys!(map, [
@@ -3516,7 +3518,7 @@ mod tests {
     fn undo_s_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace some words").unwrap();
 
@@ -3538,7 +3540,7 @@ mod tests {
     fn undo_multiple_groups() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace some words").unwrap();
 
@@ -3568,7 +3570,7 @@ mod tests {
     fn undo_r_command_with_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("replace some words").unwrap();
 
@@ -3588,7 +3590,7 @@ mod tests {
     fn tilde_basic() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("tilde").unwrap();
 
@@ -3604,7 +3606,7 @@ mod tests {
     fn tilde_basic2() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("tilde").unwrap();
 
@@ -3621,7 +3623,7 @@ mod tests {
     fn tilde_move() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("tilde").unwrap();
 
@@ -3640,7 +3642,7 @@ mod tests {
     fn tilde_repeat() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("tilde").unwrap();
 
@@ -3657,7 +3659,7 @@ mod tests {
     fn tilde_count() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("tilde").unwrap();
 
@@ -3676,7 +3678,7 @@ mod tests {
     fn tilde_count_short() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("TILDE").unwrap();
 
@@ -3694,7 +3696,7 @@ mod tests {
     fn tilde_nocase() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("ti_lde").unwrap();
 
@@ -3712,7 +3714,7 @@ mod tests {
     fn ctrl_h() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("not empty").unwrap();
 
@@ -3726,7 +3728,7 @@ mod tests {
     fn repeat_char_move_no_char() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), &mut context).unwrap();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("abc defg").unwrap();
 

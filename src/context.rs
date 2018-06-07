@@ -5,6 +5,8 @@ use termion::raw::{IntoRawMode, RawTerminal};
 use super::*;
 use keymap;
 
+pub type ColorClosure = Box<Fn(&str) -> String>;
+
 /// The default for `Context.word_divider_fn`.
 pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut res = Vec::new();
@@ -70,9 +72,10 @@ impl Context {
     pub fn read_line<P: Into<String>>(
         &mut self,
         prompt: P,
+        f: Option<ColorClosure>,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
     ) -> io::Result<String> {
-        self.read_line_with_init_buffer(prompt, handler, Buffer::new())
+        self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
     }
 
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
@@ -83,17 +86,19 @@ impl Context {
     /// let line =
     ///     context.read_line_with_init_buffer("[prompt]$ ",
     ///                                        &mut |_| {},
+    ///                                        Some(Box::new(|s| String::from(s))),
     ///                                        "some initial buffer");
     /// ```
     pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
         mut handler: &mut EventHandler<RawTerminal<Stdout>>,
+        f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
         let res = {
             let stdout = stdout().into_raw_mode()?;
-            let ed = Editor::new_with_init_buffer(stdout, prompt, self, buffer)?;
+            let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
             match self.key_bindings {
                 KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(ed), handler),
                 KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(ed), handler),
