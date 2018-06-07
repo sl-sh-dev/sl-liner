@@ -98,7 +98,11 @@ impl Context {
     ) -> io::Result<String> {
         let res = {
             let stdout = stdout().into_raw_mode()?;
+<<<<<<< HEAD
             let ed = Editor::new_with_init_buffer(stdout, prompt, self, buffer)?;
+=======
+            let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
+>>>>>>> a2d04551699db3a8b850d2bf7c00febe71190986
             match self.key_bindings {
                 KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(ed), handler),
                 KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(ed), handler),
