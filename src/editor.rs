@@ -731,7 +731,11 @@ impl<'a, W: Write> Editor<'a, W> {
             if buf_num_remaining_bytes == 0 {
                 write!(self.out, "{}", line)?;
             } else if line.len() > buf_num_remaining_bytes {
-                write!(self.out, "{}", &line[..buf_num_remaining_bytes])?;
+                let start = &line[..buf_num_remaining_bytes];
+                match self.closure {
+                    Some(ref f) => write!(self.out, "{}", f(start))?,
+                    None => write!(self.out, "{}", start)?,
+                }
                 write!(self.out, "{}", color::Fg(color::Yellow))?;
                 write!(self.out, "{}", &line[buf_num_remaining_bytes..])?;
                 buf_num_remaining_bytes = 0;
