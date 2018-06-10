@@ -7,7 +7,4 @@ before_script:
 build:
   script:
     - cargo build
-
-test:
-  script:
-  - cargo test
+    - cargo test
