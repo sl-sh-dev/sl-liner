@@ -73,7 +73,7 @@ impl Context {
         &mut self,
         prompt: P,
         f: Option<ColorClosure>,
-        mut handler: &mut EventHandler<RawTerminal<Stdout>>,
+        handler: &mut EventHandler<RawTerminal<Stdout>>,
     ) -> io::Result<String> {
         self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
     }
@@ -92,7 +92,7 @@ impl Context {
     pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
-        mut handler: &mut EventHandler<RawTerminal<Stdout>>,
+        handler: &mut EventHandler<RawTerminal<Stdout>>,
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
@@ -105,13 +105,13 @@ impl Context {
             }
         };
 
-        self.revert_all_history();
+        //self.revert_all_history();
         res
     }
 
     fn handle_keys<'a, T, W: Write, M: KeyMap<'a, W, T>>(
         mut keymap: M,
-        mut handler: &mut EventHandler<W>,
+        handler: &mut EventHandler<W>,
     ) -> io::Result<String>
     where
         String: From<M>,

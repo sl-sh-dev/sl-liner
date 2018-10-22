@@ -74,12 +74,12 @@ fn test_history_indexing() {
 #[test]
 fn test_in_memory_history_truncating() {
     let mut h = History::new();
-    h.set_max_size(2);
+    h.set_max_buffers_size(2);
     for _ in 0..4 {
         h.push(Buffer::from("a")).unwrap();
         h.push(Buffer::from("b")).unwrap();
     }
-    h.commit_history();
+    h.commit_to_file();
     assert_eq!(h.len(), 2);
 }
 
@@ -90,15 +90,15 @@ fn test_in_file_history_truncating() {
 
     {
         let mut h = History::new();
-        h.set_file_name(Some(String::from(tmp_file.to_string_lossy().into_owned())));
+        let _ = h.set_file_name_and_load_history(&tmp_file).unwrap();
         h.set_max_file_size(5);
-        for _ in 0..20 {
-            h.push(Buffer::from("a")).unwrap();
+        for bytes in b'a'..b'z' {
+            h.push(Buffer::from(format!("{}", bytes as char))).unwrap();
         }
-        h.commit_history();
+        h.commit_to_file();
     }
 
-    let f = fs::File::open(tmp_file.clone()).unwrap();
+    let f = fs::File::open(&tmp_file).unwrap();
     let r = BufReader::new(f);
     let count = r.lines().count();
     assert_eq!(count, 5);
@@ -126,8 +126,7 @@ fn test_reading_from_file() {
         f.write_all(TEXT.as_bytes()).unwrap();
     }
     let mut h = History::new();
-    h.set_file_name(Some(String::from(tmp_file.to_string_lossy().into_owned())));
-    let _ = h.load_history();
+    h.set_file_name_and_load_history(tmp_file);
     assert_eq!(String::from(h.buffers[0].clone()), "a".to_string());
     assert_eq!(String::from(h.buffers[1].clone()), "b".to_string());
     assert_eq!(String::from(h.buffers[2].clone()), "c".to_string());

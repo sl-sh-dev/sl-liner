@@ -112,8 +112,8 @@ macro_rules! cur_buf {
 
 impl<'a, W: Write> Editor<'a, W> {
     pub fn new<P: Into<String>>(
-        out: W, 
-        prompt: P, 
+        out: W,
+        prompt: P,
         f: Option<ColorClosure>,
         context: &'a mut Context
     ) -> io::Result<Self> {
@@ -601,7 +601,7 @@ impl<'a, W: Write> Editor<'a, W> {
         if self.show_autosuggestions {
             {
                 let autosuggestion = self.current_autosuggestion().cloned();
-                let mut buf = self.current_buffer_mut();
+                let buf = self.current_buffer_mut();
                 if let Some(x) = autosuggestion {
                     buf.insert_from_buffer(&x);
                 }
