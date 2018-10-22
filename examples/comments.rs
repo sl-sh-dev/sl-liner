@@ -20,17 +20,18 @@ fn highlight_dodo(s: &str) -> String {
 fn main() {
     let mut con = Context::new();
 
-    let history_file = args().nth(1);
-    match history_file {
-        Some(ref file_name) => println!("History file: {}", file_name),
-        None => println!("No history file"),
-    }
+    let history_file = match args().nth(1) {
+        Some(file_name) => {
+            println!("History file: {}", file_name);
+            file_name
+        }
+        None => {
+            eprintln!("No history file provided. Ending example early.");
+            return;
+        }
+    };
 
-    con.history.set_file_name(history_file);
-    // We set the file name, then check if we set it, and if we set it properly, we load it in
-    if con.history.file_name().is_some() {
-        con.history.load_history().unwrap();
-    }
+    con.history.set_file_name_and_load_history(history_file).unwrap();
 
     loop {
         // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving liner, and the third is called on every key press
@@ -94,7 +95,7 @@ fn main() {
                     _ => {}
                 }
 
-                // If we typed nothing, don't continue down to pushing to history 
+                // If we typed nothing, don't continue down to pushing to history
                 if res.is_empty() {
                     break;
                 }
@@ -115,7 +116,6 @@ fn main() {
                     _ => {
                         // Ensure that all writes to the history file
                         // are written before exiting due to error.
-                        con.history.commit_history();
                         panic!("error: {:?}", e)
                     },
                 }
@@ -126,5 +126,5 @@ fn main() {
     }
 
     // Ensure that all writes to the history file are written before exiting.
-    con.history.commit_history();
+    con.history.commit_to_file();
 }
