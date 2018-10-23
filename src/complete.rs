@@ -38,47 +38,45 @@ impl Completer for FilenameCompleter {
     fn completions(&self, mut start: &str) -> Vec<String> {
         // XXX: this function is really bad, TODO rewrite
 
-        let start_owned;
-        if start.starts_with("\"") || start.starts_with("'") {
+        let start_owned: String = if start.starts_with('\"') || start.starts_with('\'') {
             start = &start[1..];
             if start.len() >= 1 {
                 start = &start[..start.len() - 1];
             }
-            start_owned = start.into();
+            start.into()
         } else {
-            start_owned = start.replace("\\ ", " ");
-        }
+            start.replace(r"\ ", " ")
+        };
 
-        let full_path;
-        let start_path = PathBuf::from(&start_owned[..]);
+        let start_path = PathBuf::from(start_owned.as_str());
 
-        if let Some(ref wd) = self.working_dir {
-            let mut fp = PathBuf::from(wd);
-            fp.push(start_owned.clone());
-            full_path = fp;
-        } else {
-            full_path = PathBuf::from(start_owned.clone());
-        }
+        let full_path = match self.working_dir {
+            Some(ref wd) => {
+                let mut fp = PathBuf::from(wd);
+                fp.push(start_owned.as_str());
+                fp
+            }
+            None => PathBuf::from(start_owned.as_str()),
+        };
 
         let p;
         let start_name;
         let completing_dir;
         match full_path.parent() {
             // XXX non-unix separaor
-            Some(parent) if start != "" && !start_owned.ends_with("/") &&
+            Some(parent) if !start.is_empty() && !start_owned.ends_with("/") &&
                             !full_path.ends_with("..") => {
-                p = PathBuf::from(parent);
+                p = parent;
                 start_name = full_path
                     .file_name()
                     .unwrap()
-                    .to_string_lossy()
-                    .into_owned();
+                    .to_string_lossy();
                 completing_dir = false;
             }
             _ => {
-                p = full_path.clone();
+                p = full_path.as_path();
                 start_name = "".into();
-                completing_dir = start == "" || start.ends_with("/") || full_path.ends_with("..");
+                completing_dir = start.is_empty() || start.ends_with("/") || full_path.ends_with("..");
             }
         }
 
@@ -97,26 +95,29 @@ impl Completer for FilenameCompleter {
             let file_name = dir.file_name();
             let file_name = file_name.to_string_lossy();
 
-            if start_name == "" || file_name.starts_with(&*start_name) {
+            if start_name.is_empty() || file_name.starts_with(&*start_name) {
                 let mut a = start_path.clone();
                 if !a.is_absolute() {
                     a = PathBuf::new();
                 } else if !completing_dir && !a.pop() {
                     return vec![];
                 }
+
                 a.push(dir.file_name());
-                let mut s = a.to_string_lossy().into_owned();
+                let mut s = a.to_string_lossy();
                 if dir.path().is_dir() {
-                    s = s + "/";
+                    let mut string = s.into_owned();
+                    string.push_str("/");
+                    s = string.into();
                 }
 
-                let mut b = PathBuf::from(start_owned.clone());
+                let mut b = PathBuf::from(&start_owned);
                 if !completing_dir {
                     b.pop();
                 }
-                b.push(s);
+                b.push(s.as_ref());
 
-                matches.push(b.to_string_lossy().to_owned().replace(" ", "\\ "));
+                matches.push(b.to_string_lossy().replace(" ", r"\ "));
             }
         }
 
