@@ -97,7 +97,7 @@ impl Context {
         buffer: B,
     ) -> io::Result<String> {
         let res = {
-            let stdout = stdout().into_raw_mode()?;
+            let mut stdout = stdout().into_raw_mode()?;
             let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
             match self.key_bindings {
                 KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(ed), handler),
@@ -117,8 +117,9 @@ impl Context {
         String: From<M>,
     {
         let stdin = stdin();
+        let stdin = stdin.lock();
         for c in stdin.keys() {
-            if try!(keymap.handle_key(c.unwrap(), handler)) {
+            if keymap.handle_key(c.unwrap(), handler)? {
                 break;
             }
         }

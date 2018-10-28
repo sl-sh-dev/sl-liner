@@ -65,7 +65,7 @@ impl<'a> From<&'a str> for Buffer {
 impl fmt::Display for Buffer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for &c in &self.data {
-            try!(f.write_char(c));
+            f.write_char(c)?;
         }
         Ok(())
     }
@@ -256,9 +256,7 @@ impl Buffer {
         where W: Write
     {
         let string: String = self.data.iter().cloned().collect();
-        try!(out.write(string.as_bytes()));
-
-        Ok(())
+        out.write_all(string.as_bytes())
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
@@ -274,7 +272,7 @@ impl Buffer {
         where W: Write
     {
         let string: String = self.data.iter().skip(after).cloned().collect();
-        out.write(string.as_bytes())?;
+        out.write_all(string.as_bytes())?;
 
         Ok(string.len())
     }

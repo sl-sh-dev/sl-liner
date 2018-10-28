@@ -31,7 +31,7 @@ impl CursorPosition {
     pub fn get(cursor: usize, words: &[(usize, usize)]) -> CursorPosition {
         use CursorPosition::*;
 
-        if words.len() == 0 {
+        if words.is_empty() {
             return InSpace(None, None);
         } else if cursor == words[0].0 {
             return OnWordLeftEdge(0);
@@ -73,6 +73,9 @@ pub struct Editor<'a, W: Write> {
     // Buffer for the new line (ie. not from editing history)
     new_buf: Buffer,
 
+    // Store the line to be written here, avoiding allocations & formatting.
+    output_buf: Vec<u8>,
+
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
@@ -90,6 +93,8 @@ pub struct Editor<'a, W: Write> {
     // if set, the cursor will not be allow to move one past the end of the line, this is necessary
     // for Vi's normal mode.
     pub no_eol: bool,
+
+    no_newline: bool,
 }
 
 macro_rules! cur_buf_mut {
@@ -133,18 +138,20 @@ impl<'a, W: Write> Editor<'a, W> {
             out: out,
             closure: f,
             new_buf: buffer.into(),
+            output_buf: Vec::new(),
             cur_history_loc: None,
             context: context,
             show_completions_hint: None,
             show_autosuggestions: true,
             term_cursor_line: 1,
             no_eol: false,
+            no_newline: false,
         };
 
         if !ed.new_buf.is_empty() {
             ed.move_cursor_to_end_of_line()?;
         }
-        try!(ed.display());
+        ed.display()?;
         Ok(ed)
     }
 
@@ -186,8 +193,9 @@ impl<'a, W: Write> Editor<'a, W> {
             Ok(false)
         } else {
             self.cursor = cur_buf!(self).num_chars();
+            self.no_newline = true;
             self._display(false)?;
-            try!(self.out.write(b"\r\n"));
+            self.out.write(b"\r\n")?;
             self.show_completions_hint = None;
             Ok(true)
         }
@@ -206,6 +214,7 @@ impl<'a, W: Write> Editor<'a, W> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
+            self.no_newline = true;
             self.display()?;
         }
         Ok(did)
@@ -216,6 +225,7 @@ impl<'a, W: Write> Editor<'a, W> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
+            self.no_newline = true;
             self.display()?;
         }
         Ok(did)
@@ -226,15 +236,16 @@ impl<'a, W: Write> Editor<'a, W> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
+            self.no_newline = true;
             self.display()?;
         }
         Ok(did)
     }
 
-    fn print_completion_list(out: &mut W, completions: &[String], highlighted: Option<usize>) -> io::Result<usize> {
+    fn print_completion_list(output_buf: &mut Vec<u8>, completions: &[String], highlighted: Option<usize>) -> io::Result<usize> {
         use std::cmp::max;
 
-        let (w, _) = try!(termion::terminal_size());
+        let (w, _) = termion::terminal_size()?;
 
         // XXX wide character support
         let max_word_size = completions.iter().fold(1, |m, x| max(m, x.chars().count()));
@@ -247,7 +258,7 @@ impl<'a, W: Write> Editor<'a, W> {
         let mut i = 0;
         for (index, com) in completions.iter().enumerate() {
             if i == cols {
-                try!(write!(out, "\r\n"));
+                output_buf.write_all(b"\r\n")?;
                 lines += 1;
                 i = 0;
             } else if i > cols {
@@ -255,11 +266,13 @@ impl<'a, W: Write> Editor<'a, W> {
             }
 
             if Some(index) == highlighted {
-                try!(write!(out, "{}{}", color::Fg(color::Black), color::Bg(color::White)));
+                output_buf.extend_from_slice(color::Black.fg_str().as_bytes());
+                output_buf.extend_from_slice(color::White.bg_str().as_bytes());
             }
-            try!(write!(out, "{:<1$}", com, col_width));
+            write!(output_buf, "{:<1$}", com, col_width)?;
             if Some(index) == highlighted {
-                try!(write!(out, "{}{}", color::Bg(color::Reset), color::Fg(color::Reset)));
+                output_buf.extend_from_slice(color::Reset.bg_str().as_bytes());
+                output_buf.extend_from_slice(color::Reset.fg_str().as_bytes());
             }
 
             i += 1;
@@ -278,13 +291,14 @@ impl<'a, W: Write> Editor<'a, W> {
         if let Some((completions, i)) = self.show_completions_hint.take() {
             let i = i.map_or(0, |i| (i+1) % completions.len());
 
-            try!(self.delete_word_before_cursor(false));
-            try!(self.insert_str_after_cursor(&completions[i]));
+            self.delete_word_before_cursor(false)?;
+            self.insert_str_after_cursor(&completions[i])?;
 
             self.show_completions_hint = Some((completions, Some(i)));
         }
         if self.show_completions_hint.is_some() {
-            try!(self.display());
+            self.no_newline = true;
+            self.display()?;
             return Ok(());
         }
 
@@ -307,13 +321,13 @@ impl<'a, W: Write> Editor<'a, W> {
             }
         };
 
-        if completions.len() == 0 {
+        if completions.is_empty() {
             // Do nothing.
             self.show_completions_hint = None;
             Ok(())
         } else if completions.len() == 1 {
             self.show_completions_hint = None;
-            try!(self.delete_word_before_cursor(false));
+            self.delete_word_before_cursor(false)?;
             self.insert_str_after_cursor(completions[0].as_ref())
         } else {
             let common_prefix = util::find_longest_common_prefix(
@@ -327,13 +341,14 @@ impl<'a, W: Write> Editor<'a, W> {
                 let s = p.iter().cloned().collect::<String>();
 
                 if s.len() > word.len() && s.starts_with(&word[..]) {
-                    try!(self.delete_word_before_cursor(false));
+                    self.delete_word_before_cursor(false)?;
                     return self.insert_str_after_cursor(s.as_ref());
                 }
             }
 
             self.show_completions_hint = Some((completions, None));
-            try!(self.display());
+            self.no_newline = true;
+            self.display()?;
 
             Ok(())
         }
@@ -371,13 +386,16 @@ impl<'a, W: Write> Editor<'a, W> {
             let moved = cur_buf_mut!(self).remove(start, self.cursor);
             self.cursor -= moved;
         }
+        self.no_newline = true;
         self.display()
     }
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
-        try!(write!(self.out, "{}{}", clear::All, cursor::Goto(1, 1)));
+        self.output_buf.extend_from_slice(clear::All.as_ref());
+        self.output_buf.extend_from_slice(String::from(cursor::Goto(1,1)).as_bytes());
         self.term_cursor_line = 1;
+        self.no_newline = true;
         self.display()
     }
 
@@ -387,14 +405,14 @@ impl<'a, W: Write> Editor<'a, W> {
             if i > 0 {
                 self.cur_history_loc = Some(i - 1);
             } else {
+                self.no_newline = true;
                 return self.display();
             }
+        } else if self.context.history.len() > 0 {
+            self.cur_history_loc = Some(self.context.history.len() - 1);
         } else {
-            if self.context.history.len() > 0 {
-                self.cur_history_loc = Some(self.context.history.len() - 1);
-            } else {
-                return self.display();
-            }
+            self.no_newline = true;
+            return self.display();
         }
 
         self.move_cursor_to_end_of_line()
@@ -410,6 +428,7 @@ impl<'a, W: Write> Editor<'a, W> {
             }
             self.move_cursor_to_end_of_line()
         } else {
+            self.no_newline = true;
             self.display()
         }
     }
@@ -421,6 +440,7 @@ impl<'a, W: Write> Editor<'a, W> {
             self.move_cursor_to_end_of_line()
         } else {
             self.cur_history_loc = None;
+            self.no_newline = true;
             self.display()
         }
     }
@@ -431,6 +451,7 @@ impl<'a, W: Write> Editor<'a, W> {
             self.cur_history_loc = None;
             self.move_cursor_to_end_of_line()
         } else {
+            self.no_newline = true;
             self.display()
         }
     }
@@ -455,6 +476,7 @@ impl<'a, W: Write> Editor<'a, W> {
         }
 
         self.cursor += cs.len();
+        self.no_newline = true;
         self.display()
     }
 
@@ -467,6 +489,7 @@ impl<'a, W: Write> Editor<'a, W> {
             self.cursor -= 1;
         }
 
+        self.no_newline = true;
         self.display()
     }
 
@@ -480,6 +503,7 @@ impl<'a, W: Write> Editor<'a, W> {
                 buf.remove(self.cursor, self.cursor + 1);
             }
         }
+        self.no_newline = true;
         self.display()
     }
 
@@ -487,6 +511,7 @@ impl<'a, W: Write> Editor<'a, W> {
     pub fn delete_all_before_cursor(&mut self) -> io::Result<()> {
         cur_buf_mut!(self).remove(0, self.cursor);
         self.cursor = 0;
+        self.no_newline = true;
         self.display()
     }
 
@@ -496,6 +521,7 @@ impl<'a, W: Write> Editor<'a, W> {
             let buf = cur_buf_mut!(self);
             buf.truncate(self.cursor);
         }
+        self.no_newline = true;
         self.display()
     }
 
@@ -509,6 +535,7 @@ impl<'a, W: Write> Editor<'a, W> {
             );
             self.cursor = cmp::min(self.cursor, position);
         }
+        self.no_newline = true;
         self.display()
     }
 
@@ -522,6 +549,7 @@ impl<'a, W: Write> Editor<'a, W> {
             );
             self.cursor = cmp::min(self.cursor, position);
         }
+        self.no_newline = true;
         self.display()
     }
 
@@ -534,6 +562,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
         self.cursor -= count;
 
+        self.no_newline = true;
         self.display()
     }
 
@@ -550,6 +579,7 @@ impl<'a, W: Write> Editor<'a, W> {
             self.cursor += count;
         }
 
+        self.no_newline = true;
         self.display()
     }
 
@@ -560,18 +590,21 @@ impl<'a, W: Write> Editor<'a, W> {
         if self.cursor > buf_len {
             self.cursor = buf_len;
         }
+        self.no_newline = true;
         self.display()
     }
 
     /// Moves the cursor to the start of the line.
     pub fn move_cursor_to_start_of_line(&mut self) -> io::Result<()> {
         self.cursor = 0;
+        self.no_newline = true;
         self.display()
     }
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
         self.cursor = cur_buf!(self).num_chars();
+        self.no_newline = true;
         self.display()
     }
 
@@ -625,7 +658,7 @@ impl<'a, W: Write> Editor<'a, W> {
     }
 
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
-        fn calc_width(prompt_width: usize, buf_widths: Vec<usize>, terminal_width: usize) -> usize {
+        fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
             let mut total = 0;
 
             for line in buf_widths {
@@ -639,20 +672,7 @@ impl<'a, W: Write> Editor<'a, W> {
             total
         }
 
-        let (w, _) =
-            // when testing hardcode terminal size values
-            if cfg!(test) { (80, 24) }
-            // otherwise pull values from termion
-            else {
-                let (mut size_col, mut size_row) = try!(termion::terminal_size());
-                if size_col == 0 {
-                    size_col = 80;
-                    size_row = 24;
-                }
-                (size_col, size_row)
-            };
-        let w = w as usize;
-
+        let terminal_width = terminal_width()?;
         let prompt_width = util::width(&self.prompt);
 
         let buf = cur_buf!(self);
@@ -665,10 +685,8 @@ impl<'a, W: Write> Editor<'a, W> {
         }
 
         // Can't move past the last character in vi normal mode
-        if self.no_eol {
-            if self.cursor >= 1 && self.cursor == buf_num_chars {
-                self.cursor -= 1;
-            }
+        if self.no_eol && self.cursor != 0 && self.cursor == buf_num_chars {
+            self.cursor -= 1;
         }
 
         // Width of the current buffer lines (including autosuggestion)
@@ -683,31 +701,49 @@ impl<'a, W: Write> Editor<'a, W> {
         };
 
         // Total number of terminal spaces taken up by prompt and buffer
-        let new_total_width = calc_width(prompt_width, buf_widths, w);
-        let new_total_width_to_cursor = calc_width(prompt_width, buf_widths_to_cursor, w);
+        let new_total_width = calc_width(prompt_width, &buf_widths, terminal_width);
+        let new_total_width_to_cursor = calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
 
-        let new_num_lines = (new_total_width + w) / w;
+        let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
         // Move the term cursor to the same line as the prompt.
         if self.term_cursor_line > 1 {
-            try!(write!(
-                self.out,
-                "{}",
-                cursor::Up(self.term_cursor_line as u16 - 1)
-            ));
+            self.output_buf.extend_from_slice(cursor::Up(self.term_cursor_line as u16 - 1).to_string().as_bytes());
         }
-        // Move the cursor to the start of the line then clear everything after.
-        try!(write!(self.out, "\r{}", clear::AfterCursor));
+
+        if ! self.no_newline {
+            self.output_buf.extend_from_slice("⏎".as_bytes());
+            for _ in 0..(terminal_width - 1) {
+                self.output_buf.push(b' ');
+            }
+        }
+
+        self.output_buf.push(b'\r');
+        self.output_buf.extend_from_slice(clear::AfterCursor.as_ref());
 
         // If we're cycling through completions, show those
         let mut completion_lines = 0;
         if let Some((completions, i)) = self.show_completions_hint.as_ref() {
-            completion_lines = 1 + try!(Self::print_completion_list(&mut self.out, completions, *i));
-            try!(write!(self.out, "\r\n"));
+            completion_lines = 1 + Self::print_completion_list(&mut self.output_buf, completions, *i)?;
+            self.output_buf.extend_from_slice(b"\r\n");
         }
 
         // Write the prompt
-        try!(write!(self.out, "{}", self.prompt));
+        if ! self.no_newline {
+            let prompt: String = self.prompt
+                .chars()
+                .fold(String::with_capacity(self.prompt.len()) , |mut string, c| {
+                    if c == '\n' {
+                        string + "\r\n"
+                    } else {
+                        string.push(c);
+                        string
+                    }
+                });
+            self.output_buf.extend_from_slice(prompt.as_bytes());
+        } else {
+            self.output_buf.extend_from_slice(handle_prompt(&self.prompt).as_bytes());
+        }
 
         // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
         // We get the number of bytes in the buffer (but NOT the autosuggestion).
@@ -723,51 +759,54 @@ impl<'a, W: Write> Editor<'a, W> {
         };
         let mut buf_num_remaining_bytes = buf.num_bytes();
 
-        for (i, line) in lines.iter().enumerate() {
+        let lines_len = lines.len();
+        for (i, line) in lines.into_iter().enumerate() {
             if i > 0 {
-                try!(write!(self.out, "{}", cursor::Right(prompt_width as u16)));
+                self.output_buf.extend_from_slice(cursor::Right(prompt_width as u16).to_string().as_bytes());
             }
 
             if buf_num_remaining_bytes == 0 {
-                write!(self.out, "{}", line)?;
+                self.output_buf.extend_from_slice(line.as_bytes());
             } else if line.len() > buf_num_remaining_bytes {
                 let start = &line[..buf_num_remaining_bytes];
-                match self.closure {
-                    Some(ref f) => write!(self.out, "{}", f(start))?,
-                    None => write!(self.out, "{}", start)?,
-                }
-                write!(self.out, "{}", color::Fg(color::Yellow))?;
-                write!(self.out, "{}", &line[buf_num_remaining_bytes..])?;
+                let start = match self.closure {
+                    Some(ref f) => f(start),
+                    None => start.to_owned(),
+                };
+                self.output_buf.extend_from_slice(start.as_bytes());
+                self.output_buf.extend_from_slice(color::Yellow.fg_str().as_bytes());
+                self.output_buf.extend_from_slice(line[buf_num_remaining_bytes..].as_bytes());
                 buf_num_remaining_bytes = 0;
             } else {
                 buf_num_remaining_bytes -= line.len();
-                match self.closure {
-                    Some(ref f) => write!(self.out, "{}", f(line))?,
-                    None => write!(self.out, "{}", line)?,
-                }
+                let written_line = match self.closure {
+                    Some(ref f) => f(&line),
+                    None => line,
+                };
+                self.output_buf.extend_from_slice(written_line.as_bytes());
             }
 
-            if i + 1 < lines.len() {
-                write!(self.out, "\r\n")?;
+            if i + 1 < lines_len {
+                self.output_buf.extend_from_slice(b"\r\n");
             }
         }
 
         if self.is_currently_showing_autosuggestion() {
-            write!(self.out, "{}", color::Fg(color::Reset))?;
+            self.output_buf.extend_from_slice(color::Reset.fg_str().as_bytes());
         }
 
         // at the end of the line, move the cursor down a line
-        if new_total_width % w == 0 {
-            try!(write!(self.out, "\r\n"));
+        if new_total_width % terminal_width == 0 {
+            self.output_buf.extend_from_slice(b"\r\n");
         }
 
-        self.term_cursor_line = (new_total_width_to_cursor + w) / w;
+        self.term_cursor_line = (new_total_width_to_cursor + terminal_width) / terminal_width;
 
         // The term cursor is now on the bottom line. We may need to move the term cursor up
         // to the line where the true cursor is.
         let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
         if cursor_line_diff > 0 {
-            try!(write!(self.out, "{}", cursor::Up(cursor_line_diff as u16)));
+            self.output_buf.extend_from_slice(cursor::Up(cursor_line_diff as u16).to_string().as_bytes());
         } else if cursor_line_diff < 0 {
             unreachable!();
         }
@@ -775,19 +814,17 @@ impl<'a, W: Write> Editor<'a, W> {
         // Now that we are on the right line, we must move the term cursor left or right
         // to match the true cursor.
         let cursor_col_diff = new_total_width as isize - new_total_width_to_cursor as isize -
-            cursor_line_diff * w as isize;
+            cursor_line_diff * terminal_width as isize;
         if cursor_col_diff > 0 {
-            try!(write!(self.out, "{}", cursor::Left(cursor_col_diff as u16)));
+            self.output_buf.extend_from_slice(cursor::Left(cursor_col_diff as u16).to_string().as_bytes());
         } else if cursor_col_diff < 0 {
-            try!(write!(
-                self.out,
-                "{}",
-                cursor::Right((-cursor_col_diff) as u16)
-            ));
+            self.output_buf.extend_from_slice(cursor::Right((-cursor_col_diff) as u16).to_string().as_bytes());
         }
 
         self.term_cursor_line += completion_lines;
 
+        self.out.write_all(&self.output_buf)?;
+	    self.output_buf.clear();
         self.out.flush()
     }
 
@@ -803,6 +840,29 @@ impl<'a, W: Write> From<Editor<'a, W>> for String {
             Some(i) => ed.context.history[i].clone(),
             _ => ed.new_buf,
         }.into()
+    }
+}
+
+fn terminal_width() -> io::Result<usize> {
+    if cfg!(test) {
+        Ok(80 as usize)
+    } else {
+        let (mut size_col, _) = termion::terminal_size()?;
+        if size_col == 0 {
+            size_col = 80;
+        }
+        Ok(size_col as usize)
+    }
+}
+
+/// prints prompt info lines and
+/// returns the last prompt line.
+fn handle_prompt(full_prompt: &str) -> &str {
+    if let Some(index) = full_prompt.rfind('\n') {
+        let (_, prompt) = full_prompt.split_at(index + 1);
+        prompt
+    } else {
+        full_prompt
     }
 }
 

@@ -17,7 +17,7 @@ name = "liner"
 
 [dependencies]
 bytecount = "0.3.1"
-termion = "1.4.0"
+termion = { git = "https://gitlab.redox-os.org/redox-os/termion" }
 unicode-width = "0.1.*"
 
 [dev-dependencies]
