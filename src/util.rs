@@ -1,8 +1,9 @@
 use std::borrow::Cow;
 use unicode_width::*;
 
-pub fn width<S: AsRef<str>>(s: S) -> usize {
-    remove_codes(s.as_ref()).width()
+pub fn last_prompt_line_width<S: AsRef<str>>(s: S) -> usize {
+    let last_prompt_line_width = handle_prompt(s.as_ref());
+    remove_codes(last_prompt_line_width).width()
 }
 
 pub fn find_longest_common_prefix<T: Clone + Eq>(among: &[Vec<T>]) -> Option<Vec<T>> {
@@ -79,5 +80,15 @@ pub fn remove_codes(input: &str) -> Cow<str> {
         Cow::Owned(clean)
     } else {
         Cow::Borrowed(input)
+    }
+}
+
+/// Returns the last prompt line.
+pub fn handle_prompt(full_prompt: &str) -> &str {
+    if let Some(index) = full_prompt.rfind('\n') {
+        let (_, prompt) = full_prompt.split_at(index + 1);
+        prompt
+    } else {
+        full_prompt
     }
 }

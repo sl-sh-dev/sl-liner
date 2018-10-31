@@ -673,7 +673,7 @@ impl<'a, W: Write> Editor<'a, W> {
         }
 
         let terminal_width = terminal_width()?;
-        let prompt_width = util::width(&self.prompt);
+        let prompt_width = util::last_prompt_line_width(&self.prompt);
 
         let buf = cur_buf!(self);
         let buf_width = buf.width();
@@ -742,7 +742,7 @@ impl<'a, W: Write> Editor<'a, W> {
                 });
             self.output_buf.extend_from_slice(prompt.as_bytes());
         } else {
-            self.output_buf.extend_from_slice(handle_prompt(&self.prompt).as_bytes());
+            self.output_buf.extend_from_slice(util::handle_prompt(&self.prompt).as_bytes());
         }
 
         // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
@@ -852,17 +852,6 @@ fn terminal_width() -> io::Result<usize> {
             size_col = 80;
         }
         Ok(size_col as usize)
-    }
-}
-
-/// prints prompt info lines and
-/// returns the last prompt line.
-fn handle_prompt(full_prompt: &str) -> &str {
-    if let Some(index) = full_prompt.rfind('\n') {
-        let (_, prompt) = full_prompt.split_at(index + 1);
-        prompt
-    } else {
-        full_prompt
     }
 }
 
