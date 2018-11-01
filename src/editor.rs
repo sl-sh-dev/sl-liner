@@ -672,7 +672,7 @@ impl<'a, W: Write> Editor<'a, W> {
             total
         }
 
-        let terminal_width = terminal_width()?;
+        let terminal_width = util::terminal_width()?;
         let prompt_width = util::last_prompt_line_width(&self.prompt);
 
         let buf = cur_buf!(self);
@@ -730,17 +730,12 @@ impl<'a, W: Write> Editor<'a, W> {
 
         // Write the prompt
         if ! self.no_newline {
-            let prompt: String = self.prompt
-                .chars()
-                .fold(String::with_capacity(self.prompt.len()) , |mut string, c| {
-                    if c == '\n' {
-                        string + "\r\n"
-                    } else {
-                        string.push(c);
-                        string
-                    }
-                });
-            self.output_buf.extend_from_slice(prompt.as_bytes());
+            for line in self.prompt.split('\n') {
+                self.output_buf.extend_from_slice(line.as_bytes());
+                self.output_buf.extend_from_slice(b"\r\n");
+            }
+            self.output_buf.pop(); // pop the '\n'
+            self.output_buf.pop(); // pop the '\r'
         } else {
             self.output_buf.extend_from_slice(util::handle_prompt(&self.prompt).as_bytes());
         }
@@ -840,18 +835,6 @@ impl<'a, W: Write> From<Editor<'a, W>> for String {
             Some(i) => ed.context.history[i].clone(),
             _ => ed.new_buf,
         }.into()
-    }
-}
-
-fn terminal_width() -> io::Result<usize> {
-    if cfg!(test) {
-        Ok(80 as usize)
-    } else {
-        let (mut size_col, _) = termion::terminal_size()?;
-        if size_col == 0 {
-            size_col = 80;
-        }
-        Ok(size_col as usize)
     }
 }
 

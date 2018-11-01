@@ -1,4 +1,7 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    io
+};
 use unicode_width::*;
 
 pub fn last_prompt_line_width<S: AsRef<str>>(s: S) -> usize {
@@ -90,5 +93,17 @@ pub fn handle_prompt(full_prompt: &str) -> &str {
         prompt
     } else {
         full_prompt
+    }
+}
+
+pub fn terminal_width() -> io::Result<usize> {
+    if cfg!(test) {
+        Ok(80 as usize)
+    } else {
+        let (mut size_col, _) = termion::terminal_size()?;
+        if size_col == 0 {
+            size_col = 80;
+        }
+        Ok(size_col as usize)
     }
 }
