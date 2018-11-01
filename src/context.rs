@@ -25,10 +25,8 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
                 res.push((start, i));
                 word_start = None;
             }
-        } else {
-            if c != ' ' {
-                word_start = Some(i);
-            }
+        } else if c != ' ' {
+            word_start = Some(i);
         }
 
         just_had_backslash = false;

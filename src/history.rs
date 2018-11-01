@@ -4,7 +4,7 @@ use std::{
     collections::{vec_deque, VecDeque},
     io::{BufRead, BufReader, BufWriter},
     fs::File,
-    io::{self, Seek, SeekFrom, Write},
+    io::{self, Write},
     iter::IntoIterator,
     ops::Index,
     ops::IndexMut,
@@ -115,7 +115,7 @@ impl History {
         curr_position: Option<usize>,
         new_buff: &'b Buffer,
     ) -> Option<&'a Buffer> {
-        let pos = curr_position.unwrap_or(self.buffers.len());
+        let pos = curr_position.unwrap_or_else(|| self.buffers.len());
         for iter in (0..pos).rev() {
             if let Some(tested) = self.buffers.get(iter) {
                 if tested.starts_with(new_buff) {

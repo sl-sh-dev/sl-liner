@@ -45,7 +45,7 @@ impl ModeStack {
     /// If the stack is empty, we are in normal mode.
     fn mode(&self) -> Mode {
         self.0.last()
-            .map(|&m| m)
+            .cloned()
             .unwrap_or(Mode::Normal)
     }
 
@@ -92,18 +92,18 @@ enum ViMoveDir {
 }
 
 impl ViMoveDir {
-    pub fn advance(&self, cursor: &mut usize, max: usize) -> bool {
-        self.move_cursor(cursor, max, *self)
+    pub fn advance(self, cursor: &mut usize, max: usize) -> bool {
+        self.move_cursor(cursor, max, self)
     }
 
-    pub fn go_back(&self, cursor: &mut usize, max: usize) -> bool {
-        match *self {
+    pub fn go_back(self, cursor: &mut usize, max: usize) -> bool {
+        match self {
             ViMoveDir::Right => self.move_cursor(cursor, max, ViMoveDir::Left),
             ViMoveDir::Left => self.move_cursor(cursor, max, ViMoveDir::Right),
         }
     }
 
-    fn move_cursor(&self, cursor: &mut usize, max: usize, dir: ViMoveDir) -> bool {
+    fn move_cursor(self, cursor: &mut usize, max: usize, dir: ViMoveDir) -> bool {
         if dir == ViMoveDir::Right && *cursor == max {
             return false;
         }
@@ -272,8 +272,7 @@ fn find_char(buf: &::buffer::Buffer, start: usize, ch: char, count: usize) -> Op
         .enumerate()
         .skip(start)
         .filter(|&(_, &c)| c == ch)
-        .skip(count - 1)
-        .next()
+        .nth(count - 1)
         .map(|(i, _)| i)
 }
 
@@ -285,8 +284,7 @@ fn find_char_rev(buf: &::buffer::Buffer, start: usize, ch: char, count: usize) -
         .rev()
         .skip(rstart)
         .filter(|&(_, &c)| c == ch)
-        .skip(count - 1)
-        .next()
+        .nth(count - 1)
         .map(|(i, _)| i)
 }
 

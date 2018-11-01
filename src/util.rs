@@ -10,14 +10,14 @@ pub fn last_prompt_line_width<S: AsRef<str>>(s: S) -> usize {
 }
 
 pub fn find_longest_common_prefix<T: Clone + Eq>(among: &[Vec<T>]) -> Option<Vec<T>> {
-    if among.len() == 0 {
+    if among.is_empty() {
         return None;
     } else if among.len() == 1 {
         return Some(among[0].clone());
     }
 
     for s in among {
-        if s.len() == 0 {
+        if s.is_empty() {
             return None;
         }
     }
@@ -100,7 +100,7 @@ pub fn terminal_width() -> io::Result<usize> {
     if cfg!(test) {
         Ok(80 as usize)
     } else {
-        let (mut size_col, _) = termion::terminal_size()?;
+        let (mut size_col, _) = ::termion::terminal_size()?;
         if size_col == 0 {
             size_col = 80;
         }
