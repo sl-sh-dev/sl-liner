@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::cmp;
 use std::io::{self, Write};
 use termion::{self, clear, color, cursor};
@@ -7,6 +8,37 @@ use Context;
 use Buffer;
 use event::*;
 use util;
+
+/// Buffer for prompt writes, meant to be shared between prompt creations.
+struct LocalBuffer(pub RefCell<Vec<u8>>);
+
+impl LocalBuffer {
+    pub fn new() -> Self {
+        LocalBuffer(RefCell::new(Vec::with_capacity(512)))
+    }
+
+    pub fn append(&self, bytes: &[u8]) {
+        self.0.borrow_mut().extend_from_slice(bytes);
+    }
+
+    pub fn push(&self, byte: u8) {
+        self.0.borrow_mut().push(byte);
+    }
+
+    pub fn pop(&self) -> Option<u8> {
+        self.0.borrow_mut().pop()
+    }
+
+    pub fn extract<T>(&self, mut func: impl FnMut(&[u8]) -> T) -> T {
+        let result = func(&self.0.borrow());
+        self.0.borrow_mut().clear();
+        result
+    }
+}
+
+thread_local! {
+    static BUFFER: LocalBuffer = LocalBuffer::new();
+}
 
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,9 +105,6 @@ pub struct Editor<'a, W: Write> {
     // Buffer for the new line (ie. not from editing history)
     new_buf: Buffer,
 
-    // Store the line to be written here, avoiding allocations & formatting.
-    output_buf: Vec<u8>,
-
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
@@ -138,7 +167,6 @@ impl<'a, W: Write> Editor<'a, W> {
             out: out,
             closure: f,
             new_buf: buffer.into(),
-            output_buf: Vec::new(),
             cur_history_loc: None,
             context: context,
             show_completions_hint: None,
@@ -195,7 +223,7 @@ impl<'a, W: Write> Editor<'a, W> {
             self.cursor = cur_buf!(self).num_chars();
             self.no_newline = true;
             self._display(false)?;
-            self.out.write(b"\r\n")?;
+            self.out.write_all(b"\r\n")?;
             self.show_completions_hint = None;
             Ok(true)
         }
@@ -242,7 +270,7 @@ impl<'a, W: Write> Editor<'a, W> {
         Ok(did)
     }
 
-    fn print_completion_list(output_buf: &mut Vec<u8>, completions: &[String], highlighted: Option<usize>) -> io::Result<usize> {
+    fn print_completion_list(completions: &[String], highlighted: Option<usize>) -> io::Result<usize> {
         use std::cmp::max;
 
         let (w, _) = termion::terminal_size()?;
@@ -255,30 +283,33 @@ impl<'a, W: Write> Editor<'a, W> {
 
         let mut lines = 0;
 
-        let mut i = 0;
-        for (index, com) in completions.iter().enumerate() {
-            if i == cols {
-                output_buf.write_all(b"\r\n")?;
-                lines += 1;
-                i = 0;
-            } else if i > cols {
-                unreachable!()
+        BUFFER.with(|output_buf| {
+            let mut i = 0;
+            for (index, com) in completions.iter().enumerate() {
+                if i == cols {
+                    output_buf.append(b"\r\n");
+                    lines += 1;
+                    i = 0;
+                } else if i > cols {
+                    unreachable!()
+                }
+
+                if Some(index) == highlighted {
+                    output_buf.append(color::Black.fg_str().as_bytes());
+                    output_buf.append(color::White.bg_str().as_bytes());
+                }
+                write!(output_buf.0.borrow_mut(), "{:<1$}", com, col_width)?;
+                if Some(index) == highlighted {
+                    output_buf.append(color::Reset.bg_str().as_bytes());
+                    output_buf.append(color::Reset.fg_str().as_bytes());
+                }
+
+                i += 1;
             }
 
-            if Some(index) == highlighted {
-                output_buf.extend_from_slice(color::Black.fg_str().as_bytes());
-                output_buf.extend_from_slice(color::White.bg_str().as_bytes());
-            }
-            write!(output_buf, "{:<1$}", com, col_width)?;
-            if Some(index) == highlighted {
-                output_buf.extend_from_slice(color::Reset.bg_str().as_bytes());
-                output_buf.extend_from_slice(color::Reset.fg_str().as_bytes());
-            }
+            Ok(lines)
+        })
 
-            i += 1;
-        }
-
-        Ok(lines)
     }
 
     pub fn skip_completions_hint(&mut self) {
@@ -392,8 +423,11 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
-        self.output_buf.extend_from_slice(clear::All.as_ref());
-        self.output_buf.extend_from_slice(String::from(cursor::Goto(1,1)).as_bytes());
+        BUFFER.with(|output_buf| {
+            output_buf.append(clear::All.as_ref());
+            output_buf.append(String::from(cursor::Goto(1,1)).as_bytes());
+        });
+
         self.term_cursor_line = 1;
         self.no_newline = true;
         self.display()
@@ -658,169 +692,173 @@ impl<'a, W: Write> Editor<'a, W> {
     }
 
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
-        fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
-            let mut total = 0;
+        BUFFER.with(|output_buf| {
+            fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
+                let mut total = 0;
 
-            for line in buf_widths {
-                if total % terminal_width != 0 {
-                    total = ((total / terminal_width) + 1) * terminal_width;
+                for line in buf_widths {
+                    if total % terminal_width != 0 {
+                        total = ((total / terminal_width) + 1) * terminal_width;
+                    }
+
+                    total += prompt_width + line;
                 }
 
-                total += prompt_width + line;
+                total
             }
 
-            total
-        }
+            let terminal_width = util::terminal_width()?;
+            let prompt_width = util::last_prompt_line_width(&self.prompt);
 
-        let terminal_width = util::terminal_width()?;
-        let prompt_width = util::last_prompt_line_width(&self.prompt);
+            let buf = cur_buf!(self);
+            let buf_width = buf.width();
 
-        let buf = cur_buf!(self);
-        let buf_width = buf.width();
-
-        // Don't let the cursor go over the end!
-        let buf_num_chars = buf.num_chars();
-        if buf_num_chars < self.cursor {
-            self.cursor = buf_num_chars;
-        }
-
-        // Can't move past the last character in vi normal mode
-        if self.no_eol && self.cursor != 0 && self.cursor == buf_num_chars {
-            self.cursor -= 1;
-        }
-
-        // Width of the current buffer lines (including autosuggestion)
-        let buf_widths = match self.current_autosuggestion() {
-            Some(suggestion) => suggestion.width(),
-            None => buf_width,
-        };
-        // Width of the current buffer lines (including autosuggestion) from the start to the cursor
-        let buf_widths_to_cursor = match self.current_autosuggestion() {
-            Some(suggestion) => suggestion.range_width(0, self.cursor),
-            None => buf.range_width(0, self.cursor),
-        };
-
-        // Total number of terminal spaces taken up by prompt and buffer
-        let new_total_width = calc_width(prompt_width, &buf_widths, terminal_width);
-        let new_total_width_to_cursor = calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
-
-        let new_num_lines = (new_total_width + terminal_width) / terminal_width;
-
-        // Move the term cursor to the same line as the prompt.
-        if self.term_cursor_line > 1 {
-            self.output_buf.extend_from_slice(cursor::Up(self.term_cursor_line as u16 - 1).to_string().as_bytes());
-        }
-
-        if ! self.no_newline {
-            self.output_buf.extend_from_slice("⏎".as_bytes());
-            for _ in 0..(terminal_width - 1) {
-                self.output_buf.push(b' ');
-            }
-        }
-
-        self.output_buf.push(b'\r');
-        self.output_buf.extend_from_slice(clear::AfterCursor.as_ref());
-
-        // If we're cycling through completions, show those
-        let mut completion_lines = 0;
-        if let Some((completions, i)) = self.show_completions_hint.as_ref() {
-            completion_lines = 1 + Self::print_completion_list(&mut self.output_buf, completions, *i)?;
-            self.output_buf.extend_from_slice(b"\r\n");
-        }
-
-        // Write the prompt
-        if ! self.no_newline {
-            for line in self.prompt.split('\n') {
-                self.output_buf.extend_from_slice(line.as_bytes());
-                self.output_buf.extend_from_slice(b"\r\n");
-            }
-            self.output_buf.pop(); // pop the '\n'
-            self.output_buf.pop(); // pop the '\r'
-        } else {
-            self.output_buf.extend_from_slice(util::handle_prompt(&self.prompt).as_bytes());
-        }
-
-        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
-        // We get the number of bytes in the buffer (but NOT the autosuggestion).
-        // Then, we loop and subtract from that number until it's 0, in which case we are printing
-        // the autosuggestion from here on (in a different color).
-        let lines = if show_autosuggest {
-            match self.current_autosuggestion() {
-                Some(suggestion) => suggestion.lines(),
-                None => buf.lines(),
-            }
-        } else {
-            buf.lines()
-        };
-        let mut buf_num_remaining_bytes = buf.num_bytes();
-
-        let lines_len = lines.len();
-        for (i, line) in lines.into_iter().enumerate() {
-            if i > 0 {
-                self.output_buf.extend_from_slice(cursor::Right(prompt_width as u16).to_string().as_bytes());
+            // Don't let the cursor go over the end!
+            let buf_num_chars = buf.num_chars();
+            if buf_num_chars < self.cursor {
+                self.cursor = buf_num_chars;
             }
 
-            if buf_num_remaining_bytes == 0 {
-                self.output_buf.extend_from_slice(line.as_bytes());
-            } else if line.len() > buf_num_remaining_bytes {
-                let start = &line[..buf_num_remaining_bytes];
-                let start = match self.closure {
-                    Some(ref f) => f(start),
-                    None => start.to_owned(),
-                };
-                self.output_buf.extend_from_slice(start.as_bytes());
-                self.output_buf.extend_from_slice(color::Yellow.fg_str().as_bytes());
-                self.output_buf.extend_from_slice(line[buf_num_remaining_bytes..].as_bytes());
-                buf_num_remaining_bytes = 0;
+            // Can't move past the last character in vi normal mode
+            if self.no_eol && self.cursor != 0 && self.cursor == buf_num_chars {
+                self.cursor -= 1;
+            }
+
+            // Width of the current buffer lines (including autosuggestion)
+            let buf_widths = match self.current_autosuggestion() {
+                Some(suggestion) => suggestion.width(),
+                None => buf_width,
+            };
+            // Width of the current buffer lines (including autosuggestion) from the start to the cursor
+            let buf_widths_to_cursor = match self.current_autosuggestion() {
+                Some(suggestion) => suggestion.range_width(0, self.cursor),
+                None => buf.range_width(0, self.cursor),
+            };
+
+            // Total number of terminal spaces taken up by prompt and buffer
+            let new_total_width = calc_width(prompt_width, &buf_widths, terminal_width);
+            let new_total_width_to_cursor = calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
+
+            let new_num_lines = (new_total_width + terminal_width) / terminal_width;
+
+            // Move the term cursor to the same line as the prompt.
+            if self.term_cursor_line > 1 {
+                output_buf.append(cursor::Up(self.term_cursor_line as u16 - 1).to_string().as_bytes());
+            }
+
+            if ! self.no_newline {
+                output_buf.append("⏎".as_bytes());
+                for _ in 0..(terminal_width - 1) {
+                    output_buf.push(b' ');
+                }
+            }
+
+            output_buf.push(b'\r');
+            output_buf.append(clear::AfterCursor.as_ref());
+
+            // If we're cycling through completions, show those
+            let mut completion_lines = 0;
+            if let Some((completions, i)) = self.show_completions_hint.as_ref() {
+                completion_lines = 1 + Self::print_completion_list(completions, *i)?;
+                output_buf.append(b"\r\n");
+            }
+
+            // Write the prompt
+            if ! self.no_newline {
+                for line in self.prompt.split('\n') {
+                    output_buf.append(line.as_bytes());
+                    output_buf.append(b"\r\n");
+                }
+                output_buf.pop(); // pop the '\n'
+                output_buf.pop(); // pop the '\r'
             } else {
-                buf_num_remaining_bytes -= line.len();
-                let written_line = match self.closure {
-                    Some(ref f) => f(&line),
-                    None => line,
-                };
-                self.output_buf.extend_from_slice(written_line.as_bytes());
+                output_buf.append(util::handle_prompt(&self.prompt).as_bytes());
             }
 
-            if i + 1 < lines_len {
-                self.output_buf.extend_from_slice(b"\r\n");
+            // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
+            // We get the number of bytes in the buffer (but NOT the autosuggestion).
+            // Then, we loop and subtract from that number until it's 0, in which case we are printing
+            // the autosuggestion from here on (in a different color).
+            let lines = if show_autosuggest {
+                match self.current_autosuggestion() {
+                    Some(suggestion) => suggestion.lines(),
+                    None => buf.lines(),
+                }
+            } else {
+                buf.lines()
+            };
+            let mut buf_num_remaining_bytes = buf.num_bytes();
+
+            let lines_len = lines.len();
+            for (i, line) in lines.into_iter().enumerate() {
+                if i > 0 {
+                    output_buf.append(cursor::Right(prompt_width as u16).to_string().as_bytes());
+                }
+
+                if buf_num_remaining_bytes == 0 {
+                    output_buf.append(line.as_bytes());
+                } else if line.len() > buf_num_remaining_bytes {
+                    let start = &line[..buf_num_remaining_bytes];
+                    let start = match self.closure {
+                        Some(ref f) => f(start),
+                        None => start.to_owned(),
+                    };
+                    output_buf.append(start.as_bytes());
+                    output_buf.append(color::Yellow.fg_str().as_bytes());
+                    output_buf.append(line[buf_num_remaining_bytes..].as_bytes());
+                    buf_num_remaining_bytes = 0;
+                } else {
+                    buf_num_remaining_bytes -= line.len();
+                    let written_line = match self.closure {
+                        Some(ref f) => f(&line),
+                        None => line,
+                    };
+                    output_buf.append(written_line.as_bytes());
+                }
+
+                if i + 1 < lines_len {
+                    output_buf.append(b"\r\n");
+                }
             }
-        }
 
-        if self.is_currently_showing_autosuggestion() {
-            self.output_buf.extend_from_slice(color::Reset.fg_str().as_bytes());
-        }
+            if self.is_currently_showing_autosuggestion() {
+                output_buf.append(color::Reset.fg_str().as_bytes());
+            }
 
-        // at the end of the line, move the cursor down a line
-        if new_total_width % terminal_width == 0 {
-            self.output_buf.extend_from_slice(b"\r\n");
-        }
+            // at the end of the line, move the cursor down a line
+            if new_total_width % terminal_width == 0 {
+                output_buf.append(b"\r\n");
+            }
 
-        self.term_cursor_line = (new_total_width_to_cursor + terminal_width) / terminal_width;
+            self.term_cursor_line = (new_total_width_to_cursor + terminal_width) / terminal_width;
 
-        // The term cursor is now on the bottom line. We may need to move the term cursor up
-        // to the line where the true cursor is.
-        let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
-        if cursor_line_diff > 0 {
-            self.output_buf.extend_from_slice(cursor::Up(cursor_line_diff as u16).to_string().as_bytes());
-        } else if cursor_line_diff < 0 {
-            unreachable!();
-        }
+            // The term cursor is now on the bottom line. We may need to move the term cursor up
+            // to the line where the true cursor is.
+            let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
+            if cursor_line_diff > 0 {
+                output_buf.append(cursor::Up(cursor_line_diff as u16).to_string().as_bytes());
+            } else if cursor_line_diff < 0 {
+                unreachable!();
+            }
 
-        // Now that we are on the right line, we must move the term cursor left or right
-        // to match the true cursor.
-        let cursor_col_diff = new_total_width as isize - new_total_width_to_cursor as isize -
-            cursor_line_diff * terminal_width as isize;
-        if cursor_col_diff > 0 {
-            self.output_buf.extend_from_slice(cursor::Left(cursor_col_diff as u16).to_string().as_bytes());
-        } else if cursor_col_diff < 0 {
-            self.output_buf.extend_from_slice(cursor::Right((-cursor_col_diff) as u16).to_string().as_bytes());
-        }
+            // Now that we are on the right line, we must move the term cursor left or right
+            // to match the true cursor.
+            let cursor_col_diff = new_total_width as isize - new_total_width_to_cursor as isize -
+                cursor_line_diff * terminal_width as isize;
+            if cursor_col_diff > 0 {
+                output_buf.append(cursor::Left(cursor_col_diff as u16).to_string().as_bytes());
+            } else if cursor_col_diff < 0 {
+                output_buf.append(cursor::Right((-cursor_col_diff) as u16).to_string().as_bytes());
+            }
 
-        self.term_cursor_line += completion_lines;
+            self.term_cursor_line += completion_lines;
 
-        self.out.write_all(&self.output_buf)?;
-	    self.output_buf.clear();
-        self.out.flush()
+            {
+                let out = &mut self.out;
+                output_buf.extract(|b| out.write_all(b))?;
+                out.flush()
+            }
+        })
     }
 
     /// Deletes the displayed prompt and buffer, replacing them with the current prompt and buffer
@@ -859,7 +897,6 @@ mod tests {
     #[test]
     fn move_cursor_left() {
         let mut context = Context::new();
-        let closure = |s: &str| {String::from(s)};
         let out = Vec::new();
         let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         ed.insert_str_after_cursor("let").unwrap();

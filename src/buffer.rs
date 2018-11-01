@@ -158,7 +158,7 @@ impl Buffer {
     }
 
     pub fn revert(&mut self) -> bool {
-        if self.actions.len() == 0 {
+        if self.actions.is_empty() {
             return false;
         }
 
@@ -228,7 +228,7 @@ impl Buffer {
     }
 
     pub fn range_chars(&self, start: usize, end: usize) -> Vec<char> {
-        self.data[start..end].iter().cloned().collect()
+        self.data[start..end].to_owned()
     }
 
     pub fn width(&self) -> Vec<usize> {
@@ -292,13 +292,12 @@ impl Buffer {
     pub fn starts_with(&self, other: &Buffer) -> bool {
         let other_len = other.data.len();
         let self_len = self.data.len();
-        if other.data.len() != 0 && self_len != other_len {
+        if ! other.data.is_empty() && self_len != other_len {
             let match_let = self.data
                 .iter()
                 .zip(&other.data)
                 .take_while(|&(s, o)| *s == *o)
-                .collect::<Vec<_>>()
-                .len();
+                .count();
             match_let == other_len
         } else {
             false
