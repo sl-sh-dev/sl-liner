@@ -8,6 +8,7 @@ use Context;
 use Buffer;
 use event::*;
 use util;
+use history::History;
 
 /// Buffer for prompt writes, meant to be shared between prompt creations.
 struct LocalBuffer(pub RefCell<Vec<u8>>);
@@ -124,6 +125,10 @@ pub struct Editor<'a, W: Write> {
     pub no_eol: bool,
 
     no_newline: bool,
+
+    reverse_search: bool,
+
+    autosuggestion: Option<Buffer>,
 }
 
 macro_rules! cur_buf_mut {
@@ -174,6 +179,8 @@ impl<'a, W: Write> Editor<'a, W> {
             term_cursor_line: 1,
             no_eol: false,
             no_newline: false,
+            reverse_search: false,
+            autosuggestion: None,
         };
 
         if !ed.new_buf.is_empty() {
@@ -209,6 +216,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
     pub fn handle_newline(&mut self) -> io::Result<bool> {
+        self.reverse_search = false;
         if self.show_completions_hint.is_some() {
             self.show_completions_hint = None;
             return Ok(false);
@@ -227,6 +235,17 @@ impl<'a, W: Write> Editor<'a, W> {
             self.show_completions_hint = None;
             Ok(true)
         }
+    }
+
+    pub fn reverse_search(&mut self) {
+        let pat = self.current_buffer().to_string();
+        if !self.reverse_search {
+            self.context.history.init_reverse_search(pat);
+            self.reverse_search = true;
+        } else {
+            self.context.history.next_reverse_search(pat);
+        }
+        self.display();
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
@@ -430,11 +449,13 @@ impl<'a, W: Write> Editor<'a, W> {
 
         self.term_cursor_line = 1;
         self.no_newline = true;
+        self.reverse_search = false;
         self.display()
     }
 
     /// Move up (backwards) in history.
     pub fn move_up(&mut self) -> io::Result<()> {
+        self.reverse_search = false;
         if let Some(i) = self.cur_history_loc {
             if i > 0 {
                 self.cur_history_loc = Some(i - 1);
@@ -454,6 +475,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Move down (forwards) in history, or to the new buffer if we reach the end of history.
     pub fn move_down(&mut self) -> io::Result<()> {
+        self.reverse_search = false;
         if let Some(i) = self.cur_history_loc {
             if i < self.context.history.len() - 1 {
                 self.cur_history_loc = Some(i + 1);
@@ -637,6 +659,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
+        self.reverse_search = false;
         self.cursor = cur_buf!(self).num_chars();
         self.no_newline = true;
         self.display()
@@ -667,32 +690,51 @@ impl<'a, W: Write> Editor<'a, W> {
     pub fn accept_autosuggestion(&mut self) -> io::Result<()> {
         if self.show_autosuggestions {
             {
-                let autosuggestion = self.current_autosuggestion().cloned();
+                let autosuggestion = self.autosuggestion.clone();
+                let reverse_search = self.reverse_search;
                 let buf = self.current_buffer_mut();
-                if let Some(x) = autosuggestion {
-                    buf.insert_from_buffer(&x);
+                if let Some(ref x) = autosuggestion {
+                    if reverse_search {
+                        buf.copy_buffer(x);
+                    } else {
+                        buf.insert_from_buffer(x);
+                    }
                 }
             }
         }
+        self.reverse_search = false;
         self.move_cursor_to_end_of_line()
     }
 
-    pub fn current_autosuggestion(&self) -> Option<&Buffer> {
-        if self.show_autosuggestions {
-            self.context
-                .history
-                .get_newest_match(self.cur_history_loc, self.current_buffer())
+    //fn current_autosuggestion(&mut self) -> Option<&Buffer> {
+    /*fn current_autosuggestion(&mut self) {
+        let autosuggestion = if self.reverse_search {
+            self.context.history.reverse_search(self.current_buffer().to_string())
+        } else {
+            if self.show_autosuggestions {
+                self.context.history.get_newest_match(self.cur_history_loc, self.current_buffer())
+            } else {
+                None
+            }
+        };
+        self.autosuggestion = if let Some(buf) = autosuggestion {
+            Some(buf.clone())
         } else {
             None
-        }
-    }
+        };
+    }*/
 
     pub fn is_currently_showing_autosuggestion(&self) -> bool {
-        self.current_autosuggestion().is_some()
+        self.autosuggestion.is_some()
     }
 
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
         BUFFER.with(|output_buf| {
+            let prompt = if self.reverse_search {
+                format!("(reverse-i-search)'{}`: ", self.current_buffer())
+            } else {
+                self.prompt.clone()
+            };
             fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
                 let mut total = 0;
 
@@ -708,7 +750,7 @@ impl<'a, W: Write> Editor<'a, W> {
             }
 
             let terminal_width = util::terminal_width()?;
-            let prompt_width = util::last_prompt_line_width(&self.prompt);
+            let prompt_width = util::last_prompt_line_width(&prompt);
 
             let buf = cur_buf!(self);
             let buf_width = buf.width();
@@ -725,19 +767,26 @@ impl<'a, W: Write> Editor<'a, W> {
             }
 
             // Width of the current buffer lines (including autosuggestion)
-            let buf_widths = match self.current_autosuggestion() {
-                Some(suggestion) => suggestion.width(),
+            //self.current_autosuggestion();
+
+
+            let buf_widths = match self.autosuggestion {
+                Some(ref suggestion) => suggestion.width(),
                 None => buf_width,
             };
             // Width of the current buffer lines (including autosuggestion) from the start to the cursor
-            let buf_widths_to_cursor = match self.current_autosuggestion() {
-                Some(suggestion) => suggestion.range_width(0, self.cursor),
+            let buf_widths_to_cursor = match self.autosuggestion {
+                Some(ref suggestion) => suggestion.range_width(0, self.cursor),
                 None => buf.range_width(0, self.cursor),
             };
 
             // Total number of terminal spaces taken up by prompt and buffer
             let new_total_width = calc_width(prompt_width, &buf_widths, terminal_width);
-            let new_total_width_to_cursor = calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
+            let new_total_width_to_cursor = if self.reverse_search {
+                0
+            } else {
+                calc_width(prompt_width, &buf_widths_to_cursor, terminal_width)
+            };
 
             let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
@@ -765,14 +814,14 @@ impl<'a, W: Write> Editor<'a, W> {
 
             // Write the prompt
             if ! self.no_newline {
-                for line in self.prompt.split('\n') {
+                for line in prompt.split('\n') {
                     output_buf.append(line.as_bytes());
                     output_buf.append(b"\r\n");
                 }
                 output_buf.pop(); // pop the '\n'
                 output_buf.pop(); // pop the '\r'
             } else {
-                output_buf.append(util::handle_prompt(&self.prompt).as_bytes());
+                output_buf.append(util::handle_prompt(&prompt).as_bytes());
             }
 
             // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
@@ -780,8 +829,8 @@ impl<'a, W: Write> Editor<'a, W> {
             // Then, we loop and subtract from that number until it's 0, in which case we are printing
             // the autosuggestion from here on (in a different color).
             let lines = if show_autosuggest {
-                match self.current_autosuggestion() {
-                    Some(suggestion) => suggestion.lines(),
+                match self.autosuggestion {
+                    Some(ref suggestion) => suggestion.lines(),
                     None => buf.lines(),
                 }
             } else {
@@ -803,8 +852,13 @@ impl<'a, W: Write> Editor<'a, W> {
                         Some(ref f) => f(start),
                         None => start.to_owned(),
                     };
+                    if self.reverse_search {
+                        output_buf.append(color::Yellow.fg_str().as_bytes());
+                    }
                     output_buf.append(start.as_bytes());
-                    output_buf.append(color::Yellow.fg_str().as_bytes());
+                    if !self.reverse_search {
+                        output_buf.append(color::Yellow.fg_str().as_bytes());
+                    }
                     output_buf.append(line[buf_num_remaining_bytes..].as_bytes());
                     buf_num_remaining_bytes = 0;
                 } else {
@@ -813,6 +867,9 @@ impl<'a, W: Write> Editor<'a, W> {
                         Some(ref f) => f(&line),
                         None => line,
                     };
+                    if self.reverse_search {
+                        output_buf.append(color::Yellow.fg_str().as_bytes());
+                    }
                     output_buf.append(written_line.as_bytes());
                 }
 
@@ -863,6 +920,27 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Deletes the displayed prompt and buffer, replacing them with the current prompt and buffer
     pub fn display(&mut self) -> io::Result<()> {
+        {
+            let autosuggestion = if self.reverse_search {
+                let pat = self.current_buffer().to_string();
+                //self.context.history.reverse_search(self.current_buffer().to_string().clone())
+                self.context.history.reverse_search(pat)
+            } else {
+                if self.show_autosuggestions {
+                    self.context.history.get_newest_match(self.cur_history_loc, self.current_buffer())
+                } else {
+                    None
+                }
+            };
+            self.autosuggestion = if let Some(buf) = autosuggestion {
+                Some(buf.clone())
+            } else {
+                None
+            };
+        }
+
+
+
         self._display(true)
     }
 }

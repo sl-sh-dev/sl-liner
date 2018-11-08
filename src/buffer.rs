@@ -223,6 +223,12 @@ impl Buffer {
         self.insert(start, &other.data[start..])
     }
 
+    pub fn copy_buffer(&mut self, other: &Buffer) {
+        let data_len = self.data.len();
+        self.remove(0, data_len);
+        self.insert(0, &other.data[0..])
+    }
+
     pub fn range(&self, start: usize, end: usize) -> String {
         self.data[start..end].iter().cloned().collect()
     }
