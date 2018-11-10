@@ -37,10 +37,10 @@ pub trait KeyMap<'a, W: Write, T>: From<T> {
             Key::Ctrl('f') if self.editor().is_currently_showing_autosuggestion() => {
                 self.editor_mut().accept_autosuggestion()?;
             }
-            Key::Ctrl('s') => {
+            Key::Ctrl('k') => {
                 self.editor_mut().search(false)?;
             }
-            Key::Ctrl('j') => {
+            Key::Ctrl('s') => {
                 self.editor_mut().search(true)?;
             }
             Key::Right if self.editor().is_currently_showing_autosuggestion() &&
