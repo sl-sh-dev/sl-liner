@@ -272,6 +272,10 @@ impl<'a, W: Write> Editor<'a, W> {
         }
     }
 
+    /// Begin or continue a search through history.  If forward is true then start at top (or
+    /// current_history_loc if set). If started with forward true then incremental search goes
+    /// forward (top to bottom) other wise reverse (bottom to top).  It is valid to continue a
+    /// search with forward changed (i.e. reverse search direction for one result).
     pub fn search(&mut self, forward: bool) -> io::Result<()> {
         if !self.is_search() {
             self.reverse_search = !forward;
@@ -764,6 +768,9 @@ impl<'a, W: Write> Editor<'a, W> {
         self.move_cursor_to_end_of_line()
     }
 
+    /// Returns current auto suggestion, for history search this is the current match if not
+    /// searching the first history entry to start with current text (reverse order).
+    /// Return None if nothing found.
     fn current_autosuggestion(&mut self) -> Option<Buffer> {
         let autosuggestion = if self.is_search() {
             let search_loc = self.next_search(
@@ -815,6 +822,7 @@ impl<'a, W: Write> Editor<'a, W> {
             }
 
             let (prompt, rev_prompt_width) = if self.is_search() {
+                // If we are searching override prompt to search prompt.
                 (format!("(search)'{}`: ", self.current_buffer()), 9)
             } else {
                 (self.prompt.clone(), 0)
@@ -836,10 +844,6 @@ impl<'a, W: Write> Editor<'a, W> {
             if self.no_eol && self.cursor != 0 && self.cursor == buf_num_chars {
                 self.cursor -= 1;
             }
-
-            // Width of the current buffer lines (including autosuggestion)
-            //self.current_autosuggestion();
-
 
             let buf_widths = match self.autosuggestion {
                 Some(ref suggestion) => suggestion.width(),
