@@ -310,6 +310,14 @@ impl Buffer {
         }
     }
 
+    /// Check if the buffer contains pattern.
+    /// Used to implement history search.
+    pub fn contains(&self, pattern: &Buffer) -> bool {
+        let stested: String = self.to_string();
+        let search_term = pattern.to_string();
+        stested.contains(&search_term)
+    }
+
     /// Return true if the buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()

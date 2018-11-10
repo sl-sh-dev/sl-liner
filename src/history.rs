@@ -29,8 +29,6 @@ pub struct History {
     max_file_size: usize,
     // TODO set from environment variable?
     pub append_duplicate_entries: bool,
-    // Location for reverse search.
-    reverse_location: usize,
 }
 
 impl History {
@@ -42,7 +40,6 @@ impl History {
             max_buffers_size: DEFAULT_MAX_SIZE,
             max_file_size: DEFAULT_MAX_SIZE,
             append_duplicate_entries: false,
-            reverse_location: 0,
         }
     }
 
@@ -129,71 +126,47 @@ impl History {
         None
     }
 
-    pub fn init_reverse_search(&mut self, search_term: String) {
-        self.reverse_location = self.len();
-        if let Some(idx) = self.reverse_search_index(search_term) {
-            self.reverse_location = idx+1;
-        }
-    }
-
-    /// Go through the history and try to find a buffer index that contains search_term.
-    pub fn reverse_search_index(
-        &self,
-        search_term: String,
-    ) -> Option<usize> {
-        for iter in (0..self.reverse_location).rev() {
-            if let Some(tested) = self.buffers.get(iter) {
-                let stested: String = tested.to_string();
-                if stested.contains(&search_term) {
-                    return Some(iter);
+    fn search_index<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
+        where I: Iterator<Item = usize>
+    {
+        for i in vals {
+            if let Some(tested) = self.buffers.get(i) {
+                if tested.contains(search_term) {
+                    return Some(i);
                 }
             }
-        }
-        if self.reverse_location != self.len() {
-            // Wrap around if not found.
-            for iter in (self.reverse_location..self.len()).rev() {
-                if let Some(tested) = self.buffers.get(iter) {
-                    let stested: String = tested.to_string();
-                    if stested.contains(&search_term) {
-                        return Some(iter);
-                    }
-                }
-            }
-
         }
         None
     }
 
-    /// Go through the history and try to find a buffer which starts the same as the new buffer
-    /// given to this function as argument.
-    pub fn reverse_search<'a, 'b>(
-        &'a self,
-        search_term: String,
-    ) -> Option<&'a Buffer> {
-        if let Some(idx) = self.reverse_search_index(search_term) {
-            self.buffers.get(idx)
+    /// Go through the history and try to find a buffer index that contains search_term.
+    /// Start the search at cur_location and wrap around (search the entire history).
+    pub fn reverse_search_index(
+        &self,
+        cur_location: Option<usize>,
+        search_term: &Buffer,
+    ) -> Option<usize> {
+        let location = if let Some(x) = cur_location {
+            x + 1
         } else {
-            None
-        }
+            self.len()
+        };
+        self.search_index((0..location).rev().chain((location..self.len()).rev()), search_term)
     }
 
-    pub fn next_reverse_search(&mut self, search_term: String) {
-        if self.reverse_location > 0 {
-            self.reverse_location -= 1;
+    /// Go through the history and try to find a buffer index that contains search_term.
+    /// Start the search at cur_location and wrap around (search the entire history).
+    pub fn forward_search_index(
+        &self,
+        cur_location: Option<usize>,
+        search_term: &Buffer,
+    ) -> Option<usize> {
+        let location = if let Some(x) = cur_location {
+            x
         } else {
-            // Wrap around if we hit bottom.
-            self.reverse_location = self.len();
-        }
-        if let Some(idx) = self.reverse_search_index(search_term.clone()) {
-            self.reverse_location = idx+1;
-        /*} else {
-            if self.reverse_location != self.len() {
-                self.reverse_location = self.len();
-                if let Some(idx) = self.reverse_search_index(search_term) {
-                    self.reverse_location = idx+1;
-                }
-            }*/
-        }
+            0
+        };
+        self.search_index((location..self.len()).chain(0..location), search_term)
     }
 
     /// Get the history file name.
