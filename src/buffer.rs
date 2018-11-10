@@ -489,6 +489,33 @@ mod tests {
     }
 
     #[test]
+    fn test_contains() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['a', 'b', 'c']);
+        assert_eq!(buf.contains(&buf2), true);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['c', 'd', 'e']);
+        assert_eq!(buf.contains(&buf2), true);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['e', 'f', 'g']);
+        assert_eq!(buf.contains(&buf2), true);
+    }
+
+    #[test]
+    fn test_does_not_contain() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['x', 'b', 'c']);
+        assert_eq!(buf.contains(&buf2), false);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['a', 'b', 'd']);
+        assert_eq!(buf.contains(&buf2), false);
+    }
+
+    #[test]
     fn test_print_rest() {
         let mut buf = Buffer::new();
         buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
