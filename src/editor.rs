@@ -517,38 +517,44 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Move up (backwards) in history.
     pub fn move_up(&mut self) -> io::Result<()> {
-        self._clear_search(true);
-        if let Some(i) = self.cur_history_loc {
-            if i > 0 {
-                self.cur_history_loc = Some(i - 1);
-            } else {
-                self.no_newline = true;
-                return self.display();
-            }
-        } else if self.context.history.len() > 0 {
-            self.cur_history_loc = Some(self.context.history.len() - 1);
+        if self.is_search() {
+            self.search(false)?;
         } else {
-            self.no_newline = true;
-            return self.display();
+            if self.new_buf.num_chars() > 0 {
+                self.cur_history_loc = self.context.history.get_newest_match(self.cur_history_loc, &self.new_buf);
+            } else {
+                if let Some(i) = self.cur_history_loc {
+                    if i > 0 {
+                        self.cur_history_loc = Some(i - 1);
+                    }
+                } else if self.context.history.len() > 0 {
+                    self.cur_history_loc = Some(self.context.history.len()-1);
+                }
+            }
         }
-
         self.move_cursor_to_end_of_line()
     }
 
     /// Move down (forwards) in history, or to the new buffer if we reach the end of history.
     pub fn move_down(&mut self) -> io::Result<()> {
-        self._clear_search(true);
-        if let Some(i) = self.cur_history_loc {
-            if i < self.context.history.len() - 1 {
-                self.cur_history_loc = Some(i + 1);
-            } else {
-                self.cur_history_loc = None;
-            }
-            self.move_cursor_to_end_of_line()
+        if self.is_search() {
+            self.search(true)?;
         } else {
-            self.no_newline = true;
-            self.display()
+            if self.new_buf.num_chars() > 0 {
+                if let Some(i) = self.cur_history_loc {
+                    self.cur_history_loc = self.context.history.get_oldest_match(Some(i + 1), &self.new_buf);
+                }
+            } else {
+                if let Some(i) = self.cur_history_loc {
+                    if i < self.context.history.len()-1 {
+                        self.cur_history_loc = Some(i + 1);
+                    } else {
+                        self.cur_history_loc = None;
+                    }
+                }
+            }
         }
+        self.move_cursor_to_end_of_line()
     }
 
     /// Moves to the start of history (ie. the earliest history entry).
@@ -721,7 +727,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
-        self.clear_search();
+        //self.clear_search();
         self.cursor = cur_buf!(self).num_chars();
         self.no_newline = true;
         self.display()
@@ -788,8 +794,17 @@ impl<'a, W: Write> Editor<'a, W> {
             }
         } else {
             if self.show_autosuggestions {
-                self.context.history.get_newest_match(self.cur_history_loc,
-                                                      self.current_buffer())
+                if let Some(i) = self.cur_history_loc {
+                    Some(&self.context.history[i])
+                } else {
+                    let idx = self.context.history.get_newest_match(Some(self.context.history.len()),
+                                                                    &self.new_buf);
+                    if let Some(i) = idx {
+                        Some(&self.context.history[i])
+                    } else {
+                        None
+                    }
+                }
             } else {
                 None
             }
@@ -959,7 +974,7 @@ impl<'a, W: Write> Editor<'a, W> {
                 }
             }
 
-            if self.is_currently_showing_autosuggestion() {
+            if self.is_currently_showing_autosuggestion() || self.is_search() {
                 output_buf.append(color::Reset.fg_str().as_bytes());
             }
 

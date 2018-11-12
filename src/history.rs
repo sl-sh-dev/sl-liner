@@ -108,22 +108,39 @@ impl History {
         });
     }
 
-    /// Go through the history and try to find a buffer which starts the same as the new buffer
-    /// given to this function as argument.
-    pub fn get_newest_match<'a, 'b>(
-        &'a self,
-        curr_position: Option<usize>,
-        new_buff: &'b Buffer,
-    ) -> Option<&'a Buffer> {
-        let pos = curr_position.unwrap_or_else(|| self.buffers.len());
-        for iter in (0..pos).rev() {
-            if let Some(tested) = self.buffers.get(iter) {
-                if tested.starts_with(new_buff) {
-                    return self.buffers.get(iter);
+    fn get_match<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
+        where I: Iterator<Item = usize>
+    {
+        for i in vals {
+            if let Some(tested) = self.buffers.get(i) {
+                if tested.starts_with(search_term) {
+                    return Some(i);
                 }
             }
         }
         None
+    }
+
+    /// Go through the history and try to find an index (newest to oldest) which starts the same
+    /// as the new buffer given to this function as argument.  Starts at curr_position.  Does no wrap.
+    pub fn get_newest_match(&self, curr_position: Option<usize>, new_buff: &Buffer, ) -> Option<usize> {
+        let pos = curr_position.unwrap_or_else(|| self.buffers.len());
+        if pos > 0 {
+            self.get_match((0..pos).rev(), new_buff)
+        } else {
+            None
+        }
+    }
+
+    /// Go through the history and try to find an index (oldest to newest) which starts the same
+    /// as the new buffer given to this function as argument.  Starts at curr_position.  Does not wrap.
+    pub fn get_oldest_match(&self, curr_position: Option<usize>, new_buff: &Buffer, ) -> Option<usize> {
+        let pos = curr_position.unwrap_or_else(|| 0);
+        if pos < self.len() {
+            self.get_match(pos..self.len(), new_buff)
+        } else {
+            None
+        }
     }
 
     fn search_index<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
