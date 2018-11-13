@@ -1202,11 +1202,12 @@ mod tests {
         ]);
         assert_eq!(map.ed.cursor(), 0);
     }
+
     #[test]
     fn vi_normal_history_cursor_eol() {
         let mut context = Context::new();
-        context.history.push("history".into()).unwrap();
-        context.history.push("history".into()).unwrap();
+        context.history.push("data hostory".into()).unwrap();
+        context.history.push("data history".into()).unwrap();
         let out = Vec::new();
         let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
@@ -1214,11 +1215,69 @@ mod tests {
         assert_eq!(map.ed.cursor(), 4);
 
         simulate_keys!(map, [Up]);
-        assert_eq!(map.ed.cursor(), 7);
+        assert_eq!(map.ed.cursor(), 12);
 
         // in normal mode, make sure we don't end up past the last char
         simulate_keys!(map, [Ctrl('['), Up]);
-        assert_eq!(map.ed.cursor(), 6);
+        assert_eq!(map.ed.cursor(), 11);
+    }
+
+    #[test]
+    fn vi_normal_history() {
+        let mut context = Context::new();
+        context.history.push("data second".into()).unwrap();
+        context.history.push("skip1".into()).unwrap();
+        context.history.push("data one".into()).unwrap();
+        context.history.push("skip2".into()).unwrap();
+        let out = Vec::new();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = Vi::new(ed);
+        map.ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(map.ed.cursor(), 4);
+
+        simulate_keys!(map, [Up]);
+        assert_eq!(map.ed.cursor(), 8);
+
+        // in normal mode, make sure we don't end up past the last char
+        simulate_keys!(map, [Ctrl('['), Char('k')]);
+        assert_eq!(map.ed.cursor(), 10);
+    }
+
+    #[test]
+    fn vi_search_history() {
+        // Test incremental search as well as vi binding in search mode.
+        let mut context = Context::new();
+        context.history.push("data pat second".into()).unwrap();
+        context.history.push("skip1".into()).unwrap();
+        context.history.push("data pat one".into()).unwrap();
+        context.history.push("skip2".into()).unwrap();
+        let out = Vec::new();
+        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = Vi::new(ed);
+        map.ed.insert_str_after_cursor("pat").unwrap();
+        assert_eq!(map.ed.cursor(), 3);
+        simulate_keys!(map, [Ctrl('k'), Right]);
+        assert_eq!(map.ed.cursor(), 12);
+
+        //simulate_keys!(map, [Ctrl('['), Char('u'), Char('i')]);
+        map.ed.delete_all_before_cursor().unwrap();
+        assert_eq!(map.ed.cursor(), 0);
+        //map.ed.insert_str_after_cursor("pat").unwrap();
+        //assert_eq!(map.ed.cursor(), 3);
+        simulate_keys!(map, [Ctrl('k'), Char('p'), Char('a'), Char('t'), Ctrl('['), Char('k'), Ctrl('f')]);
+        assert_eq!(map.ed.cursor(), 14);
+
+        simulate_keys!(map, [Ctrl('['), Char('u'), Char('i')]);
+        assert_eq!(map.ed.cursor(), 0);
+        simulate_keys!(map, [Ctrl('s'), Char('p'), Char('a'), Char('t'), Ctrl('f')]);
+        assert_eq!(map.ed.cursor(), 15);
+
+        map.ed.delete_all_before_cursor().unwrap();
+        assert_eq!(map.ed.cursor(), 0);
+        map.ed.insert_str_after_cursor("pat").unwrap();
+        assert_eq!(map.ed.cursor(), 3);
+        simulate_keys!(map, [Ctrl('s'), Ctrl('['), Char('j'), Right]);
+        assert_eq!(map.ed.cursor(), 11);
     }
 
     #[test]
@@ -3347,7 +3406,7 @@ mod tests {
     /// test undo in groups
     fn undo_insert_with_history() {
         let mut context = Context::new();
-        context.history.push(Buffer::from("")).unwrap();
+        context.history.push(Buffer::from("insert something")).unwrap();
         let out = Vec::new();
         let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = Vi::new(ed);
