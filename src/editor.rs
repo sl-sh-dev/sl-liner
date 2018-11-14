@@ -519,6 +519,7 @@ impl<'a, W: Write> Editor<'a, W> {
     pub fn move_up(&mut self) -> io::Result<()> {
         if self.is_search() {
             self.search(false)?;
+            self.display()
         } else {
             if self.new_buf.num_chars() > 0 {
                 self.cur_history_loc = self.context.history.get_newest_match(self.cur_history_loc, &self.new_buf);
@@ -531,14 +532,15 @@ impl<'a, W: Write> Editor<'a, W> {
                     self.cur_history_loc = Some(self.context.history.len()-1);
                 }
             }
+            self.move_cursor_to_end_of_line()
         }
-        self.move_cursor_to_end_of_line()
     }
 
     /// Move down (forwards) in history, or to the new buffer if we reach the end of history.
     pub fn move_down(&mut self) -> io::Result<()> {
         if self.is_search() {
             self.search(true)?;
+            self.display()
         } else {
             if self.new_buf.num_chars() > 0 {
                 if let Some(i) = self.cur_history_loc {
@@ -553,8 +555,8 @@ impl<'a, W: Write> Editor<'a, W> {
                     }
                 }
             }
+            self.move_cursor_to_end_of_line()
         }
-        self.move_cursor_to_end_of_line()
     }
 
     /// Moves to the start of history (ie. the earliest history entry).
