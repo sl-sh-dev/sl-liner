@@ -1256,7 +1256,7 @@ mod tests {
         let mut map = Vi::new(ed);
         map.ed.insert_str_after_cursor("pat").unwrap();
         assert_eq!(map.ed.cursor(), 3);
-        simulate_keys!(map, [Ctrl('k'), Right]);
+        simulate_keys!(map, [Ctrl('r'), Right]);
         assert_eq!(map.ed.cursor(), 12);
 
         //simulate_keys!(map, [Ctrl('['), Char('u'), Char('i')]);
@@ -1264,7 +1264,7 @@ mod tests {
         assert_eq!(map.ed.cursor(), 0);
         //map.ed.insert_str_after_cursor("pat").unwrap();
         //assert_eq!(map.ed.cursor(), 3);
-        simulate_keys!(map, [Ctrl('k'), Char('p'), Char('a'), Char('t'), Ctrl('['), Char('k'), Ctrl('f')]);
+        simulate_keys!(map, [Ctrl('r'), Char('p'), Char('a'), Char('t'), Ctrl('['), Char('k'), Ctrl('f')]);
         assert_eq!(map.ed.cursor(), 14);
 
         simulate_keys!(map, [Ctrl('['), Char('u'), Char('i')]);
@@ -3327,9 +3327,10 @@ mod tests {
             Char('u'),
             Char('u'),
             Char('u'),
-            Char('2'),
-            Ctrl('r'),
         ]);
+        // Ctrl-r taken by incremental search so do this manually.
+        map.ed.redo().unwrap();
+        map.ed.redo().unwrap();
         assert_eq!(String::from(map), "abcde");
     }
 
