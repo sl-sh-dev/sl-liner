@@ -143,6 +143,25 @@ impl History {
         }
     }
 
+    pub fn get_history_subset(&self, search_term: &Buffer) -> Vec<usize> {
+        let mut v: Vec<usize> = Vec::new();
+        let mut ret: Vec<usize> = (0..self.len()).filter(|i| {
+            if let Some(tested) = self.buffers.get(*i) {
+                let starts = tested.starts_with(search_term);
+                let contains = tested.contains(search_term);
+                if starts {
+                    v.push(*i);
+                }
+                if contains && !starts && !tested.equals(search_term) {
+                    return true;
+                }
+            }
+            return false;
+        }).collect();
+        ret.append(&mut v);
+        ret
+    }
+
     fn search_index<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
         where I: Iterator<Item = usize>
     {

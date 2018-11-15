@@ -129,6 +129,9 @@ pub struct Editor<'a, W: Write> {
     reverse_search: bool,
     forward_search: bool,
 
+    history_subset_index: Vec<usize>,
+    history_subset_loc: Option<usize>,
+
     autosuggestion: Option<Buffer>,
 }
 
@@ -183,6 +186,8 @@ impl<'a, W: Write> Editor<'a, W> {
             no_newline: false,
             reverse_search: false,
             forward_search: false,
+            history_subset_index: vec![],
+            history_subset_loc: None,
             autosuggestion: None,
         };
 
@@ -203,6 +208,8 @@ impl<'a, W: Write> Editor<'a, W> {
         }
         self.reverse_search = false;
         self.forward_search = false;
+        self.history_subset_loc = None;
+        self.history_subset_index.clear();
     }
 
     fn clear_search(&mut self) {
@@ -522,7 +529,20 @@ impl<'a, W: Write> Editor<'a, W> {
             self.display()
         } else {
             if self.new_buf.num_chars() > 0 {
-                self.cur_history_loc = self.context.history.get_newest_match(self.cur_history_loc, &self.new_buf);
+                if let Some(i) = self.history_subset_loc {
+                    if i > 0 {
+                        self.history_subset_loc = Some(i - 1);
+                        self.cur_history_loc = Some(self.history_subset_index[i - 1]);
+                    }
+                } else {
+                    self.history_subset_index = self.context.history.get_history_subset(&self.new_buf);
+                    if self.history_subset_index.len() > 0 {
+                        self.history_subset_loc = Some(self.history_subset_index.len() - 1);
+                        self.cur_history_loc = Some(self.history_subset_index[self.history_subset_index.len() - 1]);
+                    } else {
+                        self.history_subset_loc = None;
+                    }
+                }
             } else {
                 if let Some(i) = self.cur_history_loc {
                     if i > 0 {
@@ -543,8 +563,15 @@ impl<'a, W: Write> Editor<'a, W> {
             self.display()
         } else {
             if self.new_buf.num_chars() > 0 {
-                if let Some(i) = self.cur_history_loc {
-                    self.cur_history_loc = self.context.history.get_oldest_match(Some(i + 1), &self.new_buf);
+                if let Some(i) = self.history_subset_loc {
+                    if i < self.history_subset_index.len()-1 {
+                        self.history_subset_loc = Some(i + 1);
+                        self.cur_history_loc = Some(self.history_subset_index[i + 1]);
+                    } else {
+                        self.cur_history_loc = None;
+                        self.history_subset_loc = None;
+                        self.history_subset_index.clear();
+                    }
                 }
             } else {
                 if let Some(i) = self.cur_history_loc {
