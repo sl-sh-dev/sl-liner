@@ -525,8 +525,7 @@ impl<'a, W: Write> Editor<'a, W> {
     /// Move up (backwards) in history.
     pub fn move_up(&mut self) -> io::Result<()> {
         if self.is_search() {
-            self.search(false)?;
-            self.display()
+            self.search(false)
         } else {
             if self.new_buf.num_chars() > 0 {
                 match self.history_subset_loc {
@@ -557,8 +556,7 @@ impl<'a, W: Write> Editor<'a, W> {
     /// Move down (forwards) in history, or to the new buffer if we reach the end of history.
     pub fn move_down(&mut self) -> io::Result<()> {
         if self.is_search() {
-            self.search(true)?;
-            self.display()
+            self.search(true)
         } else {
             if self.new_buf.num_chars() > 0 {
                 if let Some(i) = self.history_subset_loc {

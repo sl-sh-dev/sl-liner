@@ -127,17 +127,6 @@ impl History {
         }
     }
 
-    /// Go through the history and try to find an index (oldest to newest) which starts the same
-    /// as the new buffer given to this function as argument.  Starts at curr_position.  Does not wrap.
-    pub fn get_oldest_match(&self, curr_position: Option<usize>, new_buff: &Buffer, ) -> Option<usize> {
-        let pos = curr_position.unwrap_or_else(|| 0);
-        if pos < self.len() {
-            self.get_match(pos..self.len(), new_buff)
-        } else {
-            None
-        }
-    }
-
     pub fn get_history_subset(&self, search_term: &Buffer) -> Vec<usize> {
         let mut v: Vec<usize> = Vec::new();
         let mut ret: Vec<usize> = (0..self.len()).filter(|i| {
