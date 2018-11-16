@@ -295,18 +295,7 @@ impl Buffer {
 
     /// Check if the other buffer has the same content as this one.
     pub fn equals(&self, other: &Buffer) -> bool {
-        let other_len = other.data.len();
-        let self_len = self.data.len();
-        if other_len == self_len {
-            let match_let = self.data
-                .iter()
-                .zip(&other.data)
-                .take_while(|&(s, o)| *s == *o)
-                .count();
-            match_let == other_len
-        } else {
-            false
-        }
+        self.data == other.data
     }
 
     /// Check if the other buffer starts with the same content as this one.
