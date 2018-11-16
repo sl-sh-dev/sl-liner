@@ -111,14 +111,9 @@ impl History {
     fn get_match<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
         where I: Iterator<Item = usize>
     {
-        for i in vals {
-            if let Some(tested) = self.buffers.get(i) {
-                if tested.starts_with(search_term) {
-                    return Some(i);
-                }
-            }
-        }
-        None
+        vals.filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
+            .filter(|(_i, tested)| tested.starts_with(search_term))
+            .next().map(|(i, _)| i)
     }
 
     /// Go through the history and try to find an index (newest to oldest) which starts the same
@@ -165,14 +160,9 @@ impl History {
     fn search_index<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
         where I: Iterator<Item = usize>
     {
-        for i in vals {
-            if let Some(tested) = self.buffers.get(i) {
-                if tested.contains(search_term) {
-                    return Some(i);
-                }
-            }
-        }
-        None
+        vals.filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
+            .filter(|(_i, tested)| tested.contains(search_term))
+            .next().map(|(i, _)| i)
     }
 
     /// Go through the history and try to find a buffer index that contains search_term.

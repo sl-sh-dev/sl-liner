@@ -529,27 +529,25 @@ impl<'a, W: Write> Editor<'a, W> {
             self.display()
         } else {
             if self.new_buf.num_chars() > 0 {
-                if let Some(i) = self.history_subset_loc {
-                    if i > 0 {
+                match self.history_subset_loc {
+                    Some(i) if i > 0 => {
                         self.history_subset_loc = Some(i - 1);
                         self.cur_history_loc = Some(self.history_subset_index[i - 1]);
                     }
-                } else {
-                    self.history_subset_index = self.context.history.get_history_subset(&self.new_buf);
-                    if self.history_subset_index.len() > 0 {
-                        self.history_subset_loc = Some(self.history_subset_index.len() - 1);
-                        self.cur_history_loc = Some(self.history_subset_index[self.history_subset_index.len() - 1]);
-                    } else {
-                        self.history_subset_loc = None;
+                    None => {
+                        self.history_subset_index = self.context.history.get_history_subset(&self.new_buf);
+                        if self.history_subset_index.len() > 0 {
+                            self.history_subset_loc = Some(self.history_subset_index.len() - 1);
+                            self.cur_history_loc = Some(self.history_subset_index[self.history_subset_index.len() - 1]);
+                        }
                     }
+                    _ => ()
                 }
             } else {
-                if let Some(i) = self.cur_history_loc {
-                    if i > 0 {
-                        self.cur_history_loc = Some(i - 1);
-                    }
-                } else if self.context.history.len() > 0 {
-                    self.cur_history_loc = Some(self.context.history.len()-1);
+                match self.cur_history_loc {
+                    Some(i) if i > 0 => self.cur_history_loc = Some(i - 1),
+                    None if self.context.history.len() > 0  => self.cur_history_loc = Some(self.context.history.len()-1),
+                    _ => ()
                 }
             }
             self.move_cursor_to_end_of_line()
@@ -574,12 +572,9 @@ impl<'a, W: Write> Editor<'a, W> {
                     }
                 }
             } else {
-                if let Some(i) = self.cur_history_loc {
-                    if i < self.context.history.len()-1 {
-                        self.cur_history_loc = Some(i + 1);
-                    } else {
-                        self.cur_history_loc = None;
-                    }
+                match self.cur_history_loc.take() {
+                    Some(i) if i < self.context.history.len() - 1 => self.cur_history_loc = Some(i + 1),
+                    _ => ()
                 }
             }
             self.move_cursor_to_end_of_line()
@@ -790,12 +785,10 @@ impl<'a, W: Write> Editor<'a, W> {
                 let autosuggestion = self.autosuggestion.clone();
                 let search = self.is_search();
                 let buf = self.current_buffer_mut();
-                if let Some(ref x) = autosuggestion {
-                    if search {
-                        buf.copy_buffer(x);
-                    } else {
-                        buf.insert_from_buffer(x);
-                    }
+                match autosuggestion {
+                    Some(ref x) if search => buf.copy_buffer(x),
+                    Some(ref x) => buf.insert_from_buffer(x),
+                    None => ()
                 }
             }
         }
@@ -811,38 +804,27 @@ impl<'a, W: Write> Editor<'a, W> {
             let search_loc = self.next_search(
                 self.search_history_loc,
                 self.current_buffer());
-            if let Some(i) = search_loc {
-                self.search_history_loc = search_loc;
-                Some(&self.context.history[i])
-            } else {
-                if let Some(i) = self.search_history_loc {
+
+            match search_loc {
+                Some(i) => {
+                    self.search_history_loc = Some(i);
                     Some(&self.context.history[i])
-                } else {
-                    None
                 }
+                None => self.search_history_loc.map(|i| &self.context.history[i])
             }
-        } else {
-            if self.show_autosuggestions {
-                if let Some(i) = self.cur_history_loc {
-                    Some(&self.context.history[i])
-                } else {
-                    let idx = self.context.history.get_newest_match(Some(self.context.history.len()),
-                                                                    &self.new_buf);
-                    if let Some(i) = idx {
-                        Some(&self.context.history[i])
-                    } else {
-                        None
-                    }
-                }
-            } else {
-                None
-            }
-        };
-        if let Some(buf) = autosuggestion {
-            Some(buf.clone())
+        } else if self.show_autosuggestions {
+            let context_history = &self.context.history;
+            self.cur_history_loc
+                .map(|i| &context_history[i])
+                .or_else(|| {
+                    context_history
+                        .get_newest_match(Some(context_history.len()), &self.new_buf)
+                        .map(|i| &context_history[i])
+                })
         } else {
             None
-        }
+        };
+        autosuggestion.cloned()
     }
 
     pub fn is_currently_showing_autosuggestion(&self) -> bool {
