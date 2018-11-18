@@ -107,7 +107,6 @@ pub struct Editor<'a, W: Write> {
 
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
-    search_history_loc: Option<usize>,
 
     // The line of the cursor relative to the prompt. 1-indexed.
     // So if the cursor is on the same line as the prompt, `term_cursor_line == 1`.
@@ -128,6 +127,7 @@ pub struct Editor<'a, W: Write> {
 
     reverse_search: bool,
     forward_search: bool,
+    buffer_changed: bool,
 
     history_subset_index: Vec<usize>,
     history_subset_loc: Option<usize>,
@@ -138,8 +138,14 @@ pub struct Editor<'a, W: Write> {
 macro_rules! cur_buf_mut {
     ($s:expr) => {
         match $s.cur_history_loc {
-            Some(i) => &mut $s.context.history[i],
-            _ => &mut $s.new_buf,
+            Some(i) => {
+                $s.buffer_changed = true;
+                &mut $s.context.history[i]
+            },
+            _ => {
+                $s.buffer_changed = true;
+                &mut $s.new_buf
+            },
         }
     }
 }
@@ -177,7 +183,6 @@ impl<'a, W: Write> Editor<'a, W> {
             closure: f,
             new_buf: buffer.into(),
             cur_history_loc: None,
-            search_history_loc: None,
             context: context,
             show_completions_hint: None,
             show_autosuggestions: true,
@@ -186,6 +191,7 @@ impl<'a, W: Write> Editor<'a, W> {
             no_newline: false,
             reverse_search: false,
             forward_search: false,
+            buffer_changed: false,
             history_subset_index: vec![],
             history_subset_loc: None,
             autosuggestion: None,
@@ -202,31 +208,11 @@ impl<'a, W: Write> Editor<'a, W> {
         self.reverse_search || self.forward_search
     }
 
-    fn _clear_search(&mut self, update_history_loc: bool) {
-        if self.is_search() && update_history_loc {
-            self.cur_history_loc = self.search_history_loc;
-        }
+    fn clear_search(&mut self) {
         self.reverse_search = false;
         self.forward_search = false;
         self.history_subset_loc = None;
         self.history_subset_index.clear();
-    }
-
-    fn clear_search(&mut self) {
-        self._clear_search(false);
-    }
-
-    fn next_search(&self,
-                   cur_location: Option<usize>,
-                   search_term: &Buffer,
-    ) -> Option<usize> {
-        if self.forward_search {
-            self.context.history.forward_search_index(cur_location, search_term)
-        } else if self.reverse_search {
-            self.context.history.reverse_search_index(cur_location, search_term)
-        } else {
-            None
-        }
     }
 
     /// None if we're on the new buffer, else the index of history
@@ -279,39 +265,65 @@ impl<'a, W: Write> Editor<'a, W> {
         }
     }
 
+    fn search_history_loc(&self) -> Option<usize> {
+        if self.history_subset_index.len() > 0 {
+            self.history_subset_loc.map(|i| self.history_subset_index[i])
+        } else {
+            None
+        }
+    }
+
+    /// Refresh incremental search, either when started or when the buffer changes.
+    fn refresh_search(&mut self, forward: bool) {
+        let search_history_loc = self.search_history_loc();
+        self.history_subset_index = self.context.history.search_index(&self.new_buf);
+        if self.history_subset_index.len() > 0 {
+            self.history_subset_loc = if forward {
+                Some(0)
+            } else {
+                Some(self.history_subset_index.len() - 1)
+            };
+            if let Some(target_loc) = search_history_loc {
+                for (i, history_loc) in self.history_subset_index.iter().enumerate() {
+                    if target_loc <= *history_loc {
+                        if forward || target_loc == *history_loc || i == 0 {
+                            self.history_subset_loc = Some(i);
+                        } else {
+                            self.history_subset_loc = Some(i-1);
+                        }
+                        break;
+                    }
+                }
+
+            }
+        } else {
+            self.history_subset_loc = None;
+        }
+
+        self.reverse_search = !forward;
+        self.forward_search = forward;
+        self.cur_history_loc = None;
+        self.no_newline = true;
+        self.buffer_changed = false;
+    }
+
     /// Begin or continue a search through history.  If forward is true then start at top (or
     /// current_history_loc if set). If started with forward true then incremental search goes
     /// forward (top to bottom) other wise reverse (bottom to top).  It is valid to continue a
     /// search with forward changed (i.e. reverse search direction for one result).
     pub fn search(&mut self, forward: bool) -> io::Result<()> {
         if !self.is_search() {
-            self.reverse_search = !forward;
-            self.forward_search = forward;
-            self.search_history_loc = self.next_search(self.cur_history_loc, &self.new_buf);
-            self.cur_history_loc = None;
-            self.no_newline = true;
-        } else {
-            let place = if let Some(p) = self.search_history_loc {
+            self.refresh_search(forward);
+        } else if self.history_subset_index.len() > 0 {
+            self.history_subset_loc = if let Some(p) = self.history_subset_loc {
                 if forward {
-                    if p < self.context.history.len() - 1 { Some(p + 1) } else { Some(0) }
+                    if p < self.history_subset_index.len() - 1 { Some(p + 1) } else { Some(0) }
                 } else {
-                    if p > 0 { Some(p - 1) } else { Some(self.context.history.len()) }
+                    if p > 0 { Some(p - 1) } else { Some(self.history_subset_index.len() - 1) }
                 }
             } else {
-                if forward {
-                    Some(0)
-                } else {
-                    Some(self.context.history.len())
-                }
+                None
             };
-            let search_loc = if forward {
-                self.context.history.forward_search_index(place, &self.new_buf)
-            } else {
-                self.context.history.reverse_search_index(place, &self.new_buf)
-            };
-            if let Some(_) = search_loc {
-                self.search_history_loc = search_loc;
-            }
         }
         self.display()?;
         Ok(())
@@ -798,20 +810,10 @@ impl<'a, W: Write> Editor<'a, W> {
     /// searching the first history entry to start with current text (reverse order).
     /// Return None if nothing found.
     fn current_autosuggestion(&mut self) -> Option<Buffer> {
+        let context_history = &self.context.history;
         let autosuggestion = if self.is_search() {
-            let search_loc = self.next_search(
-                self.search_history_loc,
-                self.current_buffer());
-
-            match search_loc {
-                Some(i) => {
-                    self.search_history_loc = Some(i);
-                    Some(&self.context.history[i])
-                }
-                None => self.search_history_loc.map(|i| &self.context.history[i])
-            }
+            self.search_history_loc().map(|i| &context_history[i])
         } else if self.show_autosuggestions {
-            let context_history = &self.context.history;
             self.cur_history_loc
                 .map(|i| &context_history[i])
                 .or_else(|| {
@@ -827,6 +829,25 @@ impl<'a, W: Write> Editor<'a, W> {
 
     pub fn is_currently_showing_autosuggestion(&self) -> bool {
         self.autosuggestion.is_some()
+    }
+
+    /// Override the prompt for incremental search if needed.
+    fn search_prompt(&mut self) -> (String, usize) {
+        if self.is_search() {
+            // If we are searching override prompt to search prompt.
+            let hplace = if self.history_subset_index.len() > 0 {
+                self.history_subset_loc.unwrap_or(0) + 1
+            } else {
+                0
+            };
+            (format!("(search)'{}` ({}/{}): ",
+                     self.current_buffer(),
+                     hplace,
+                     self.history_subset_index.len()),
+             9)
+        } else {
+            (self.prompt.clone(), 0)
+        }
     }
 
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
@@ -845,12 +866,7 @@ impl<'a, W: Write> Editor<'a, W> {
                 total
             }
 
-            let (prompt, rev_prompt_width) = if self.is_search() {
-                // If we are searching override prompt to search prompt.
-                (format!("(search)'{}`: ", self.current_buffer()), 9)
-            } else {
-                (self.prompt.clone(), 0)
-            };
+            let (prompt, rev_prompt_width) = self.search_prompt();
 
             let terminal_width = util::terminal_width()?;
             let prompt_width = util::last_prompt_line_width(&prompt);
@@ -1025,6 +1041,11 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Deletes the displayed prompt and buffer, replacing them with the current prompt and buffer
     pub fn display(&mut self) -> io::Result<()> {
+        if self.is_search() && self.buffer_changed {
+            // Refresh incremental search.
+            let forward = self.forward_search;
+            self.refresh_search(forward);
+        }
         self.autosuggestion = self.current_autosuggestion();
 
         self._display(true)

@@ -146,42 +146,11 @@ impl History {
         ret
     }
 
-    fn search_index<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
-        where I: Iterator<Item = usize>
+    pub fn search_index(&self, search_term: &Buffer) -> Vec<usize>
     {
-        vals.filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
+        (0..self.len()).filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
             .filter(|(_i, tested)| tested.contains(search_term))
-            .next().map(|(i, _)| i)
-    }
-
-    /// Go through the history and try to find a buffer index that contains search_term.
-    /// Start the search at cur_location and wrap around (search the entire history).
-    pub fn reverse_search_index(
-        &self,
-        cur_location: Option<usize>,
-        search_term: &Buffer,
-    ) -> Option<usize> {
-        let location = if let Some(x) = cur_location {
-            x + 1
-        } else {
-            self.len()
-        };
-        self.search_index((0..location).rev().chain((location..self.len()).rev()), search_term)
-    }
-
-    /// Go through the history and try to find a buffer index that contains search_term.
-    /// Start the search at cur_location and wrap around (search the entire history).
-    pub fn forward_search_index(
-        &self,
-        cur_location: Option<usize>,
-        search_term: &Buffer,
-    ) -> Option<usize> {
-        let location = if let Some(x) = cur_location {
-            x
-        } else {
-            0
-        };
-        self.search_index((location..self.len()).chain(0..location), search_term)
+            .map(|(i, _)| i).collect()
     }
 
     /// Get the history file name.
