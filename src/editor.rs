@@ -835,13 +835,13 @@ impl<'a, W: Write> Editor<'a, W> {
     fn search_prompt(&mut self) -> (String, usize) {
         if self.is_search() {
             // If we are searching override prompt to search prompt.
-            let hplace = if self.history_subset_index.len() > 0 {
-                self.history_subset_loc.unwrap_or(0) + 1
+            let (hplace, color) = if self.history_subset_index.len() > 0 {
+                (self.history_subset_loc.unwrap_or(0) + 1, color::Green.fg_str())
             } else {
-                0
+                (0, color::Red.fg_str())
             };
-            (format!("(search)'{}` ({}/{}): ",
-                     self.current_buffer(),
+            (format!("(search)'{}{}{}` ({}/{}): ",
+                     color, self.current_buffer(), color::Reset.fg_str(),
                      hplace,
                      self.history_subset_index.len()),
              9)
