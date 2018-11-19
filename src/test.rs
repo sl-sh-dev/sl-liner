@@ -126,7 +126,7 @@ fn test_reading_from_file() {
         f.write_all(TEXT.as_bytes()).unwrap();
     }
     let mut h = History::new();
-    h.set_file_name_and_load_history(tmp_file);
+    h.set_file_name_and_load_history(tmp_file).unwrap();
     assert_eq!(String::from(h.buffers[0].clone()), "a".to_string());
     assert_eq!(String::from(h.buffers[1].clone()), "b".to_string());
     assert_eq!(String::from(h.buffers[2].clone()), "c".to_string());
