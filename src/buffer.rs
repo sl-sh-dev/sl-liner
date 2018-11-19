@@ -223,6 +223,12 @@ impl Buffer {
         self.insert(start, &other.data[start..])
     }
 
+    pub fn copy_buffer(&mut self, other: &Buffer) {
+        let data_len = self.data.len();
+        self.remove(0, data_len);
+        self.insert(0, &other.data[0..])
+    }
+
     pub fn range(&self, start: usize, end: usize) -> String {
         self.data[start..end].iter().cloned().collect()
     }
@@ -287,6 +293,11 @@ impl Buffer {
         }
     }
 
+    /// Check if the other buffer has the same content as this one.
+    pub fn equals(&self, other: &Buffer) -> bool {
+        self.data == other.data
+    }
+
     /// Check if the other buffer starts with the same content as this one.
     /// Used to implement autosuggestions.
     pub fn starts_with(&self, other: &Buffer) -> bool {
@@ -302,6 +313,16 @@ impl Buffer {
         } else {
             false
         }
+    }
+
+    /// Check if the buffer contains pattern.
+    /// Used to implement history search.
+    pub fn contains(&self, pattern: &Buffer) -> bool {
+        let search_term: &[char] = &pattern.data;
+        if search_term.is_empty() {
+            return false;
+        }
+        self.data.windows(search_term.len()).any(|window| window == search_term)
     }
 
     /// Return true if the buffer is empty.
@@ -472,6 +493,33 @@ mod tests {
         let mut buf2 = Buffer::new();
         buf2.insert(0, &['x', 'y', 'z']);
         assert_eq!(buf.starts_with(&buf2), false);
+    }
+
+    #[test]
+    fn test_contains() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['a', 'b', 'c']);
+        assert_eq!(buf.contains(&buf2), true);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['c', 'd', 'e']);
+        assert_eq!(buf.contains(&buf2), true);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['e', 'f', 'g']);
+        assert_eq!(buf.contains(&buf2), true);
+    }
+
+    #[test]
+    fn test_does_not_contain() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['x', 'b', 'c']);
+        assert_eq!(buf.contains(&buf2), false);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['a', 'b', 'd']);
+        assert_eq!(buf.contains(&buf2), false);
     }
 
     #[test]
