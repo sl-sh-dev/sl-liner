@@ -419,10 +419,16 @@ impl<'a, W: Write> Editor<'a, W> {
     pub fn complete(&mut self, handler: &mut EventHandler<W>) -> io::Result<()> {
         handler(Event::new(self, EventKind::BeforeComplete));
 
-        if let Some((completions, i)) = self.show_completions_hint.take() {
-            let i = i.map_or(0, |i| (i+1) % completions.len());
+        if let Some((completions, i_in)) = self.show_completions_hint.take() {
+            let i = i_in.map_or(0, |i| (i+1) % completions.len());
 
-            self.delete_word_before_cursor(false)?;
+            match i_in {
+                Some(x) if cur_buf!(self).equals(&Buffer::from(&completions[x][..])) => {
+                    cur_buf_mut!(self).truncate(0);
+                    self.cursor = 0;
+                },
+                _ => self.delete_word_before_cursor(false)?
+            }
             self.insert_str_after_cursor(&completions[i])?;
 
             self.show_completions_hint = Some((completions, Some(i)));
