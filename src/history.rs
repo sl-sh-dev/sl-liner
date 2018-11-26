@@ -164,7 +164,11 @@ impl History {
 
         let item_str = String::from(new_item.clone());
         self.buffers.push_back(new_item);
-        self.to_max_size();
+        //self.to_max_size();
+        while self.buffers.len() > self.max_buffers_size {
+            self.buffers.pop_front();
+        }
+
 
         if self.inc_append && self.file_name.is_some() {
             self.compaction_writes += 1;
