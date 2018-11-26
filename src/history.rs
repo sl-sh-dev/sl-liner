@@ -29,6 +29,16 @@ pub struct History {
     max_file_size: usize,
     // TODO set from environment variable?
     pub append_duplicate_entries: bool,
+    /// Append each entry to history file as entered?
+    pub inc_append: bool,
+    /// Share history across ion's with the same history file (combine with inc_append).
+    pub share: bool,
+    /// Last filesize of history file, used to optimize history sharing.
+    pub file_size: u64,
+    /// Allow loading duplicate entries, need to know this for loading history files.
+    pub load_duplicates: bool,
+    /// Writes between history compaction.
+    compaction_writes: usize,
 }
 
 impl History {
@@ -40,29 +50,88 @@ impl History {
             max_buffers_size: DEFAULT_MAX_SIZE,
             max_file_size: DEFAULT_MAX_SIZE,
             append_duplicate_entries: false,
+            inc_append: false,
+            share: false,
+            file_size: 0,
+            load_duplicates: true,
+            compaction_writes: 0,
         }
     }
 
-    /// Set history file name and at the same time load the history.
-    pub fn set_file_name_and_load_history<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
-        let status;
+    /// Clears out the history.
+    pub fn clear_history(&mut self) {
+        self.buffers.clear();
+    }
+
+    /// Loads the history file from the saved path and appends it to the end of the history if append
+    /// is true otherwise replace history.
+    pub fn load_history(&mut self, append: bool) -> io::Result<u64> {
+        if let Some(path) = self.file_name.clone() {
+            let file_size = self.file_size;
+            self.load_history_file_test(&path, file_size, append).map(|l| { self.file_size = l; l })
+        } else {
+            Err(io::Error::new(io::ErrorKind::Other, "History filename not set!"))
+        }
+    }
+
+    /// Loads the history file from path and appends it to the end of the history if append is true.
+    pub fn load_history_file<P: AsRef<Path>>(&mut self, path: P, append: bool) -> io::Result<u64> {
+        self.load_history_file_test(path, 0, append)
+    }
+
+    /// Loads the history file from path and appends it to the end of the history.f append is true
+    /// (replaces if false).  Only loads if length is not equal to current file size.
+    fn load_history_file_test<P: AsRef<Path>>(&mut self, path: P, length: u64, append: bool) -> io::Result<u64> {
         let path = path.as_ref();
         let file = if path.exists() {
-            status = format!("opening {:?}", path);
             File::open(path)?
         } else {
-            status = format!("creating {:?}", path);
-            File::create(path)?
+            let status = format!("File not found {:?}", path);
+            return Err(io::Error::new(io::ErrorKind::Other, status));
         };
-        let reader = BufReader::new(file);
-        for line in reader.lines() {
-            match line {
-                Ok(line) => self.buffers.push_back(Buffer::from(line)),
-                Err(_) => break,
+        let new_length = file.metadata()?.len();
+        if new_length == 0 && length == 0 && !append {
+            // Special case, trying to load nothing and not appending- just clear.
+            self.clear_history();
+        }
+        if new_length != length {
+            if !append {
+                self.clear_history();
+            }
+            let reader = BufReader::new(file);
+            for line in reader.lines() {
+                match line {
+                    Ok(line) => self.buffers.push_back(Buffer::from(line)),
+                    Err(_) => break,
+                }
+            }
+            self.to_max_size();
+            let mut tmp_buffers: Vec<Buffer> = Vec::with_capacity(self.buffers.len());
+            if !self.load_duplicates {
+                // Remove duplicates from loaded history if we do not want it.
+                while let Some(buf) = self.buffers.pop_back() {
+                    self.remove_duplicates(&buf.to_string()[..]);
+                    tmp_buffers.push(buf);
+                }
+                while let Some(buf) = tmp_buffers.pop() {
+                    self.buffers.push_back(buf);
+                }
             }
         }
+        Ok(new_length)
+    }
+
+    /// Set history file name and at the same time load the history.
+    pub fn set_file_name_and_load_history<P: AsRef<Path>>(&mut self, path: P) -> io::Result<u64> {
+        let path = path.as_ref();
         self.file_name = path.to_str().map(|s| s.to_owned());
-        Ok(status)
+        self.file_size = 0;
+        if path.exists() {
+            self.load_history_file(path, false).map(|l| { self.file_size = l; l })
+        } else {
+            File::create(path)?;
+            Ok(0)
+        }
     }
 
     /// Set maximal number of buffers stored in memory
@@ -93,9 +162,30 @@ impl History {
             return Ok(());
         }
 
+        let item_str = String::from(new_item.clone());
         self.buffers.push_back(new_item);
-        while self.buffers.len() > self.max_buffers_size {
-            self.buffers.pop_front();
+        self.to_max_size();
+
+        if self.inc_append && self.file_name.is_some() {
+            self.compaction_writes += 1;
+            // Every 30 writes "compact" the history file by writing just in memory history.  This
+            // is to keep the history file at clean and at a reasonable size (not much over max
+            // history size at it's worst).
+            if self.compaction_writes > 29 {
+                self.commit_to_file();
+                self.compaction_writes = 0;
+            }
+            let file_name = self.file_name.clone().unwrap();
+            if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
+                self.file_size = inner_file.metadata()?.len();
+                if self.compaction_writes > 0 { // If 0 we "compacted" and nothing to write.
+                    let mut file = BufWriter::new(inner_file);
+                    let _ = file.write_all(&item_str.as_bytes());
+                    let _ = file.write_all(b"\n");
+                    // Save the filesize after each append so we do not reload when we do not need to.
+                    self.file_size += item_str.len() as u64 + 1;
+                }
+            }
         }
         Ok(())
     }
@@ -159,26 +249,32 @@ impl History {
         self.file_name.as_ref().map(|s| s.as_str())
     }
 
+    fn to_max_size(&mut self) {
+        // Find how many lines we need to move backwards
+        // in the file to remove all the old commands.
+        if self.buffers.len() >= self.max_file_size {
+            let pop_out = self.buffers.len() - self.max_file_size;
+            for _ in 0..pop_out {
+                self.buffers.pop_front();
+            }
+        }
+    }
+
+    pub fn commit_to_file_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
+        self.to_max_size();
+        let mut file = BufWriter::new(File::create(&path)?);
+
+        // Write the commands to the history file.
+        for command in self.buffers.iter().cloned() {
+            let _ = file.write_all(&String::from(command).as_bytes());
+            let _ = file.write_all(b"\n");
+        }
+        Ok("Wrote history to file.".to_string())
+    }
+
     pub fn commit_to_file(&mut self) {
         if let Some(file_name) = self.file_name.clone() {
-            // Find how many bytes we need to move backwards
-            // in the file to remove all the old commands.
-            if self.buffers.len() >= self.max_file_size {
-                let pop_out = self.buffers.len() - self.max_file_size;
-                for _ in 0..pop_out {
-                    self.buffers.pop_front();
-                }
-            }
-
-            let mut file = BufWriter::new(File::create(&file_name)
-                // It's safe to unwrap, because the file has be loaded by this time
-                .unwrap());
-
-            // Write the commands to the history file.
-            for command in self.buffers.iter().cloned() {
-                let _ = file.write_all(&String::from(command).as_bytes());
-                let _ = file.write_all(b"\n");
-            }
+            let _ = self.commit_to_file_path(file_name);
         }
     }
 }

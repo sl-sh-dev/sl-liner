@@ -133,6 +133,8 @@ pub struct Editor<'a, W: Write> {
     history_subset_loc: Option<usize>,
 
     autosuggestion: Option<Buffer>,
+
+    history_fresh: bool,
 }
 
 macro_rules! cur_buf_mut {
@@ -195,6 +197,7 @@ impl<'a, W: Write> Editor<'a, W> {
             history_subset_index: vec![],
             history_subset_loc: None,
             autosuggestion: None,
+            history_fresh: false,
         };
 
         if !ed.new_buf.is_empty() {
@@ -241,6 +244,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
     pub fn handle_newline(&mut self) -> io::Result<bool> {
+        self.history_fresh = false;
         if self.is_search() {
             self.accept_autosuggestion()?;
         }
@@ -270,6 +274,13 @@ impl<'a, W: Write> Editor<'a, W> {
             self.history_subset_loc.map(|i| self.history_subset_index[i])
         } else {
             None
+        }
+    }
+
+    fn freshen_history(&mut self) {
+        if self.context.history.share && !self.history_fresh {
+            let _ = self.context.history.load_history(false);
+            self.history_fresh = true;
         }
     }
 
@@ -313,6 +324,7 @@ impl<'a, W: Write> Editor<'a, W> {
     /// search with forward changed (i.e. reverse search direction for one result).
     pub fn search(&mut self, forward: bool) -> io::Result<()> {
         if !self.is_search() {
+            self.freshen_history();
             self.refresh_search(forward);
         } else if self.history_subset_index.len() > 0 {
             self.history_subset_loc = if let Some(p) = self.history_subset_loc {
@@ -545,6 +557,7 @@ impl<'a, W: Write> Editor<'a, W> {
         if self.is_search() {
             self.search(false)
         } else {
+            self.freshen_history();
             if self.new_buf.num_chars() > 0 {
                 match self.history_subset_loc {
                     Some(i) if i > 0 => {
@@ -585,12 +598,13 @@ impl<'a, W: Write> Editor<'a, W> {
                         self.cur_history_loc = None;
                         self.history_subset_loc = None;
                         self.history_subset_index.clear();
+                        self.history_fresh = false;
                     }
                 }
             } else {
                 match self.cur_history_loc.take() {
                     Some(i) if i < self.context.history.len() - 1 => self.cur_history_loc = Some(i + 1),
-                    _ => ()
+                    _ => self.history_fresh = false,
                 }
             }
             self.move_cursor_to_end_of_line()
