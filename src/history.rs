@@ -106,8 +106,8 @@ impl History {
                 }
             }
             self.to_max_size();
-            let mut tmp_buffers: Vec<Buffer> = Vec::with_capacity(self.buffers.len());
             if !self.load_duplicates {
+                let mut tmp_buffers: Vec<Buffer> = Vec::with_capacity(self.buffers.len());
                 // Remove duplicates from loaded history if we do not want it.
                 while let Some(buf) = self.buffers.pop_back() {
                     self.remove_duplicates(&buf.to_string()[..]);
@@ -173,7 +173,7 @@ impl History {
         if self.inc_append && self.file_name.is_some() {
             self.compaction_writes += 1;
             // Every 30 writes "compact" the history file by writing just in memory history.  This
-            // is to keep the history file at clean and at a reasonable size (not much over max
+            // is to keep the history file clean and at a reasonable size (not much over max
             // history size at it's worst).
             if self.compaction_writes > 29 {
                 self.commit_to_file();
