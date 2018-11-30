@@ -121,6 +121,56 @@ impl History {
         Ok(new_length)
     }
 
+    /// Removes duplicates and trims a history file to max_file_size.
+    /// Primarily if inc_append is set without shared history.
+    /// Static because it should have no side effects on a history object.
+    fn deduplicate_history_file<P: AsRef<Path>>(path: P, max_file_size: usize) -> io::Result<String> {
+        let path = path.as_ref();
+        let file = if path.exists() {
+            File::open(path)?
+        } else {
+            let status = format!("File not found {:?}", path);
+            return Err(io::Error::new(io::ErrorKind::Other, status));
+        };
+        let mut buf: VecDeque<String> = VecDeque::new();
+        let reader = BufReader::new(file);
+        for line in reader.lines() {
+            match line {
+                Ok(line) => buf.push_back(line),
+                Err(_) => break,
+            }
+        }
+        let org_length = buf.len();
+        if buf.len() >= max_file_size {
+            let pop_out = buf.len() - max_file_size;
+            for _ in 0..pop_out {
+                buf.pop_front();
+            }
+        }
+        let mut tmp_buffers: Vec<String> = Vec::with_capacity(buf.len());
+        // Remove duplicates from loaded history if we do not want it.
+        while let Some(line) = buf.pop_back() {
+            buf.retain(|buffer| {
+                *buffer != line
+            });
+            tmp_buffers.push(line);
+        }
+        while let Some(line) = tmp_buffers.pop() {
+            buf.push_back(line);
+        }
+
+        if org_length != buf.len() {
+            // Overwrite the history file with the deduplicated version if it changed.
+            let mut file = BufWriter::new(File::create(&path)?);
+            // Write the commands to the history file.
+            for command in buf.into_iter() {
+                let _ = file.write_all(&String::from(command).as_bytes());
+                let _ = file.write_all(b"\n");
+            }
+        }
+        Ok("De-duplicated history file.".to_string())
+    }
+
     /// Set history file name and at the same time load the history.
     pub fn set_file_name_and_load_history<P: AsRef<Path>>(&mut self, path: P) -> io::Result<u64> {
         let path = path.as_ref();
@@ -171,13 +221,32 @@ impl History {
 
 
         if self.inc_append && self.file_name.is_some() {
-            self.compaction_writes += 1;
-            // Every 30 writes "compact" the history file by writing just in memory history.  This
-            // is to keep the history file clean and at a reasonable size (not much over max
-            // history size at it's worst).
-            if self.compaction_writes > 29 {
-                self.commit_to_file();
-                self.compaction_writes = 0;
+            if !self.load_duplicates {
+                // Do not want duplicates so periodically compact the history file.
+                self.compaction_writes += 1;
+                // Every 30 writes "compact" the history file by writing just in memory history.  This
+                // is to keep the history file clean and at a reasonable size (not much over max
+                // history size at it's worst).
+                if self.compaction_writes > 29 {
+                    if self.share {
+                        // Reload history, we may be out of sync.
+                        let _ = self.load_history(false);
+                        // Commit the duplicated history.
+                        if let Some(file_name) = self.file_name.clone() {
+                            let _ = self.overwrite_history(file_name);
+                        }
+                    } else {
+                        // Not using shared history so just de-dup the file without messing with
+                        // our history.
+                        if let Some(file_name) = self.file_name.clone() {
+                            let _ = History::deduplicate_history_file(file_name, self.max_file_size);
+                        }
+                    }
+                    self.compaction_writes = 0;
+                }
+            } else {
+                // If allowing duplicates then no need for compaction.
+                self.compaction_writes = 1;
             }
             let file_name = self.file_name.clone().unwrap();
             if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
@@ -264,7 +333,7 @@ impl History {
         }
     }
 
-    pub fn commit_to_file_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
+    fn overwrite_history<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
         self.to_max_size();
         let mut file = BufWriter::new(File::create(&path)?);
 
@@ -274,6 +343,14 @@ impl History {
             let _ = file.write_all(b"\n");
         }
         Ok("Wrote history to file.".to_string())
+    }
+
+    pub fn commit_to_file_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
+        if self.inc_append {
+            Ok("Nothing to commit.".to_string())
+        } else {
+            self.overwrite_history(path)
+        }
     }
 
     pub fn commit_to_file(&mut self) {
