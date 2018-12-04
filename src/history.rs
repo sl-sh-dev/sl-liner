@@ -250,7 +250,7 @@ impl History {
             }
             let file_name = self.file_name.clone().unwrap();
             if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
-                self.file_size = inner_file.metadata()?.len();
+                // Leave file size alone, if it is not right trigger a reload later.
                 if self.compaction_writes > 0 { // If 0 we "compacted" and nothing to write.
                     let mut file = BufWriter::new(inner_file);
                     let _ = file.write_all(&item_str.as_bytes());
