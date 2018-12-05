@@ -852,6 +852,8 @@ impl<'a, W: Write> Editor<'a, W> {
     /// searching the first history entry to start with current text (reverse order).
     /// Return None if nothing found.
     fn current_autosuggestion(&mut self) -> Option<Buffer> {
+        // If we are editing a previous history item no autosuggestion.
+        if self.hist_buf_valid { return None; }
         let context_history = &self.context.history;
         let autosuggestion = if self.is_search() {
             self.search_history_loc().map(|i| &context_history[i])
