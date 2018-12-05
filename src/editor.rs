@@ -105,6 +105,9 @@ pub struct Editor<'a, W: Write> {
     // Buffer for the new line (ie. not from editing history)
     new_buf: Buffer,
 
+    // Buffer to use when editing history so we do not overwrite it.
+    hist_buf: Buffer,
+
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
@@ -142,7 +145,8 @@ macro_rules! cur_buf_mut {
         match $s.cur_history_loc {
             Some(i) => {
                 $s.buffer_changed = true;
-                &mut $s.context.history[i]
+                $s.hist_buf.copy_buffer(&$s.context.history[i]);
+                &mut $s.hist_buf
             },
             _ => {
                 $s.buffer_changed = true;
@@ -184,6 +188,7 @@ impl<'a, W: Write> Editor<'a, W> {
             out: out,
             closure: f,
             new_buf: buffer.into(),
+            hist_buf: Buffer::new(),
             cur_history_loc: None,
             context: context,
             show_completions_hint: None,
