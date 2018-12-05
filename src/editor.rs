@@ -107,6 +107,7 @@ pub struct Editor<'a, W: Write> {
 
     // Buffer to use when editing history so we do not overwrite it.
     hist_buf: Buffer,
+    hist_buf_valid: bool,
 
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
@@ -145,11 +146,15 @@ macro_rules! cur_buf_mut {
         match $s.cur_history_loc {
             Some(i) => {
                 $s.buffer_changed = true;
-                $s.hist_buf.copy_buffer(&$s.context.history[i]);
+                if !$s.hist_buf_valid {
+                  $s.hist_buf.copy_buffer(&$s.context.history[i]);
+                  $s.hist_buf_valid = true;
+                }
                 &mut $s.hist_buf
             },
             _ => {
                 $s.buffer_changed = true;
+                $s.hist_buf_valid = false;
                 &mut $s.new_buf
             },
         }
@@ -159,7 +164,13 @@ macro_rules! cur_buf_mut {
 macro_rules! cur_buf {
     ($s:expr) => {
         match $s.cur_history_loc {
-            Some(i) => &$s.context.history[i],
+            Some(i) => {
+                if $s.hist_buf_valid {
+                    &$s.hist_buf
+                } else {
+                    &$s.context.history[i]
+                }
+            }
             _ => &$s.new_buf,
         }
     }
@@ -189,6 +200,7 @@ impl<'a, W: Write> Editor<'a, W> {
             closure: f,
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
+            hist_buf_valid: false,
             cur_history_loc: None,
             context: context,
             show_completions_hint: None,
@@ -319,6 +331,7 @@ impl<'a, W: Write> Editor<'a, W> {
         self.reverse_search = !forward;
         self.forward_search = forward;
         self.cur_history_loc = None;
+        self.hist_buf_valid = false;
         self.no_newline = true;
         self.buffer_changed = false;
     }
@@ -562,6 +575,7 @@ impl<'a, W: Write> Editor<'a, W> {
         if self.is_search() {
             self.search(false)
         } else {
+            self.hist_buf_valid = false;
             self.freshen_history();
             if self.new_buf.num_chars() > 0 {
                 match self.history_subset_loc {
@@ -594,6 +608,7 @@ impl<'a, W: Write> Editor<'a, W> {
         if self.is_search() {
             self.search(true)
         } else {
+            self.hist_buf_valid = false;
             if self.new_buf.num_chars() > 0 {
                 if let Some(i) = self.history_subset_loc {
                     if i < self.history_subset_index.len()-1 {
@@ -618,6 +633,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves to the start of history (ie. the earliest history entry).
     pub fn move_to_start_of_history(&mut self) -> io::Result<()> {
+        self.hist_buf_valid = false;
         if self.context.history.len() > 0 {
             self.cur_history_loc = Some(0);
             self.move_cursor_to_end_of_line()
@@ -630,6 +646,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves to the end of history (ie. the new buffer).
     pub fn move_to_end_of_history(&mut self) -> io::Result<()> {
+        self.hist_buf_valid = false;
         if self.cur_history_loc.is_some() {
             self.cur_history_loc = None;
             self.move_cursor_to_end_of_line()
@@ -1080,7 +1097,13 @@ impl<'a, W: Write> Editor<'a, W> {
 impl<'a, W: Write> From<Editor<'a, W>> for String {
     fn from(ed: Editor<'a, W>) -> String {
         match ed.cur_history_loc {
-            Some(i) => ed.context.history[i].clone(),
+            Some(i) => {
+                if ed.hist_buf_valid {
+                    ed.hist_buf
+                } else {
+                    ed.context.history[i].clone()
+                }
+            },
             _ => ed.new_buf,
         }.into()
     }
