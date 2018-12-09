@@ -142,35 +142,26 @@ pub struct Editor<'a, W: Write> {
 }
 
 macro_rules! cur_buf_mut {
-    ($s:expr) => {
+    ($s:expr) => {{
+        $s.buffer_changed = true;
         match $s.cur_history_loc {
             Some(i) => {
-                $s.buffer_changed = true;
                 if !$s.hist_buf_valid {
                   $s.hist_buf.copy_buffer(&$s.context.history[i]);
                   $s.hist_buf_valid = true;
                 }
                 &mut $s.hist_buf
             },
-            _ => {
-                $s.buffer_changed = true;
-                $s.hist_buf_valid = false;
-                &mut $s.new_buf
-            },
+            _ => &mut $s.new_buf,
         }
-    }
+    }}
 }
 
 macro_rules! cur_buf {
     ($s:expr) => {
         match $s.cur_history_loc {
-            Some(i) => {
-                if $s.hist_buf_valid {
-                    &$s.hist_buf
-                } else {
-                    &$s.context.history[i]
-                }
-            }
+            Some(_) if $s.hist_buf_valid => &$s.hist_buf,
+            Some(i) => &$s.context.history[i],
             _ => &$s.new_buf,
         }
     }
@@ -803,7 +794,6 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
-        //self.clear_search();
         self.cursor = cur_buf!(self).num_chars();
         self.no_newline = true;
         self.display()
@@ -833,15 +823,13 @@ impl<'a, W: Write> Editor<'a, W> {
     /// Accept autosuggestion and copy its content into current buffer
     pub fn accept_autosuggestion(&mut self) -> io::Result<()> {
         if self.show_autosuggestions {
-            {
-                let autosuggestion = self.autosuggestion.clone();
-                let search = self.is_search();
-                let buf = self.current_buffer_mut();
-                match autosuggestion {
-                    Some(ref x) if search => buf.copy_buffer(x),
-                    Some(ref x) => buf.insert_from_buffer(x),
-                    None => ()
-                }
+            let autosuggestion = self.autosuggestion.clone();
+            let search = self.is_search();
+            let buf = cur_buf_mut!(self);
+            match autosuggestion {
+                Some(ref x) if search => buf.copy_buffer(x),
+                Some(ref x) => buf.insert_from_buffer(x),
+                None => ()
             }
         }
         self.clear_search();
