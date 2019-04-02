@@ -2,9 +2,9 @@ use super::*;
 
 use std::{
     collections::{vec_deque, VecDeque},
-    io::{BufRead, BufReader, BufWriter},
     fs::File,
     io::{self, Write},
+    io::{BufRead, BufReader, BufWriter},
     iter::IntoIterator,
     ops::Index,
     ops::IndexMut,
@@ -44,7 +44,10 @@ impl History {
     }
 
     /// Set history file name and at the same time load the history.
-    pub fn set_file_name_and_load_history<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
+    pub fn set_file_name_and_load_history<P: AsRef<Path>>(
+        &mut self,
+        path: P,
+    ) -> io::Result<String> {
         let status;
         let path = path.as_ref();
         let file = if path.exists() {
@@ -57,7 +60,11 @@ impl History {
         let reader = BufReader::new(file);
         for line in reader.lines() {
             match line {
-                Ok(line) => self.buffers.push_back(Buffer::from(line)),
+                Ok(line) => {
+                    if !line.starts_with('#') {
+                        self.buffers.push_back(Buffer::from(line));
+                    }
+                }
                 Err(_) => break,
             }
         }
@@ -109,16 +116,22 @@ impl History {
     }
 
     fn get_match<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
-        where I: Iterator<Item = usize>
+    where
+        I: Iterator<Item = usize>,
     {
         vals.filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
             .filter(|(_i, tested)| tested.starts_with(search_term))
-            .next().map(|(i, _)| i)
+            .next()
+            .map(|(i, _)| i)
     }
 
     /// Go through the history and try to find an index (newest to oldest) which starts the same
     /// as the new buffer given to this function as argument.  Starts at curr_position.  Does no wrap.
-    pub fn get_newest_match(&self, curr_position: Option<usize>, new_buff: &Buffer, ) -> Option<usize> {
+    pub fn get_newest_match(
+        &self,
+        curr_position: Option<usize>,
+        new_buff: &Buffer,
+    ) -> Option<usize> {
         let pos = curr_position.unwrap_or_else(|| self.buffers.len());
         if pos > 0 {
             self.get_match((0..pos).rev(), new_buff)
@@ -129,28 +142,31 @@ impl History {
 
     pub fn get_history_subset(&self, search_term: &Buffer) -> Vec<usize> {
         let mut v: Vec<usize> = Vec::new();
-        let mut ret: Vec<usize> = (0..self.len()).filter(|i| {
-            if let Some(tested) = self.buffers.get(*i) {
-                let starts = tested.starts_with(search_term);
-                let contains = tested.contains(search_term);
-                if starts {
-                    v.push(*i);
+        let mut ret: Vec<usize> = (0..self.len())
+            .filter(|i| {
+                if let Some(tested) = self.buffers.get(*i) {
+                    let starts = tested.starts_with(search_term);
+                    let contains = tested.contains(search_term);
+                    if starts {
+                        v.push(*i);
+                    }
+                    if contains && !starts && !tested.equals(search_term) {
+                        return true;
+                    }
                 }
-                if contains && !starts && !tested.equals(search_term) {
-                    return true;
-                }
-            }
-            return false;
-        }).collect();
+                return false;
+            })
+            .collect();
         ret.append(&mut v);
         ret
     }
 
-    pub fn search_index(&self, search_term: &Buffer) -> Vec<usize>
-    {
-        (0..self.len()).filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
+    pub fn search_index(&self, search_term: &Buffer) -> Vec<usize> {
+        (0..self.len())
+            .filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
             .filter(|(_i, tested)| tested.contains(search_term))
-            .map(|(i, _)| i).collect()
+            .map(|(i, _)| i)
+            .collect()
     }
 
     /// Get the history file name.
@@ -170,9 +186,11 @@ impl History {
                 }
             }
 
-            let mut file = BufWriter::new(File::create(&file_name)
-                // It's safe to unwrap, because the file has be loaded by this time
-                .unwrap());
+            let mut file = BufWriter::new(
+                File::create(&file_name)
+                    // It's safe to unwrap, because the file has be loaded by this time
+                    .unwrap(),
+            );
 
             // Write the commands to the history file.
             for command in self.buffers.iter().cloned() {
