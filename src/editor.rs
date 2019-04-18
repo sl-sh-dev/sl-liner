@@ -922,16 +922,12 @@ impl<'a, W: Write> Editor<'a, W> {
             };
             // Width of the current buffer lines (including autosuggestion) from the start to the cursor
             let buf_widths_to_cursor = match self.autosuggestion {
-                Some(ref suggestion) =>
+                Some(ref suggestion) if self.cursor < suggestion.num_chars() =>
                 // Cursor might overrun autosuggestion with history search.
                 {
-                    if self.cursor < suggestion.num_chars() {
-                        suggestion.range_width(0, self.cursor)
-                    } else {
-                        buf.range_width(0, self.cursor)
-                    }
+                    suggestion.range_width(0, self.cursor)
                 }
-                None => buf.range_width(0, self.cursor),
+                _ => buf.range_width(0, self.cursor),
             };
 
             // Total number of terminal spaces taken up by prompt and buffer
@@ -944,6 +940,8 @@ impl<'a, W: Write> Editor<'a, W> {
 
             let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
+            output_buf.append(b"\x1B[?1049l\x1B[?1000l\x1B[?1l");
+
             // Move the term cursor to the same line as the prompt.
             if self.term_cursor_line > 1 {
                 output_buf.append(
@@ -955,9 +953,6 @@ impl<'a, W: Write> Editor<'a, W> {
 
             if !self.no_newline {
                 output_buf.append("⏎".as_bytes());
-                for _ in 0..(terminal_width - 1) {
-                    output_buf.push(b' ');
-                }
             }
 
             output_buf.push(b'\r');
@@ -986,13 +981,9 @@ impl<'a, W: Write> Editor<'a, W> {
             // We get the number of bytes in the buffer (but NOT the autosuggestion).
             // Then, we loop and subtract from that number until it's 0, in which case we are printing
             // the autosuggestion from here on (in a different color).
-            let lines = if show_autosuggest {
-                match self.autosuggestion {
-                    Some(ref suggestion) => suggestion.lines(),
-                    None => buf.lines(),
-                }
-            } else {
-                buf.lines()
+            let lines = match self.autosuggestion {
+                Some(ref suggestion) if show_autosuggest => suggestion.lines(),
+                _ => buf.lines(),
             };
             let mut buf_num_remaining_bytes = buf.num_bytes();
 
