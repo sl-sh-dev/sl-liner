@@ -107,10 +107,10 @@ impl Context {
     ) -> io::Result<String> {
         let res = {
             let mut stdout = stdout().into_raw_mode()?;
-            let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
+            let mut ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
             match self.key_bindings {
-                KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(ed), handler),
-                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(ed), handler),
+                KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
+                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(&mut ed), ed, handler),
             }
         };
 
@@ -118,22 +118,18 @@ impl Context {
         res
     }
 
-    fn handle_keys<'a, T, W: Write, M: KeyMap<'a, W, T>, C: Completer<W>>(
+    fn handle_keys<'a, W: Write, M: KeyMap, C: Completer<W>>(
         mut keymap: M,
+        mut ed: Editor<'a, W>,
         handler: &mut C,
-    ) -> io::Result<String>
-    where
-        String: From<M>,
-    {
-        let stdin = stdin();
-        let stdin = stdin.lock();
-        for c in stdin.keys() {
-            if keymap.handle_key(c.unwrap(), handler)? {
+    ) -> io::Result<String> {
+        for c in stdin().keys() {
+            if keymap.handle_key(c.unwrap(), &mut ed, handler)? {
                 break;
             }
         }
 
-        Ok(keymap.into())
+        Ok(ed.into())
     }
 
     pub fn revert_all_history(&mut self) {

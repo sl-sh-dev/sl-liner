@@ -4,17 +4,24 @@ use std::io::{self, ErrorKind, Write};
 use termion::event::Key;
 use Editor;
 
-pub trait KeyMap<'a, W: Write, T>: From<T> {
-    fn handle_key_core(&mut self, key: Key) -> io::Result<()>;
-    fn editor(&self) -> &Editor<'a, W>;
-    fn editor_mut(&mut self) -> &mut Editor<'a, W>;
+pub trait KeyMap {
+    fn handle_key_core<'a, W: Write>(
+        &mut self,
+        key: Key,
+        editor: &mut Editor<'a, W>,
+    ) -> io::Result<()>;
 
-    fn handle_key<C: Completer<W>>(&mut self, mut key: Key, handler: &mut C) -> io::Result<bool> {
+    fn handle_key<'a, W: Write, C: Completer<W>>(
+        &mut self,
+        mut key: Key,
+        editor: &mut Editor<'a, W>,
+        handler: &mut C,
+    ) -> io::Result<bool> {
         let mut done = false;
 
-        handler.on_event(Event::new(self.editor_mut(), EventKind::BeforeKey(key)));
+        handler.on_event(Event::new(editor, EventKind::BeforeKey(key)));
 
-        let is_empty = self.editor().current_buffer().is_empty();
+        let is_empty = editor.current_buffer().is_empty();
 
         if key == Key::Ctrl('h') {
             // XXX: Might need to change this when remappable keybindings are added.
@@ -23,42 +30,42 @@ pub trait KeyMap<'a, W: Write, T>: From<T> {
 
         match key {
             Key::Ctrl('c') => {
-                self.editor_mut().handle_newline()?;
+                editor.handle_newline()?;
                 return Err(io::Error::new(ErrorKind::Interrupted, "ctrl-c"));
             }
             // if the current buffer is empty, treat ctrl-d as eof
             Key::Ctrl('d') if is_empty => {
-                self.editor_mut().handle_newline()?;
+                editor.handle_newline()?;
                 return Err(io::Error::new(ErrorKind::UnexpectedEof, "ctrl-d"));
             }
-            Key::Char('\t') => self.editor_mut().complete(handler)?,
+            Key::Char('\t') => editor.complete(handler)?,
             Key::Char('\n') => {
-                done = self.editor_mut().handle_newline()?;
+                done = editor.handle_newline()?;
             }
-            Key::Ctrl('f') if self.editor().is_currently_showing_autosuggestion() => {
-                self.editor_mut().accept_autosuggestion()?;
+            Key::Ctrl('f') if editor.is_currently_showing_autosuggestion() => {
+                editor.accept_autosuggestion()?;
             }
             Key::Ctrl('r') => {
-                self.editor_mut().search(false)?;
+                editor.search(false)?;
             }
             Key::Ctrl('s') => {
-                self.editor_mut().search(true)?;
+                editor.search(true)?;
             }
             Key::Right
-                if self.editor().is_currently_showing_autosuggestion()
-                    && self.editor().cursor_is_at_end_of_line() =>
+                if editor.is_currently_showing_autosuggestion()
+                    && editor.cursor_is_at_end_of_line() =>
             {
-                self.editor_mut().accept_autosuggestion()?;
+                editor.accept_autosuggestion()?;
             }
             _ => {
-                self.handle_key_core(key)?;
-                self.editor_mut().skip_completions_hint();
+                self.handle_key_core(key, editor)?;
+                editor.skip_completions_hint();
             }
         };
 
-        handler.on_event(Event::new(self.editor_mut(), EventKind::AfterKey(key)));
+        handler.on_event(Event::new(editor, EventKind::AfterKey(key)));
 
-        self.editor_mut().flush()?;
+        editor.flush()?;
 
         Ok(done)
     }
@@ -77,27 +84,15 @@ mod tests {
     use termion::event::Key::*;
     use Context;
 
-    struct TestKeyMap<'a, W: Write> {
-        ed: Editor<'a, W>,
-    }
+    struct TestKeyMap;
 
-    impl<'a, W: Write> TestKeyMap<'a, W> {
-        pub fn new(ed: Editor<'a, W>) -> Self {
-            TestKeyMap { ed: ed }
-        }
-    }
-
-    impl<'a, W: Write> KeyMap<'a, W, TestKeyMap<'a, W>> for TestKeyMap<'a, W> {
-        fn handle_key_core(&mut self, _: Key) -> io::Result<()> {
+    impl KeyMap for TestKeyMap {
+        fn handle_key_core<'a, W: Write>(
+            &mut self,
+            _: Key,
+            _: &mut Editor<'a, W>,
+        ) -> io::Result<()> {
             Ok(())
-        }
-
-        fn editor_mut(&mut self) -> &mut Editor<'a, W> {
-            &mut self.ed
-        }
-
-        fn editor(&self) -> &Editor<'a, W> {
-            &self.ed
         }
     }
 
@@ -114,10 +109,10 @@ mod tests {
     fn ctrl_d_empty() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = TestKeyMap::new(ed);
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = TestKeyMap;
 
-        let res = map.handle_key(Ctrl('d'), &mut EmptyCompleter);
+        let res = map.handle_key(Ctrl('d'), &mut ed, &mut EmptyCompleter);
         assert_eq!(res.is_err(), true);
         assert_eq!(res.err().unwrap().kind(), ErrorKind::UnexpectedEof);
     }
@@ -127,11 +122,11 @@ mod tests {
     fn ctrl_d_non_empty() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = TestKeyMap::new(ed);
-        map.ed.insert_str_after_cursor("not empty").unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = TestKeyMap;
+        ed.insert_str_after_cursor("not empty").unwrap();
 
-        let res = map.handle_key(Ctrl('d'), &mut EmptyCompleter);
+        let res = map.handle_key(Ctrl('d'), &mut ed, &mut EmptyCompleter);
         assert_eq!(res.is_ok(), true);
     }
 
@@ -140,10 +135,10 @@ mod tests {
     fn ctrl_c() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = TestKeyMap::new(ed);
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = TestKeyMap;
 
-        let res = map.handle_key(Ctrl('c'), &mut EmptyCompleter);
+        let res = map.handle_key(Ctrl('c'), &mut ed, &mut EmptyCompleter);
         assert_eq!(res.is_err(), true);
         assert_eq!(res.err().unwrap().kind(), ErrorKind::Interrupted);
     }
