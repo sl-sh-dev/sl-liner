@@ -110,7 +110,7 @@ impl Context {
             let mut ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
             match self.key_bindings {
                 KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
-                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(&mut ed), ed, handler),
+                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
             }
         };
 
@@ -123,6 +123,7 @@ impl Context {
         mut ed: Editor<'a, W>,
         handler: &mut C,
     ) -> io::Result<String> {
+        keymap.init(&mut ed);
         for c in stdin().keys() {
             if keymap.handle_key(c.unwrap(), &mut ed, handler)? {
                 break;

@@ -12,15 +12,14 @@ use KeyMap;
 /// let mut context = Context::new();
 /// context.key_bindings = KeyBindings::Emacs;
 /// ```
+#[derive(Default)]
 pub struct Emacs {
     last_arg_fetch_index: Option<usize>,
 }
 
 impl Emacs {
     pub fn new() -> Self {
-        Emacs {
-            last_arg_fetch_index: None,
-        }
+        Self::default()
     }
 
     fn handle_ctrl_key<'a, W: Write>(&mut self, c: char, ed: &mut Editor<'a, W>) -> io::Result<()> {

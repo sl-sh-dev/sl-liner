@@ -4,12 +4,14 @@ use std::io::{self, ErrorKind, Write};
 use termion::event::Key;
 use Editor;
 
-pub trait KeyMap {
+pub trait KeyMap: Default {
     fn handle_key_core<'a, W: Write>(
         &mut self,
         key: Key,
         editor: &mut Editor<'a, W>,
     ) -> io::Result<()>;
+
+    fn init<'a, W: Write>(&mut self, _editor: &mut Editor<'a, W>) {}
 
     fn handle_key<'a, W: Write, C: Completer<W>>(
         &mut self,
@@ -84,6 +86,7 @@ mod tests {
     use termion::event::Key::*;
     use Context;
 
+    #[derive(Default)]
     struct TestKeyMap;
 
     impl KeyMap for TestKeyMap {
