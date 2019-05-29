@@ -1,14 +1,14 @@
 extern crate liner;
-extern crate termion;
 extern crate regex;
+extern crate termion;
 
-use std::mem::replace;
 use std::env::{args, current_dir};
 use std::io;
+use std::mem::replace;
 
-use liner::{Context, CursorPosition, Event, EventKind, FilenameCompleter};
-use termion::color;
+use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter};
 use regex::Regex;
+use termion::color;
 
 fn highlight_dodo(s: &str) -> String {
     let reg_exp = Regex::new("(?P<k>dodo)").unwrap();
@@ -16,8 +16,45 @@ fn highlight_dodo(s: &str) -> String {
     reg_exp.replace_all(s, format.as_str()).to_string()
 }
 
+struct NoCommentCompleter {
+    inner: Option<FilenameCompleter>,
+}
+
+impl<W: io::Write> Completer<W> for NoCommentCompleter {
+    fn completions(&mut self, start: &str) -> Vec<String> {
+        if let Some(inner) = &mut self.inner {
+            Completer::<W>::completions(inner, start)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event(&mut self, event: Event<W>) {
+        if let EventKind::BeforeComplete = event.kind {
+            let (_, pos) = event.editor.get_words_and_cursor_position();
+
+            // Figure out of we are completing a command (the first word) or a filename.
+            let filename = match pos {
+                CursorPosition::InWord(i) => i > 0,
+                CursorPosition::InSpace(Some(_), _) => true,
+                CursorPosition::InSpace(None, _) => false,
+                CursorPosition::OnWordLeftEdge(i) => i >= 1,
+                CursorPosition::OnWordRightEdge(i) => i >= 1,
+            };
+
+            if filename {
+                let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
+                replace(&mut self.inner, Some(completer));
+            } else {
+                replace(&mut self.inner, None);
+            }
+        }
+    }
+}
+
 fn main() {
     let mut con = Context::new();
+    let mut completer = NoCommentCompleter { inner: None };
 
     let history_file = match args().nth(1) {
         Some(file_name) => {
@@ -30,32 +67,12 @@ fn main() {
         }
     };
 
-    con.history.set_file_name_and_load_history(history_file).unwrap();
+    con.history
+        .set_file_name_and_load_history(history_file)
+        .unwrap();
 
     loop {
-        let res = con.read_line("[prompt]$ ",
-                                Some(Box::new(highlight_dodo)),
-                                &mut |Event { editor, kind }| {
-            if let EventKind::BeforeComplete = kind {
-                let (_, pos) = editor.get_words_and_cursor_position();
-
-                // Figure out of we are completing a command (the first word) or a filename.
-                let filename = match pos {
-                    CursorPosition::InWord(i) => i > 0,
-                    CursorPosition::InSpace(Some(_), _) => true,
-                    CursorPosition::InSpace(None, _) => false,
-                    CursorPosition::OnWordLeftEdge(i) => i >= 1,
-                    CursorPosition::OnWordRightEdge(i) => i >= 1,
-                };
-
-                if filename {
-                    let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                    replace(&mut editor.context().completer, Some(Box::new(completer)));
-                } else {
-                    replace(&mut editor.context().completer, None);
-                }
-            }
-        });
+        let res = con.read_line("[prompt]$ ", Some(Box::new(highlight_dodo)), &mut completer);
 
         match res {
             Ok(res) => {
@@ -94,7 +111,7 @@ fn main() {
                         // Ensure that all writes to the history file
                         // are written before exiting.
                         panic!("error: {:?}", e)
-                    },
+                    }
                 }
             }
         }

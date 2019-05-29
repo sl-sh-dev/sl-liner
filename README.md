@@ -20,7 +20,7 @@ A Rust library offering readline-like functionality.
 In `Cargo.toml`:
 ```toml
 [dependencies]
-liner = "0.4.5"
+liner = "0.5.0"
 ...
 ```
 
@@ -29,13 +29,21 @@ In `src/main.rs`:
 ```rust
 extern crate liner;
 
-use liner::Context;
+use liner::{Context, Completer};
+
+struct EmptyCompleter;
+
+impl<W: std::io::Write> Completer<W> for EmptyCompleter {
+    fn completions(&mut self, _start: &str) -> Vec<String> {
+        Vec::new()
+    }
+}
 
 fn main() {
     let mut con = Context::new();
 
     loop {
-        let res = con.read_line("[prompt]$ ", &mut |_| {}).unwrap();
+        let res = con.read_line("[prompt]$ ", &mut EmptyCompleter).unwrap();
 
         if res.is_empty() {
             break;

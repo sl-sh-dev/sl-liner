@@ -1,7 +1,10 @@
+use super::event::Event;
+use std::io::Write;
 use std::path::PathBuf;
 
-pub trait Completer {
-    fn completions(&self, start: &str) -> Vec<String>;
+pub trait Completer<W: Write> {
+    fn completions(&mut self, start: &str) -> Vec<String>;
+    fn on_event(&mut self, _event: Event<W>) {}
 }
 
 pub struct BasicCompleter {
@@ -10,12 +13,14 @@ pub struct BasicCompleter {
 
 impl BasicCompleter {
     pub fn new<T: Into<String>>(prefixes: Vec<T>) -> BasicCompleter {
-        BasicCompleter { prefixes: prefixes.into_iter().map(|s| s.into()).collect() }
+        BasicCompleter {
+            prefixes: prefixes.into_iter().map(|s| s.into()).collect(),
+        }
     }
 }
 
-impl Completer for BasicCompleter {
-    fn completions(&self, start: &str) -> Vec<String> {
+impl<T: Write> Completer<T> for BasicCompleter {
+    fn completions(&mut self, start: &str) -> Vec<String> {
         self.prefixes
             .iter()
             .filter(|s| s.starts_with(start))
@@ -30,17 +35,19 @@ pub struct FilenameCompleter {
 
 impl FilenameCompleter {
     pub fn new<T: Into<PathBuf>>(working_dir: Option<T>) -> Self {
-        FilenameCompleter { working_dir: working_dir.map(|p| p.into()) }
+        FilenameCompleter {
+            working_dir: working_dir.map(|p| p.into()),
+        }
     }
 }
 
-impl Completer for FilenameCompleter {
-    fn completions(&self, mut start: &str) -> Vec<String> {
+impl<T: Write> Completer<T> for FilenameCompleter {
+    fn completions(&mut self, mut start: &str) -> Vec<String> {
         // XXX: this function is really bad, TODO rewrite
 
         let start_owned: String = if start.starts_with('\"') || start.starts_with('\'') {
             start = &start[1..];
-            if ! start.is_empty() {
+            if !start.is_empty() {
                 start = &start[..start.len() - 1];
             }
             start.into()
@@ -64,22 +71,22 @@ impl Completer for FilenameCompleter {
         let completing_dir;
         match full_path.parent() {
             // XXX non-unix separaor
-            Some(parent) if !start.is_empty() && !start_owned.ends_with('/') &&
-                            !full_path.ends_with("..") => {
+            Some(parent)
+                if !start.is_empty()
+                    && !start_owned.ends_with('/')
+                    && !full_path.ends_with("..") =>
+            {
                 p = parent;
-                start_name = full_path
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy();
+                start_name = full_path.file_name().unwrap().to_string_lossy();
                 completing_dir = false;
             }
             _ => {
                 p = full_path.as_path();
                 start_name = "".into();
-                completing_dir = start.is_empty() || start.ends_with('/') || full_path.ends_with("..");
+                completing_dir =
+                    start.is_empty() || start.ends_with('/') || full_path.ends_with("..");
             }
         }
-
 
         let read_dir = match p.read_dir() {
             Ok(x) => x,
