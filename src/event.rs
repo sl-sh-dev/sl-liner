@@ -2,8 +2,6 @@ use std::io::Write;
 use termion::event::Key;
 use Editor;
 
-pub type EventHandler<'a, W> = FnMut(Event<W>) + 'a;
-
 pub struct Event<'a, 'out: 'a, W: Write + 'a> {
     pub editor: &'a mut Editor<'out, W>,
     pub kind: EventKind,

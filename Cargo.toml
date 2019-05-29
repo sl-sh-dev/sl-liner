@@ -1,6 +1,6 @@
 [package]
 name = "liner"
-version = "0.4.5" # remember to update README
+version = "0.5.0" # remember to update README
 authors = ["MovingtoMars <definitelynotliam@gmail.com>"]
 description = "A library offering readline-like functionality."
 repository = "https://gitlab.redox-os.org/redox-os/liner"

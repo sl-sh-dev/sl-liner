@@ -1,17 +1,18 @@
-use std::io::{self, Write, ErrorKind};
+use super::complete::Completer;
+use event::*;
+use std::io::{self, ErrorKind, Write};
 use termion::event::Key;
 use Editor;
-use event::*;
 
 pub trait KeyMap<'a, W: Write, T>: From<T> {
     fn handle_key_core(&mut self, key: Key) -> io::Result<()>;
     fn editor(&self) -> &Editor<'a, W>;
     fn editor_mut(&mut self) -> &mut Editor<'a, W>;
 
-    fn handle_key(&mut self, mut key: Key, handler: &mut EventHandler<W>) -> io::Result<bool> {
+    fn handle_key<C: Completer<W>>(&mut self, mut key: Key, handler: &mut C) -> io::Result<bool> {
         let mut done = false;
 
-        handler(Event::new(self.editor_mut(), EventKind::BeforeKey(key)));
+        handler.on_event(Event::new(self.editor_mut(), EventKind::BeforeKey(key)));
 
         let is_empty = self.editor().current_buffer().is_empty();
 
@@ -43,8 +44,10 @@ pub trait KeyMap<'a, W: Write, T>: From<T> {
             Key::Ctrl('s') => {
                 self.editor_mut().search(true)?;
             }
-            Key::Right if self.editor().is_currently_showing_autosuggestion() &&
-                          self.editor().cursor_is_at_end_of_line() => {
+            Key::Right
+                if self.editor().is_currently_showing_autosuggestion()
+                    && self.editor().cursor_is_at_end_of_line() =>
+            {
                 self.editor_mut().accept_autosuggestion()?;
             }
             _ => {
@@ -53,7 +56,7 @@ pub trait KeyMap<'a, W: Write, T>: From<T> {
             }
         };
 
-        handler(Event::new(self.editor_mut(), EventKind::AfterKey(key)));
+        handler.on_event(Event::new(self.editor_mut(), EventKind::AfterKey(key)));
 
         self.editor_mut().flush()?;
 
@@ -70,8 +73,8 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use termion::event::Key::*;
     use std::io::ErrorKind;
+    use termion::event::Key::*;
     use Context;
 
     struct TestKeyMap<'a, W: Write> {
@@ -80,9 +83,7 @@ mod tests {
 
     impl<'a, W: Write> TestKeyMap<'a, W> {
         pub fn new(ed: Editor<'a, W>) -> Self {
-            TestKeyMap {
-                ed: ed,
-            }
+            TestKeyMap { ed: ed }
         }
     }
 
@@ -91,12 +92,20 @@ mod tests {
             Ok(())
         }
 
-        fn editor_mut(&mut self) ->  &mut Editor<'a, W> {
+        fn editor_mut(&mut self) -> &mut Editor<'a, W> {
             &mut self.ed
         }
 
-        fn editor(&self) ->  &Editor<'a, W> {
+        fn editor(&self) -> &Editor<'a, W> {
             &self.ed
+        }
+    }
+
+    struct EmptyCompleter;
+
+    impl<W: Write> Completer<W> for EmptyCompleter {
+        fn completions(&mut self, _start: &str) -> Vec<String> {
+            Vec::default()
         }
     }
 
@@ -108,7 +117,7 @@ mod tests {
         let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = TestKeyMap::new(ed);
 
-        let res = map.handle_key(Ctrl('d'), &mut |_| {});
+        let res = map.handle_key(Ctrl('d'), &mut EmptyCompleter);
         assert_eq!(res.is_err(), true);
         assert_eq!(res.err().unwrap().kind(), ErrorKind::UnexpectedEof);
     }
@@ -122,7 +131,7 @@ mod tests {
         let mut map = TestKeyMap::new(ed);
         map.ed.insert_str_after_cursor("not empty").unwrap();
 
-        let res = map.handle_key(Ctrl('d'), &mut |_| {});
+        let res = map.handle_key(Ctrl('d'), &mut EmptyCompleter);
         assert_eq!(res.is_ok(), true);
     }
 
@@ -134,7 +143,7 @@ mod tests {
         let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
         let mut map = TestKeyMap::new(ed);
 
-        let res = map.handle_key(Ctrl('c'), &mut |_| {});
+        let res = map.handle_key(Ctrl('c'), &mut EmptyCompleter);
         assert_eq!(res.is_err(), true);
         assert_eq!(res.err().unwrap().kind(), ErrorKind::Interrupted);
     }
