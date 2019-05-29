@@ -21,16 +21,16 @@ struct CommentCompleter {
     inner: Option<FilenameCompleter>,
 }
 
-impl<W: io::Write> Completer<W> for CommentCompleter {
+impl Completer for CommentCompleter {
     fn completions(&mut self, start: &str) -> Vec<String> {
         if let Some(inner) = &mut self.inner {
-            Completer::<W>::completions(inner, start)
+            inner.completions(start)
         } else {
             Vec::new()
         }
     }
 
-    fn on_event(&mut self, event: Event<W>) {
+    fn on_event<W: std::io::Write>(&mut self, event: Event<W>) {
         if let EventKind::BeforeComplete = event.kind {
             let (_, pos) = event.editor.get_words_and_cursor_position();
 
