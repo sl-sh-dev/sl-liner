@@ -427,7 +427,7 @@ impl<'a, W: Write> Editor<'a, W> {
         self.show_completions_hint = None;
     }
 
-    pub fn complete<T: Completer<W>>(&mut self, handler: &mut T) -> io::Result<()> {
+    pub fn complete<T: Completer>(&mut self, handler: &mut T) -> io::Result<()> {
         handler.on_event(Event::new(self, EventKind::BeforeComplete));
 
         if let Some((completions, i)) = self.show_completions_hint.take() {

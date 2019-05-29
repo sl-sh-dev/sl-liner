@@ -13,7 +13,7 @@ pub trait KeyMap: Default {
 
     fn init<'a, W: Write>(&mut self, _editor: &mut Editor<'a, W>) {}
 
-    fn handle_key<'a, W: Write, C: Completer<W>>(
+    fn handle_key<'a, W: Write, C: Completer>(
         &mut self,
         mut key: Key,
         editor: &mut Editor<'a, W>,
@@ -101,7 +101,7 @@ mod tests {
 
     struct EmptyCompleter;
 
-    impl<W: Write> Completer<W> for EmptyCompleter {
+    impl Completer for EmptyCompleter {
         fn completions(&mut self, _start: &str) -> Vec<String> {
             Vec::default()
         }

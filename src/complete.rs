@@ -2,9 +2,9 @@ use super::event::Event;
 use std::io::Write;
 use std::path::PathBuf;
 
-pub trait Completer<W: Write> {
+pub trait Completer {
     fn completions(&mut self, start: &str) -> Vec<String>;
-    fn on_event(&mut self, _event: Event<W>) {}
+    fn on_event<W: Write>(&mut self, _event: Event<W>) {}
 }
 
 pub struct BasicCompleter {
@@ -19,7 +19,7 @@ impl BasicCompleter {
     }
 }
 
-impl<T: Write> Completer<T> for BasicCompleter {
+impl Completer for BasicCompleter {
     fn completions(&mut self, start: &str) -> Vec<String> {
         self.prefixes
             .iter()
@@ -41,7 +41,7 @@ impl FilenameCompleter {
     }
 }
 
-impl<T: Write> Completer<T> for FilenameCompleter {
+impl Completer for FilenameCompleter {
     fn completions(&mut self, mut start: &str) -> Vec<String> {
         // XXX: this function is really bad, TODO rewrite
 

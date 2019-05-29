@@ -1090,7 +1090,7 @@ mod tests {
 
     struct EmptyCompleter;
 
-    impl<W: Write> Completer<W> for EmptyCompleter {
+    impl Completer for EmptyCompleter {
         fn completions(&mut self, _start: &str) -> Vec<String> {
             Vec::default()
         }

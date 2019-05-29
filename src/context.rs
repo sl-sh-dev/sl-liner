@@ -1,6 +1,6 @@
-use std::io::{self, stdin, stdout, Stdout, Write};
+use std::io::{self, stdin, stdout, Write};
 use termion::input::TermRead;
-use termion::raw::{IntoRawMode, RawTerminal};
+use termion::raw::IntoRawMode;
 
 use super::*;
 use keymap;
@@ -65,7 +65,7 @@ impl Context {
     /// The output is stdout.
     /// The returned line has the newline removed.
     /// Before returning, will revert all changes to the history buffers.
-    pub fn read_line<P: Into<String>, C: Completer<RawTerminal<Stdout>>>(
+    pub fn read_line<P: Into<String>, C: Completer>(
         &mut self,
         prompt: P,
         f: Option<ColorClosure>,
@@ -81,7 +81,7 @@ impl Context {
     ///
     /// struct EmptyCompleter;
     ///
-    /// impl<W: std::io::Write> Completer<W> for EmptyCompleter {
+    /// impl Completer for EmptyCompleter {
     ///     fn completions(&mut self, _start: &str) -> Vec<String> {
     ///         Vec::new()
     ///     }
@@ -94,11 +94,7 @@ impl Context {
     ///                                        Some(Box::new(|s| String::from(s))),
     ///                                        "some initial buffer");
     /// ```
-    pub fn read_line_with_init_buffer<
-        P: Into<String>,
-        B: Into<Buffer>,
-        C: Completer<RawTerminal<Stdout>>,
-    >(
+    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>, C: Completer>(
         &mut self,
         prompt: P,
         handler: &mut C,
@@ -118,7 +114,7 @@ impl Context {
         res
     }
 
-    fn handle_keys<'a, W: Write, M: KeyMap, C: Completer<W>>(
+    fn handle_keys<'a, W: Write, M: KeyMap, C: Completer>(
         mut keymap: M,
         mut ed: Editor<'a, W>,
         handler: &mut C,
