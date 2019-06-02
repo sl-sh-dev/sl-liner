@@ -940,7 +940,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
             let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
-            output_buf.append(b"\x1B[?1049l\x1B[?1000l\x1B[?1l");
+            output_buf.append(b"\x1B[?1000l\x1B[?1l");
 
             // Move the term cursor to the same line as the prompt.
             if self.term_cursor_line > 1 {
