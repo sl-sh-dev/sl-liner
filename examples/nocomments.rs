@@ -1,14 +1,14 @@
 extern crate liner;
-extern crate termion;
 extern crate regex;
+extern crate termion;
 
-use std::mem::replace;
 use std::env::{args, current_dir};
 use std::io;
+use std::mem::replace;
 
 use liner::{Context, CursorPosition, Event, EventKind, FilenameCompleter};
-use termion::color;
 use regex::Regex;
+use termion::color;
 
 fn highlight_dodo(s: &str) -> String {
     let reg_exp = Regex::new("(?P<k>dodo)").unwrap();
@@ -30,32 +30,36 @@ fn main() {
         }
     };
 
-    con.history.set_file_name_and_load_history(history_file).unwrap();
+    con.history
+        .set_file_name_and_load_history(history_file)
+        .unwrap();
 
     loop {
-        let res = con.read_line("[prompt]$ ",
-                                Some(Box::new(highlight_dodo)),
-                                &mut |Event { editor, kind }| {
-            if let EventKind::BeforeComplete = kind {
-                let (_, pos) = editor.get_words_and_cursor_position();
+        let res = con.read_line(
+            "[prompt]$ ",
+            Some(Box::new(highlight_dodo)),
+            &mut |Event { editor, kind }| {
+                if let EventKind::BeforeComplete = kind {
+                    let (_, pos) = editor.get_words_and_cursor_position();
 
-                // Figure out of we are completing a command (the first word) or a filename.
-                let filename = match pos {
-                    CursorPosition::InWord(i) => i > 0,
-                    CursorPosition::InSpace(Some(_), _) => true,
-                    CursorPosition::InSpace(None, _) => false,
-                    CursorPosition::OnWordLeftEdge(i) => i >= 1,
-                    CursorPosition::OnWordRightEdge(i) => i >= 1,
-                };
+                    // Figure out of we are completing a command (the first word) or a filename.
+                    let filename = match pos {
+                        CursorPosition::InWord(i) => i > 0,
+                        CursorPosition::InSpace(Some(_), _) => true,
+                        CursorPosition::InSpace(None, _) => false,
+                        CursorPosition::OnWordLeftEdge(i) => i >= 1,
+                        CursorPosition::OnWordRightEdge(i) => i >= 1,
+                    };
 
-                if filename {
-                    let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                    replace(&mut editor.context().completer, Some(Box::new(completer)));
-                } else {
-                    replace(&mut editor.context().completer, None);
+                    if filename {
+                        let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
+                        replace(&mut editor.context().completer, Some(Box::new(completer)));
+                    } else {
+                        replace(&mut editor.context().completer, None);
+                    }
                 }
-            }
-        });
+            },
+        );
 
         match res {
             Ok(res) => {
@@ -94,7 +98,7 @@ fn main() {
                         // Ensure that all writes to the history file
                         // are written before exiting.
                         panic!("error: {:?}", e)
-                    },
+                    }
                 }
             }
         }

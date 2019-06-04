@@ -1,10 +1,10 @@
-use unicode_width::UnicodeWidthStr;
+use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, Write};
 use std::iter::FromIterator;
-use std::fmt::{self, Write as FmtWrite};
+use unicode_width::UnicodeWidthStr;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub enum Action {
     Insert { start: usize, text: Vec<char> },
     Remove { start: usize, text: Vec<char> },
@@ -172,7 +172,10 @@ impl Buffer {
     }
 
     pub fn last_arg(&self) -> Option<&[char]> {
-        self.data.split(|&c| c == ' ').filter(|s| !s.is_empty()).last()
+        self.data
+            .split(|&c| c == ' ')
+            .filter(|s| !s.is_empty())
+            .last()
     }
 
     pub fn num_chars(&self) -> usize {
@@ -242,11 +245,17 @@ impl Buffer {
     }
 
     pub fn range_width(&self, start: usize, end: usize) -> Vec<usize> {
-        self.range(start, end).split('\n').map(|s| s.width()).collect()
+        self.range(start, end)
+            .split('\n')
+            .map(|s| s.width())
+            .collect()
     }
 
     pub fn lines(&self) -> Vec<String> {
-        self.data.split(|&c| c == '\n').map(|s| s.iter().cloned().collect()).collect()
+        self.data
+            .split(|&c| c == '\n')
+            .map(|s| s.iter().cloned().collect())
+            .collect()
     }
 
     pub fn chars(&self) -> ::std::slice::Iter<char> {
@@ -259,7 +268,8 @@ impl Buffer {
     }
 
     pub fn print<W>(&self, out: &mut W) -> io::Result<()>
-        where W: Write
+    where
+        W: Write,
     {
         let string: String = self.data.iter().cloned().collect();
         out.write_all(string.as_bytes())
@@ -275,7 +285,8 @@ impl Buffer {
     /// the other stopped.
     /// Used to implement autosuggestions.
     pub fn print_rest<W>(&self, out: &mut W, after: usize) -> io::Result<usize>
-        where W: Write
+    where
+        W: Write,
     {
         let string: String = self.data.iter().skip(after).cloned().collect();
         out.write_all(string.as_bytes())?;
@@ -303,8 +314,9 @@ impl Buffer {
     pub fn starts_with(&self, other: &Buffer) -> bool {
         let other_len = other.data.len();
         let self_len = self.data.len();
-        if ! other.data.is_empty() && self_len != other_len {
-            let match_let = self.data
+        if !other.data.is_empty() && self_len != other_len {
+            let match_let = self
+                .data
                 .iter()
                 .zip(&other.data)
                 .take_while(|&(s, o)| *s == *o)
@@ -322,7 +334,9 @@ impl Buffer {
         if search_term.is_empty() {
             return false;
         }
-        self.data.windows(search_term.len()).any(|window| window == search_term)
+        self.data
+            .windows(search_term.len())
+            .any(|window| window == search_term)
     }
 
     /// Return true if the buffer is empty.

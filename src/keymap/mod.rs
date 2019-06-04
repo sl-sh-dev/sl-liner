@@ -1,7 +1,7 @@
-use std::io::{self, Write, ErrorKind};
+use event::*;
+use std::io::{self, ErrorKind, Write};
 use termion::event::Key;
 use Editor;
-use event::*;
 
 pub trait KeyMap<'a, W: Write, T>: From<T> {
     fn handle_key_core(&mut self, key: Key) -> io::Result<()>;
@@ -43,8 +43,10 @@ pub trait KeyMap<'a, W: Write, T>: From<T> {
             Key::Ctrl('s') => {
                 self.editor_mut().search(true)?;
             }
-            Key::Right if self.editor().is_currently_showing_autosuggestion() &&
-                          self.editor().cursor_is_at_end_of_line() => {
+            Key::Right
+                if self.editor().is_currently_showing_autosuggestion()
+                    && self.editor().cursor_is_at_end_of_line() =>
+            {
                 self.editor_mut().accept_autosuggestion()?;
             }
             _ => {
@@ -70,8 +72,8 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use termion::event::Key::*;
     use std::io::ErrorKind;
+    use termion::event::Key::*;
     use Context;
 
     struct TestKeyMap<'a, W: Write> {
@@ -80,9 +82,7 @@ mod tests {
 
     impl<'a, W: Write> TestKeyMap<'a, W> {
         pub fn new(ed: Editor<'a, W>) -> Self {
-            TestKeyMap {
-                ed: ed,
-            }
+            TestKeyMap { ed: ed }
         }
     }
 
@@ -91,11 +91,11 @@ mod tests {
             Ok(())
         }
 
-        fn editor_mut(&mut self) ->  &mut Editor<'a, W> {
+        fn editor_mut(&mut self) -> &mut Editor<'a, W> {
             &mut self.ed
         }
 
-        fn editor(&self) ->  &Editor<'a, W> {
+        fn editor(&self) -> &Editor<'a, W> {
             &self.ed
         }
     }

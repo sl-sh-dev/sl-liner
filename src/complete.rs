@@ -10,7 +10,9 @@ pub struct BasicCompleter {
 
 impl BasicCompleter {
     pub fn new<T: Into<String>>(prefixes: Vec<T>) -> BasicCompleter {
-        BasicCompleter { prefixes: prefixes.into_iter().map(|s| s.into()).collect() }
+        BasicCompleter {
+            prefixes: prefixes.into_iter().map(|s| s.into()).collect(),
+        }
     }
 }
 
@@ -31,11 +33,17 @@ pub struct FilenameCompleter {
 
 impl FilenameCompleter {
     pub fn new<T: Into<PathBuf>>(working_dir: Option<T>) -> Self {
-        FilenameCompleter { working_dir: working_dir.map(|p| p.into()), case_sensitive: true }
+        FilenameCompleter {
+            working_dir: working_dir.map(|p| p.into()),
+            case_sensitive: true,
+        }
     }
 
     pub fn new_case<T: Into<PathBuf>>(working_dir: Option<T>, case_sensitive: bool) -> Self {
-        FilenameCompleter { working_dir: working_dir.map(|p| p.into()), case_sensitive }
+        FilenameCompleter {
+            working_dir: working_dir.map(|p| p.into()),
+            case_sensitive,
+        }
     }
 }
 
@@ -45,7 +53,7 @@ impl Completer for FilenameCompleter {
 
         let start_owned: String = if start.starts_with('\"') || start.starts_with('\'') {
             start = &start[1..];
-            if ! start.is_empty() {
+            if !start.is_empty() {
                 start = &start[..start.len() - 1];
             }
             start.into()
@@ -69,23 +77,30 @@ impl Completer for FilenameCompleter {
         let completing_dir;
         match full_path.parent() {
             // XXX non-unix separaor
-            Some(parent) if !start.is_empty() && !start_owned.ends_with('/') &&
-                            !full_path.ends_with("..") => {
+            Some(parent)
+                if !start.is_empty()
+                    && !start_owned.ends_with('/')
+                    && !full_path.ends_with("..") =>
+            {
                 p = parent;
                 start_name = if self.case_sensitive {
                     full_path.file_name().unwrap().to_string_lossy().to_string()
                 } else {
-                    full_path.file_name().unwrap().to_string_lossy().to_lowercase()
+                    full_path
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_lowercase()
                 };
                 completing_dir = false;
             }
             _ => {
                 p = full_path.as_path();
                 start_name = "".into();
-                completing_dir = start.is_empty() || start.ends_with('/') || full_path.ends_with("..");
+                completing_dir =
+                    start.is_empty() || start.ends_with('/') || full_path.ends_with("..");
             }
         }
-
 
         let read_dir = match p.read_dir() {
             Ok(x) => x,

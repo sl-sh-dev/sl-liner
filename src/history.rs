@@ -68,9 +68,16 @@ impl History {
     pub fn load_history(&mut self, append: bool) -> io::Result<u64> {
         if let Some(path) = self.file_name.clone() {
             let file_size = self.file_size;
-            self.load_history_file_test(&path, file_size, append).map(|l| { self.file_size = l; l })
+            self.load_history_file_test(&path, file_size, append)
+                .map(|l| {
+                    self.file_size = l;
+                    l
+                })
         } else {
-            Err(io::Error::new(io::ErrorKind::Other, "History filename not set!"))
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "History filename not set!",
+            ))
         }
     }
 
@@ -81,7 +88,12 @@ impl History {
 
     /// Loads the history file from path and appends it to the end of the history.f append is true
     /// (replaces if false).  Only loads if length is not equal to current file size.
-    fn load_history_file_test<P: AsRef<Path>>(&mut self, path: P, length: u64, append: bool) -> io::Result<u64> {
+    fn load_history_file_test<P: AsRef<Path>>(
+        &mut self,
+        path: P,
+        length: u64,
+        append: bool,
+    ) -> io::Result<u64> {
         let path = path.as_ref();
         let file = if path.exists() {
             File::open(path)?
@@ -128,7 +140,10 @@ impl History {
     /// Removes duplicates and trims a history file to max_file_size.
     /// Primarily if inc_append is set without shared history.
     /// Static because it should have no side effects on a history object.
-    fn deduplicate_history_file<P: AsRef<Path>>(path: P, max_file_size: usize) -> io::Result<String> {
+    fn deduplicate_history_file<P: AsRef<Path>>(
+        path: P,
+        max_file_size: usize,
+    ) -> io::Result<String> {
         let path = path.as_ref();
         let file = if path.exists() {
             File::open(path)?
@@ -158,9 +173,7 @@ impl History {
         let mut tmp_buffers: Vec<String> = Vec::with_capacity(buf.len());
         // Remove duplicates from loaded history if we do not want it.
         while let Some(line) = buf.pop_back() {
-            buf.retain(|buffer| {
-                *buffer != line
-            });
+            buf.retain(|buffer| *buffer != line);
             tmp_buffers.push(line);
         }
         while let Some(line) = tmp_buffers.pop() {
@@ -185,7 +198,10 @@ impl History {
         self.file_name = path.to_str().map(|s| s.to_owned());
         self.file_size = 0;
         if path.exists() {
-            self.load_history_file(path, false).map(|l| { self.file_size = l; l })
+            self.load_history_file(path, false).map(|l| {
+                self.file_size = l;
+                l
+            })
         } else {
             File::create(path)?;
             Ok(0)
@@ -227,7 +243,6 @@ impl History {
             self.buffers.pop_front();
         }
 
-
         if self.inc_append && self.file_name.is_some() {
             if !self.load_duplicates {
                 // Do not want duplicates so periodically compact the history file.
@@ -247,7 +262,8 @@ impl History {
                         // Not using shared history so just de-dup the file without messing with
                         // our history.
                         if let Some(file_name) = self.file_name.clone() {
-                            let _ = History::deduplicate_history_file(file_name, self.max_file_size);
+                            let _ =
+                                History::deduplicate_history_file(file_name, self.max_file_size);
                         }
                     }
                     self.compaction_writes = 0;
@@ -259,7 +275,8 @@ impl History {
             let file_name = self.file_name.clone().unwrap();
             if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
                 // Leave file size alone, if it is not right trigger a reload later.
-                if self.compaction_writes > 0 { // If 0 we "compacted" and nothing to write.
+                if self.compaction_writes > 0 {
+                    // If 0 we "compacted" and nothing to write.
                     let mut file = BufWriter::new(inner_file);
                     let _ = file.write_all(&item_str.as_bytes());
                     let _ = file.write_all(b"\n");
