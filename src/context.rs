@@ -1,6 +1,6 @@
-use std::io::{self, stdin, stdout, Stdout, Write};
+use std::io::{self, stdin, stdout, Write};
 use termion::input::TermRead;
-use termion::raw::{IntoRawMode, RawTerminal};
+use termion::raw::IntoRawMode;
 
 use super::*;
 use keymap;
@@ -48,7 +48,6 @@ pub enum KeyBindings {
 
 pub struct Context {
     pub history: History,
-    pub completer: Option<Box<Completer>>,
     pub word_divider_fn: Box<Fn(&Buffer) -> Vec<(usize, usize)>>,
     pub key_bindings: KeyBindings,
 }
@@ -57,7 +56,6 @@ impl Context {
     pub fn new() -> Self {
         Context {
             history: History::new(),
-            completer: None,
             word_divider_fn: Box::new(get_buffer_words),
             key_bindings: KeyBindings::Emacs,
         }
@@ -67,11 +65,11 @@ impl Context {
     /// The output is stdout.
     /// The returned line has the newline removed.
     /// Before returning, will revert all changes to the history buffers.
-    pub fn read_line<P: Into<String>>(
+    pub fn read_line<P: Into<String>, C: Completer>(
         &mut self,
         prompt: P,
         f: Option<ColorClosure>,
-        handler: &mut EventHandler<RawTerminal<Stdout>>,
+        handler: &mut C,
     ) -> io::Result<String> {
         self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
     }
@@ -79,27 +77,36 @@ impl Context {
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
     ///
     /// ```no_run
-    /// use liner::Context;
+    /// use liner::{Context, Completer};
+    ///
+    /// struct EmptyCompleter;
+    ///
+    /// impl Completer for EmptyCompleter {
+    ///     fn completions(&mut self, _start: &str) -> Vec<String> {
+    ///         Vec::new()
+    ///     }
+    /// }
+    ///
     /// let mut context = Context::new();
     /// let line =
     ///     context.read_line_with_init_buffer("[prompt]$ ",
-    ///                                        &mut |_| {},
+    ///                                        &mut EmptyCompleter,
     ///                                        Some(Box::new(|s| String::from(s))),
     ///                                        "some initial buffer");
     /// ```
-    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
+    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>, C: Completer>(
         &mut self,
         prompt: P,
-        handler: &mut EventHandler<RawTerminal<Stdout>>,
+        handler: &mut C,
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
         let res = {
             let mut stdout = stdout().into_raw_mode()?;
-            let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
+            let mut ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
             match self.key_bindings {
-                KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(ed), handler),
-                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(ed), handler),
+                KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
+                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
             }
         };
 
@@ -107,22 +114,19 @@ impl Context {
         res
     }
 
-    fn handle_keys<'a, T, W: Write, M: KeyMap<'a, W, T>>(
+    fn handle_keys<'a, W: Write, M: KeyMap, C: Completer>(
         mut keymap: M,
-        handler: &mut EventHandler<W>,
-    ) -> io::Result<String>
-    where
-        String: From<M>,
-    {
-        let stdin = stdin();
-        let stdin = stdin.lock();
-        for c in stdin.keys() {
-            if keymap.handle_key(c.unwrap(), handler)? {
+        mut ed: Editor<'a, W>,
+        handler: &mut C,
+    ) -> io::Result<String> {
+        keymap.init(&mut ed);
+        for c in stdin().keys() {
+            if keymap.handle_key(c.unwrap(), &mut ed, handler)? {
                 break;
             }
         }
 
-        Ok(keymap.into())
+        Ok(ed.into())
     }
 
     pub fn revert_all_history(&mut self) {

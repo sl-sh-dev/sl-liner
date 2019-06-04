@@ -3,6 +3,7 @@ use std::cmp;
 use std::io::{self, Write};
 use termion::{self, clear, color, cursor};
 
+use super::complete::Completer;
 use context::ColorClosure;
 use event::*;
 use util;
@@ -150,9 +151,14 @@ macro_rules! cur_buf_mut {
                     $s.hist_buf.copy_buffer(&$s.context.history[i]);
                     $s.hist_buf_valid = true;
                 }
+                $s.buffer_changed = true;
                 &mut $s.hist_buf
+                //&mut $s.context.history[i]
             }
-            _ => &mut $s.new_buf,
+            _ => {
+                $s.buffer_changed = true;
+                &mut $s.new_buf
+            }
         }
     }};
 }
@@ -447,8 +453,8 @@ impl<'a, W: Write> Editor<'a, W> {
         self.show_completions_hint = None;
     }
 
-    pub fn complete(&mut self, handler: &mut EventHandler<W>) -> io::Result<()> {
-        handler(Event::new(self, EventKind::BeforeComplete));
+    pub fn complete<T: Completer>(&mut self, handler: &mut T) -> io::Result<()> {
+        handler.on_event(Event::new(self, EventKind::BeforeComplete));
 
         if let Some((completions, i_in)) = self.show_completions_hint.take() {
             let i = i_in.map_or(0, |i| (i + 1) % completions.len());
@@ -479,14 +485,10 @@ impl<'a, W: Write> Editor<'a, W> {
                 None => "".into(),
             };
 
-            if let Some(ref completer) = self.context.completer {
-                let mut completions = completer.completions(word.as_ref());
-                completions.sort();
-                completions.dedup();
-                (word, completions)
-            } else {
-                return Ok(());
-            }
+            let mut completions = handler.completions(word.as_ref());
+            completions.sort();
+            completions.dedup();
+            (word, completions)
         };
 
         if completions.is_empty() {
@@ -844,13 +846,15 @@ impl<'a, W: Write> Editor<'a, W> {
     /// Accept autosuggestion and copy its content into current buffer
     pub fn accept_autosuggestion(&mut self) -> io::Result<()> {
         if self.show_autosuggestions {
-            let autosuggestion = self.autosuggestion.clone();
-            let search = self.is_search();
-            let buf = cur_buf_mut!(self);
-            match autosuggestion {
-                Some(ref x) if search => buf.copy_buffer(x),
-                Some(ref x) => buf.insert_from_buffer(x),
-                None => (),
+            {
+                let autosuggestion = self.autosuggestion.clone();
+                let search = self.is_search();
+                let buf = self.current_buffer_mut();
+                match autosuggestion {
+                    Some(ref x) if search => buf.copy_buffer(x),
+                    Some(ref x) => buf.insert_from_buffer(x),
+                    None => (),
+                }
             }
         }
         self.clear_search();
@@ -959,16 +963,12 @@ impl<'a, W: Write> Editor<'a, W> {
             };
             // Width of the current buffer lines (including autosuggestion) from the start to the cursor
             let buf_widths_to_cursor = match self.autosuggestion {
-                Some(ref suggestion) =>
+                Some(ref suggestion) if self.cursor < suggestion.num_chars() =>
                 // Cursor might overrun autosuggestion with history search.
                 {
-                    if self.cursor < suggestion.num_chars() {
-                        suggestion.range_width(0, self.cursor)
-                    } else {
-                        buf.range_width(0, self.cursor)
-                    }
+                    suggestion.range_width(0, self.cursor)
                 }
-                None => buf.range_width(0, self.cursor),
+                _ => buf.range_width(0, self.cursor),
             };
 
             // Total number of terminal spaces taken up by prompt and buffer
@@ -981,6 +981,8 @@ impl<'a, W: Write> Editor<'a, W> {
 
             let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
+            output_buf.append(b"\x1B[?1000l\x1B[?1l");
+
             // Move the term cursor to the same line as the prompt.
             if self.term_cursor_line > 1 {
                 output_buf.append(
@@ -992,9 +994,6 @@ impl<'a, W: Write> Editor<'a, W> {
 
             if !self.no_newline {
                 output_buf.append("⏎".as_bytes());
-                for _ in 0..(terminal_width - 1) {
-                    output_buf.push(b' ');
-                }
             }
 
             output_buf.push(b'\r');
@@ -1023,13 +1022,9 @@ impl<'a, W: Write> Editor<'a, W> {
             // We get the number of bytes in the buffer (but NOT the autosuggestion).
             // Then, we loop and subtract from that number until it's 0, in which case we are printing
             // the autosuggestion from here on (in a different color).
-            let lines = if show_autosuggest {
-                match self.autosuggestion {
-                    Some(ref suggestion) => suggestion.lines(),
-                    None => buf.lines(),
-                }
-            } else {
-                buf.lines()
+            let lines = match self.autosuggestion {
+                Some(ref suggestion) if show_autosuggest => suggestion.lines(),
+                _ => buf.lines(),
             };
             let mut buf_num_remaining_bytes = buf.num_bytes();
 

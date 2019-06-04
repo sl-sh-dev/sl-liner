@@ -6,7 +6,7 @@ use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
 
-use liner::{Context, CursorPosition, Event, EventKind, FilenameCompleter};
+use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter};
 use regex::Regex;
 use termion::color;
 
@@ -17,8 +17,59 @@ fn highlight_dodo(s: &str) -> String {
     reg_exp.replace_all(s, format.as_str()).to_string()
 }
 
+struct CommentCompleter {
+    inner: Option<FilenameCompleter>,
+}
+
+impl Completer for CommentCompleter {
+    fn completions(&mut self, start: &str) -> Vec<String> {
+        if let Some(inner) = &mut self.inner {
+            inner.completions(start)
+        } else {
+            Vec::new()
+        }
+    }
+
+    fn on_event<W: std::io::Write>(&mut self, event: Event<W>) {
+        if let EventKind::BeforeComplete = event.kind {
+            let (_, pos) = event.editor.get_words_and_cursor_position();
+
+            // Figure out of we are completing a command (the first word) or a filename.
+            let filename = match pos {
+                // If we are inside of a word(i is the index inside of the text, and if that
+                // position is over zero, we return true
+                CursorPosition::InWord(i) => i > 0,
+                // If we are in a space like this `cat | cart` or cat |
+                // checks if there is a word to our left(indicated by there being Some value)
+                CursorPosition::InSpace(Some(_), _) => true,
+                // Checks if there is no word to our left(indicated by there being None value)
+                CursorPosition::InSpace(None, _) => false,
+                // If we are on the left edge of a word, and the position of the cursor is
+                // greater than or equal to 1, return true
+                CursorPosition::OnWordLeftEdge(i) => i >= 1,
+                // If we are on the right edge of the word
+                CursorPosition::OnWordRightEdge(i) => i >= 1,
+            };
+
+            // If we are not in a word with pos over zero, or in a space with text beforehand,
+            // or on the left edge of a word with pos >= to 1, or on the Right edge of a word
+            // under the same condition, then
+            // This condition is only false under the predicate that we are in a space with no
+            // word to the left
+            if filename {
+                let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
+                replace(&mut self.inner, Some(completer));
+            } else {
+                // Delete the completer
+                replace(&mut self.inner, None);
+            }
+        }
+    }
+}
+
 fn main() {
     let mut con = Context::new();
+    let mut completer = CommentCompleter { inner: None };
 
     let history_file = match args().nth(1) {
         Some(file_name) => {
@@ -38,45 +89,7 @@ fn main() {
     loop {
         // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving liner, and the third is called on every key press
         // Basically highlight_dodo(read_line()), where on every keypress, the lambda is called
-        let res = con.read_line(
-            "[prompt]$ ",
-            Some(Box::new(highlight_dodo)),
-            &mut |Event { editor, kind }| {
-                if let EventKind::BeforeComplete = kind {
-                    let (_, pos) = editor.get_words_and_cursor_position();
-
-                    // Figure out of we are completing a command (the first word) or a filename.
-                    let filename = match pos {
-                        // If we are inside of a word(i is the index inside of the text, and if that
-                        // position is over zero, we return true
-                        CursorPosition::InWord(i) => i > 0,
-                        // If we are in a space like this `cat | cart` or cat |
-                        // checks if there is a word to our left(indicated by there being Some value)
-                        CursorPosition::InSpace(Some(_), _) => true,
-                        // Checks if there is no word to our left(indicated by there being None value)
-                        CursorPosition::InSpace(None, _) => false,
-                        // If we are on the left edge of a word, and the position of the cursor is
-                        // greater than or equal to 1, return true
-                        CursorPosition::OnWordLeftEdge(i) => i >= 1,
-                        // If we are on the right edge of the word
-                        CursorPosition::OnWordRightEdge(i) => i >= 1,
-                    };
-
-                    // If we are not in a word with pos over zero, or in a space with text beforehand,
-                    // or on the left edge of a word with pos >= to 1, or on the Right edge of a word
-                    // under the same condition, then
-                    // This condition is only false under the predicate that we are in a space with no
-                    // word to the left
-                    if filename {
-                        let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                        replace(&mut editor.context().completer, Some(Box::new(completer)));
-                    } else {
-                        // Delete the completer
-                        replace(&mut editor.context().completer, None);
-                    }
-                }
-            },
-        );
+        let res = con.read_line("[prompt]$ ", Some(Box::new(highlight_dodo)), &mut completer);
 
         // We are out of the lambda, and res is the result from read_line which is an Into<String>
         match res {

@@ -1,7 +1,10 @@
+use super::event::Event;
+use std::io::Write;
 use std::path::PathBuf;
 
 pub trait Completer {
-    fn completions(&self, start: &str) -> Vec<String>;
+    fn completions(&mut self, start: &str) -> Vec<String>;
+    fn on_event<W: Write>(&mut self, _event: Event<W>) {}
 }
 
 pub struct BasicCompleter {
@@ -17,7 +20,7 @@ impl BasicCompleter {
 }
 
 impl Completer for BasicCompleter {
-    fn completions(&self, start: &str) -> Vec<String> {
+    fn completions(&mut self, start: &str) -> Vec<String> {
         self.prefixes
             .iter()
             .filter(|s| s.starts_with(start))
@@ -48,7 +51,7 @@ impl FilenameCompleter {
 }
 
 impl Completer for FilenameCompleter {
-    fn completions(&self, mut start: &str) -> Vec<String> {
+    fn completions(&mut self, mut start: &str) -> Vec<String> {
         // XXX: this function is really bad, TODO rewrite
 
         let start_owned: String = if start.starts_with('\"') || start.starts_with('\'') {
