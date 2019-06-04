@@ -1,9 +1,9 @@
 use std::io::{self, Write};
 use termion::event::Key;
 
-use KeyMap;
-use Editor;
 use CursorPosition;
+use Editor;
+use KeyMap;
 
 /// Emacs keybindings for `Editor`. This is the default for `Context::read_line()`.
 ///
@@ -12,78 +12,80 @@ use CursorPosition;
 /// let mut context = Context::new();
 /// context.key_bindings = KeyBindings::Emacs;
 /// ```
-pub struct Emacs<'a, W: Write> {
-    ed: Editor<'a, W>,
+#[derive(Default)]
+pub struct Emacs {
     last_arg_fetch_index: Option<usize>,
 }
 
-impl<'a, W: Write> Emacs<'a, W> {
-    pub fn new(ed: Editor<'a, W>) -> Self {
-        Emacs { ed, last_arg_fetch_index: None }
+impl Emacs {
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    fn handle_ctrl_key(&mut self, c: char) -> io::Result<()> {
+    fn handle_ctrl_key<'a, W: Write>(&mut self, c: char, ed: &mut Editor<'a, W>) -> io::Result<()> {
         match c {
-            'l' => self.ed.clear(),
-            'a' => self.ed.move_cursor_to_start_of_line(),
-            'e' => self.ed.move_cursor_to_end_of_line(),
-            'b' => self.ed.move_cursor_left(1),
-            'f' => self.ed.move_cursor_right(1),
-            'd' => self.ed.delete_after_cursor(),
-            'p' => self.ed.move_up(),
-            'n' => self.ed.move_down(),
-            'u' => self.ed.delete_all_before_cursor(),
-            'k' => self.ed.delete_all_after_cursor(),
-            'w' => self.ed.delete_word_before_cursor(true),
+            'l' => ed.clear(),
+            'a' => ed.move_cursor_to_start_of_line(),
+            'e' => ed.move_cursor_to_end_of_line(),
+            'b' => ed.move_cursor_left(1),
+            'f' => ed.move_cursor_right(1),
+            'd' => ed.delete_after_cursor(),
+            'p' => ed.move_up(),
+            'n' => ed.move_down(),
+            'u' => ed.delete_all_before_cursor(),
+            'k' => ed.delete_all_after_cursor(),
+            'w' => ed.delete_word_before_cursor(true),
             'x' => {
-                self.ed.undo()?;
+                ed.undo()?;
                 Ok(())
             }
             _ => Ok(()),
         }
     }
 
-    fn handle_alt_key(&mut self, c: char) -> io::Result<()> {
+    fn handle_alt_key<'a, W: Write>(&mut self, c: char, ed: &mut Editor<'a, W>) -> io::Result<()> {
         match c {
-            '<' => self.ed.move_to_start_of_history(),
-            '>' => self.ed.move_to_end_of_history(),
-            '\x7F' => self.ed.delete_word_before_cursor(true),
-            'f' => emacs_move_word(&mut self.ed, EmacsMoveDir::Right),
-            'b' => emacs_move_word(&mut self.ed, EmacsMoveDir::Left),
+            '<' => ed.move_to_start_of_history(),
+            '>' => ed.move_to_end_of_history(),
+            '\x7F' => ed.delete_word_before_cursor(true),
+            'f' => emacs_move_word(ed, EmacsMoveDir::Right),
+            'b' => emacs_move_word(ed, EmacsMoveDir::Left),
             'r' => {
-                self.ed.revert()?;
+                ed.revert()?;
                 Ok(())
             }
-            '.' => self.handle_last_arg_fetch(),
+            '.' => self.handle_last_arg_fetch(ed),
             _ => Ok(()),
         }
     }
 
-    fn handle_last_arg_fetch(&mut self) -> io::Result<()> {
+    fn handle_last_arg_fetch<'a, W: Write>(&mut self, ed: &mut Editor<'a, W>) -> io::Result<()> {
         // Empty history means no last arg to fetch.
-        if self.ed.context().history.len() == 0 {
+        if ed.context().history.len() == 0 {
             return Ok(());
         }
 
         let history_index = match self.last_arg_fetch_index {
             Some(0) => return Ok(()),
             Some(x) => x - 1,
-            None => self.ed.current_history_location().unwrap_or(self.ed.context().history.len() - 1),
+            None => ed
+                .current_history_location()
+                .unwrap_or(ed.context().history.len() - 1),
         };
 
         // If did a last arg fetch just before this, we need to delete it so it can be replaced by
         // this last arg fetch.
         if self.last_arg_fetch_index.is_some() {
-            let buffer_len = self.ed.current_buffer().num_chars();
-            if let Some(last_arg_len) = self.ed.current_buffer().last_arg().map(|x| x.len()) {
-                self.ed.delete_until(buffer_len - last_arg_len)?;
+            let buffer_len = ed.current_buffer().num_chars();
+            if let Some(last_arg_len) = ed.current_buffer().last_arg().map(|x| x.len()) {
+                ed.delete_until(buffer_len - last_arg_len)?;
             }
         }
 
         // Actually insert it
-        let buf = self.ed.context().history[history_index].clone();
+        let buf = ed.context().history[history_index].clone();
         if let Some(last_arg) = buf.last_arg() {
-            self.ed.insert_chars_after_cursor(last_arg)?;
+            ed.insert_chars_after_cursor(last_arg)?;
         }
 
         // Edit the index in case the user does a last arg fetch again.
@@ -93,42 +95,32 @@ impl<'a, W: Write> Emacs<'a, W> {
     }
 }
 
-impl<'a, W: Write> KeyMap<'a, W, Emacs<'a, W>> for Emacs<'a, W> {
-    fn handle_key_core(&mut self, key: Key) -> io::Result<()> {
+impl KeyMap for Emacs {
+    fn handle_key_core<'a, W: Write>(
+        &mut self,
+        key: Key,
+        ed: &mut Editor<'a, W>,
+    ) -> io::Result<()> {
         match key {
-            Key::Alt('.') => {},
+            Key::Alt('.') => {}
             _ => self.last_arg_fetch_index = None,
         }
 
         match key {
-            Key::Char(c) => self.ed.insert_after_cursor(c),
-            Key::Alt(c) => self.handle_alt_key(c),
-            Key::Ctrl(c) => self.handle_ctrl_key(c),
-            Key::Left => self.ed.move_cursor_left(1),
-            Key::Right => self.ed.move_cursor_right(1),
-            Key::Up => self.ed.move_up(),
-            Key::Down => self.ed.move_down(),
-            Key::Home => self.ed.move_cursor_to_start_of_line(),
-            Key::End => self.ed.move_cursor_to_end_of_line(),
-            Key::Backspace => self.ed.delete_before_cursor(),
-            Key::Delete => self.ed.delete_after_cursor(),
+            Key::Char(c) => ed.insert_after_cursor(c),
+            Key::Alt(c) => self.handle_alt_key(c, ed),
+            Key::Ctrl(c) => self.handle_ctrl_key(c, ed),
+            Key::Left => ed.move_cursor_left(1),
+            Key::Right => ed.move_cursor_right(1),
+            Key::Up => ed.move_up(),
+            Key::Down => ed.move_down(),
+            Key::Home => ed.move_cursor_to_start_of_line(),
+            Key::End => ed.move_cursor_to_end_of_line(),
+            Key::Backspace => ed.delete_before_cursor(),
+            Key::Delete => ed.delete_after_cursor(),
             Key::Null => Ok(()),
             _ => Ok(()),
         }
-    }
-
-    fn editor_mut(&mut self) ->  &mut Editor<'a, W> {
-        &mut self.ed
-    }
-
-    fn editor(&self) ->  &Editor<'a, W> {
-        &self.ed
-    }
-}
-
-impl<'a, W: Write> From<Emacs<'a, W>> for String {
-    fn from(emacs: Emacs<'a, W>) -> String {
-        emacs.ed.into()
     }
 }
 
@@ -142,26 +134,22 @@ fn emacs_move_word<W: Write>(ed: &mut Editor<W>, direction: EmacsMoveDir) -> io:
     let (words, pos) = ed.get_words_and_cursor_position();
 
     let word_index = match pos {
-        CursorPosition::InWord(i) => {
-            Some(i)
-        },
+        CursorPosition::InWord(i) => Some(i),
         CursorPosition::OnWordLeftEdge(mut i) => {
             if i > 0 && direction == EmacsMoveDir::Left {
                 i -= 1;
             }
             Some(i)
-        },
+        }
         CursorPosition::OnWordRightEdge(mut i) => {
             if i < words.len() - 1 && direction == EmacsMoveDir::Right {
                 i += 1;
             }
             Some(i)
-        },
-        CursorPosition::InSpace(left, right) => {
-            match direction {
-                EmacsMoveDir::Left => left,
-                EmacsMoveDir::Right => right,
-            }
+        }
+        CursorPosition::InSpace(left, right) => match direction {
+            EmacsMoveDir::Left => left,
+            EmacsMoveDir::Right => right,
         },
     };
 
@@ -183,23 +171,23 @@ fn emacs_move_word<W: Write>(ed: &mut Editor<W>, direction: EmacsMoveDir) -> io:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
     use termion::event::Key;
+    use Completer;
     use Context;
     use Editor;
     use KeyMap;
-    use std::io::Write;
 
-    macro_rules! simulate_keys {
-        ($keymap:ident, $keys:expr) => {{
-            simulate_keys(&mut $keymap, $keys.into_iter())
-        }}
-    }
-
-    fn simulate_keys<'a, 'b, W: Write, T, M: KeyMap<'a, W, T>, I>(keymap: &mut M, keys: I) -> bool
-        where I: Iterator<Item = &'b Key>
+    fn simulate_keys<'a, 'b, W: Write, M: KeyMap, I>(
+        keymap: &mut M,
+        ed: &mut Editor<'a, W>,
+        keys: I,
+    ) -> bool
+    where
+        I: IntoIterator<Item = &'b Key>,
     {
         for k in keys {
-            if keymap.handle_key(*k, &mut |_| {}).unwrap() {
+            if keymap.handle_key(*k, ed, &mut EmptyCompleter).unwrap() {
                 return true;
             }
         }
@@ -207,68 +195,77 @@ mod tests {
         false
     }
 
+    struct EmptyCompleter;
+
+    impl Completer for EmptyCompleter {
+        fn completions(&mut self, _start: &str) -> Vec<String> {
+            Vec::default()
+        }
+    }
+
     #[test]
     fn enter_is_done() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = Emacs::new(ed);
-        map.ed.insert_str_after_cursor("done").unwrap();
-        assert_eq!(map.ed.cursor(), 4);
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = Emacs::new();
+        ed.insert_str_after_cursor("done").unwrap();
+        assert_eq!(ed.cursor(), 4);
 
-        assert!(simulate_keys!(map, [Key::Char('\n')]));
+        assert!(simulate_keys(&mut map, &mut ed, [Key::Char('\n')].iter()));
 
-        assert_eq!(map.ed.cursor(), 4);
-        assert_eq!(String::from(map), "done");
+        assert_eq!(ed.cursor(), 4);
+        assert_eq!(String::from(ed), "done");
     }
 
     #[test]
     fn move_cursor_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = Emacs::new(ed);
-        map.editor_mut().insert_str_after_cursor("let").unwrap();
-        assert_eq!(map.ed.cursor(), 3);
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = Emacs::new();
+        ed.insert_str_after_cursor("let").unwrap();
+        assert_eq!(ed.cursor(), 3);
 
-        simulate_keys!(map, [Key::Left, Key::Char('f')]);
+        simulate_keys(&mut map, &mut ed, [Key::Left, Key::Char('f')].iter());
 
-        assert_eq!(map.ed.cursor(), 3);
-        assert_eq!(String::from(map), "left");
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "left");
     }
 
     #[test]
     fn move_word() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = Emacs::new(ed);
-        map.editor_mut().insert_str_after_cursor("abc def ghi").unwrap();
-        assert_eq!(map.ed.cursor(), 11);
 
-        simulate_keys!(map, [Key::Alt('b')]);
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = Emacs::new();
+        ed.insert_str_after_cursor("abc def ghi").unwrap();
+        assert_eq!(ed.cursor(), 11);
+
+        simulate_keys(&mut map, &mut ed, [Key::Alt('b')].iter());
 
         // Move to `g`
-        assert_eq!(map.ed.cursor(), 8);
+        assert_eq!(ed.cursor(), 8);
 
-        simulate_keys!(map, [Key::Alt('b'), Key::Alt('f')]);
+        simulate_keys(&mut map, &mut ed, [Key::Alt('b'), Key::Alt('f')].iter());
 
         // Move to the char after `f`
-        assert_eq!(map.ed.cursor(), 7);
+        assert_eq!(ed.cursor(), 7);
     }
 
     #[test]
     fn cursor_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = Emacs::new(ed);
-        map.ed.insert_str_after_cursor("right").unwrap();
-        assert_eq!(map.ed.cursor(), 5);
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = Emacs::new();
+        ed.insert_str_after_cursor("right").unwrap();
+        assert_eq!(ed.cursor(), 5);
 
-        simulate_keys!(map, [Key::Left, Key::Left, Key::Right]);
+        simulate_keys(&mut map, &mut ed, [Key::Left, Key::Left, Key::Right].iter());
 
-        assert_eq!(map.ed.cursor(), 4);
+        assert_eq!(ed.cursor(), 4);
     }
 
     #[test]
@@ -276,12 +273,12 @@ mod tests {
     fn ctrl_h() {
         let mut context = Context::new();
         let out = Vec::new();
-        let ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
-        let mut map = Emacs::new(ed);
-        map.ed.insert_str_after_cursor("not empty").unwrap();
+        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut map = Emacs::new();
+        ed.insert_str_after_cursor("not empty").unwrap();
 
-        let res = map.handle_key(Key::Ctrl('h'), &mut |_| {});
+        let res = map.handle_key(Key::Ctrl('h'), &mut ed, &mut EmptyCompleter);
         assert_eq!(res.is_ok(), true);
-        assert_eq!(map.ed.current_buffer().to_string(), "not empt".to_string());
+        assert_eq!(ed.current_buffer().to_string(), "not empt".to_string());
     }
 }
