@@ -31,12 +31,24 @@ impl Completer for BasicCompleter {
 
 pub struct FilenameCompleter {
     working_dir: Option<PathBuf>,
+    case_sensitive: bool,
 }
 
 impl FilenameCompleter {
     pub fn new<T: Into<PathBuf>>(working_dir: Option<T>) -> Self {
         FilenameCompleter {
             working_dir: working_dir.map(|p| p.into()),
+            case_sensitive: true,
+        }
+    }
+
+    pub fn with_case_sensitivity<T: Into<PathBuf>>(
+        working_dir: Option<T>,
+        case_sensitive: bool,
+    ) -> Self {
+        FilenameCompleter {
+            working_dir: working_dir.map(|p| p.into()),
+            case_sensitive,
         }
     }
 }
@@ -77,7 +89,13 @@ impl Completer for FilenameCompleter {
                     && !full_path.ends_with("..") =>
             {
                 p = parent;
-                start_name = full_path.file_name().unwrap().to_string_lossy();
+                start_name = if self.case_sensitive {
+                    full_path.file_name().unwrap().to_string_lossy()
+                } else {
+                    let sn = full_path.file_name().unwrap().to_string_lossy();
+                    sn.to_lowercase();
+                    sn
+                };
                 completing_dir = false;
             }
             _ => {
@@ -100,7 +118,11 @@ impl Completer for FilenameCompleter {
                 Err(_) => continue,
             };
             let file_name = dir.file_name();
-            let file_name = file_name.to_string_lossy();
+            let file_name = if self.case_sensitive {
+                file_name.to_string_lossy().to_string()
+            } else {
+                file_name.to_string_lossy().to_lowercase()
+            };
 
             if start_name.is_empty() || file_name.starts_with(&*start_name) {
                 let mut a = start_path.clone();

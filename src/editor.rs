@@ -106,6 +106,10 @@ pub struct Editor<'a, W: Write> {
     // Buffer for the new line (ie. not from editing history)
     new_buf: Buffer,
 
+    // Buffer to use when editing history so we do not overwrite it.
+    hist_buf: Buffer,
+    hist_buf_valid: bool,
+
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
@@ -134,26 +138,30 @@ pub struct Editor<'a, W: Write> {
     history_subset_loc: Option<usize>,
 
     autosuggestion: Option<Buffer>,
+
+    history_fresh: bool,
 }
 
 macro_rules! cur_buf_mut {
-    ($s:expr) => {
+    ($s:expr) => {{
+        $s.buffer_changed = true;
         match $s.cur_history_loc {
             Some(i) => {
-                $s.buffer_changed = true;
-                &mut $s.context.history[i]
+                if !$s.hist_buf_valid {
+                    $s.hist_buf.copy_buffer(&$s.context.history[i]);
+                    $s.hist_buf_valid = true;
+                }
+                &mut $s.hist_buf
             }
-            _ => {
-                $s.buffer_changed = true;
-                &mut $s.new_buf
-            }
+            _ => &mut $s.new_buf,
         }
-    };
+    }};
 }
 
 macro_rules! cur_buf {
     ($s:expr) => {
         match $s.cur_history_loc {
+            Some(_) if $s.hist_buf_valid => &$s.hist_buf,
             Some(i) => &$s.context.history[i],
             _ => &$s.new_buf,
         }
@@ -183,6 +191,8 @@ impl<'a, W: Write> Editor<'a, W> {
             out: out,
             closure: f,
             new_buf: buffer.into(),
+            hist_buf: Buffer::new(),
+            hist_buf_valid: false,
             cur_history_loc: None,
             context: context,
             show_completions_hint: None,
@@ -196,6 +206,7 @@ impl<'a, W: Write> Editor<'a, W> {
             history_subset_index: vec![],
             history_subset_loc: None,
             autosuggestion: None,
+            history_fresh: false,
         };
 
         if !ed.new_buf.is_empty() {
@@ -242,6 +253,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
     pub fn handle_newline(&mut self) -> io::Result<bool> {
+        self.history_fresh = false;
         if self.is_search() {
             self.accept_autosuggestion()?;
         }
@@ -275,6 +287,13 @@ impl<'a, W: Write> Editor<'a, W> {
         }
     }
 
+    fn freshen_history(&mut self) {
+        if self.context.history.share && !self.history_fresh {
+            let _ = self.context.history.load_history(false);
+            self.history_fresh = true;
+        }
+    }
+
     /// Refresh incremental search, either when started or when the buffer changes.
     fn refresh_search(&mut self, forward: bool) {
         let search_history_loc = self.search_history_loc();
@@ -304,6 +323,7 @@ impl<'a, W: Write> Editor<'a, W> {
         self.reverse_search = !forward;
         self.forward_search = forward;
         self.cur_history_loc = None;
+        self.hist_buf_valid = false;
         self.no_newline = true;
         self.buffer_changed = false;
     }
@@ -314,6 +334,7 @@ impl<'a, W: Write> Editor<'a, W> {
     /// search with forward changed (i.e. reverse search direction for one result).
     pub fn search(&mut self, forward: bool) -> io::Result<()> {
         if !self.is_search() {
+            self.freshen_history();
             self.refresh_search(forward);
         } else if self.history_subset_index.len() > 0 {
             self.history_subset_loc = if let Some(p) = self.history_subset_loc {
@@ -430,10 +451,16 @@ impl<'a, W: Write> Editor<'a, W> {
     pub fn complete<T: Completer>(&mut self, handler: &mut T) -> io::Result<()> {
         handler.on_event(Event::new(self, EventKind::BeforeComplete));
 
-        if let Some((completions, i)) = self.show_completions_hint.take() {
-            let i = i.map_or(0, |i| (i + 1) % completions.len());
+        if let Some((completions, i_in)) = self.show_completions_hint.take() {
+            let i = i_in.map_or(0, |i| (i + 1) % completions.len());
 
-            self.delete_word_before_cursor(false)?;
+            match i_in {
+                Some(x) if cur_buf!(self) == &Buffer::from(&completions[x][..]) => {
+                    cur_buf_mut!(self).truncate(0);
+                    self.cursor = 0;
+                }
+                _ => self.delete_word_before_cursor(false)?,
+            }
             self.insert_str_after_cursor(&completions[i])?;
 
             self.show_completions_hint = Some((completions, Some(i)));
@@ -550,6 +577,8 @@ impl<'a, W: Write> Editor<'a, W> {
         if self.is_search() {
             self.search(false)
         } else {
+            self.hist_buf_valid = false;
+            self.freshen_history();
             if self.new_buf.num_chars() > 0 {
                 match self.history_subset_loc {
                     Some(i) if i > 0 => {
@@ -586,6 +615,7 @@ impl<'a, W: Write> Editor<'a, W> {
         if self.is_search() {
             self.search(true)
         } else {
+            self.hist_buf_valid = false;
             if self.new_buf.num_chars() > 0 {
                 if let Some(i) = self.history_subset_loc {
                     if i < self.history_subset_index.len() - 1 {
@@ -595,6 +625,7 @@ impl<'a, W: Write> Editor<'a, W> {
                         self.cur_history_loc = None;
                         self.history_subset_loc = None;
                         self.history_subset_index.clear();
+                        self.history_fresh = false;
                     }
                 }
             } else {
@@ -602,7 +633,7 @@ impl<'a, W: Write> Editor<'a, W> {
                     Some(i) if i < self.context.history.len() - 1 => {
                         self.cur_history_loc = Some(i + 1)
                     }
-                    _ => (),
+                    _ => self.history_fresh = false,
                 }
             }
             self.move_cursor_to_end_of_line()
@@ -611,6 +642,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves to the start of history (ie. the earliest history entry).
     pub fn move_to_start_of_history(&mut self) -> io::Result<()> {
+        self.hist_buf_valid = false;
         if self.context.history.len() > 0 {
             self.cur_history_loc = Some(0);
             self.move_cursor_to_end_of_line()
@@ -623,6 +655,7 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves to the end of history (ie. the new buffer).
     pub fn move_to_end_of_history(&mut self) -> io::Result<()> {
+        self.hist_buf_valid = false;
         if self.cur_history_loc.is_some() {
             self.cur_history_loc = None;
             self.move_cursor_to_end_of_line()
@@ -779,7 +812,6 @@ impl<'a, W: Write> Editor<'a, W> {
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
-        //self.clear_search();
         self.cursor = cur_buf!(self).num_chars();
         self.no_newline = true;
         self.display()
@@ -828,6 +860,10 @@ impl<'a, W: Write> Editor<'a, W> {
     /// searching the first history entry to start with current text (reverse order).
     /// Return None if nothing found.
     fn current_autosuggestion(&mut self) -> Option<Buffer> {
+        // If we are editing a previous history item no autosuggestion.
+        if self.hist_buf_valid {
+            return None;
+        }
         let context_history = &self.context.history;
         let autosuggestion = if self.is_search() {
             self.search_history_loc().map(|i| &context_history[i])
@@ -1088,7 +1124,13 @@ impl<'a, W: Write> Editor<'a, W> {
 impl<'a, W: Write> From<Editor<'a, W>> for String {
     fn from(ed: Editor<'a, W>) -> String {
         match ed.cur_history_loc {
-            Some(i) => ed.context.history[i].clone(),
+            Some(i) => {
+                if ed.hist_buf_valid {
+                    ed.hist_buf
+                } else {
+                    ed.context.history[i].clone()
+                }
+            }
             _ => ed.new_buf,
         }
         .into()
