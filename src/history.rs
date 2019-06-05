@@ -331,7 +331,7 @@ impl History {
                     if starts {
                         v.push(*i);
                     }
-                    if contains && !starts && !tested.equals(search_term) {
+                    if contains && !starts && tested != search_term {
                         return true;
                     }
                 }
