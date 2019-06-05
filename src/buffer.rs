@@ -44,6 +44,13 @@ pub struct Buffer {
     undone_actions: Vec<Action>,
 }
 
+impl PartialEq for Buffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.data == other.data
+    }
+}
+impl Eq for Buffer {}
+
 impl From<Buffer> for String {
     fn from(buf: Buffer) -> Self {
         String::from_iter(buf.data)
@@ -302,11 +309,6 @@ impl Buffer {
         for (i, &c) in text.iter().enumerate() {
             self.data.insert(start + i, c)
         }
-    }
-
-    /// Check if the other buffer has the same content as this one.
-    pub fn equals(&self, other: &Buffer) -> bool {
-        self.data == other.data
     }
 
     /// Check if the other buffer starts with the same content as this one.

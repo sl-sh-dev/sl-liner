@@ -151,14 +151,9 @@ macro_rules! cur_buf_mut {
                     $s.hist_buf.copy_buffer(&$s.context.history[i]);
                     $s.hist_buf_valid = true;
                 }
-                $s.buffer_changed = true;
                 &mut $s.hist_buf
-                //&mut $s.context.history[i]
             }
-            _ => {
-                $s.buffer_changed = true;
-                &mut $s.new_buf
-            }
+            _ => &mut $s.new_buf,
         }
     }};
 }
@@ -460,7 +455,7 @@ impl<'a, W: Write> Editor<'a, W> {
             let i = i_in.map_or(0, |i| (i + 1) % completions.len());
 
             match i_in {
-                Some(x) if cur_buf!(self).equals(&Buffer::from(&completions[x][..])) => {
+                Some(x) if cur_buf!(self) == &Buffer::from(&completions[x][..]) => {
                     cur_buf_mut!(self).truncate(0);
                     self.cursor = 0;
                 }

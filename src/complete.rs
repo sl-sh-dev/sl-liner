@@ -42,7 +42,10 @@ impl FilenameCompleter {
         }
     }
 
-    pub fn new_case<T: Into<PathBuf>>(working_dir: Option<T>, case_sensitive: bool) -> Self {
+    pub fn with_case_sensitivity<T: Into<PathBuf>>(
+        working_dir: Option<T>,
+        case_sensitive: bool,
+    ) -> Self {
         FilenameCompleter {
             working_dir: working_dir.map(|p| p.into()),
             case_sensitive,
@@ -87,13 +90,11 @@ impl Completer for FilenameCompleter {
             {
                 p = parent;
                 start_name = if self.case_sensitive {
-                    full_path.file_name().unwrap().to_string_lossy().to_string()
+                    full_path.file_name().unwrap().to_string_lossy()
                 } else {
-                    full_path
-                        .file_name()
-                        .unwrap()
-                        .to_string_lossy()
-                        .to_lowercase()
+                    let sn = full_path.file_name().unwrap().to_string_lossy();
+                    sn.to_lowercase();
+                    sn
                 };
                 completing_dir = false;
             }
