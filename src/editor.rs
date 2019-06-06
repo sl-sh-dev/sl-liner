@@ -989,6 +989,9 @@ impl<'a, W: Write> Editor<'a, W> {
 
             if !self.no_newline {
                 output_buf.append("⏎".as_bytes());
+                for _ in 0..(terminal_width - 1) {
+                    output_buf.push(b' '); // if the line is not empty, owerflow on next line
+                }
             }
 
             output_buf.push(b'\r');
