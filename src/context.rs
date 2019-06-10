@@ -50,6 +50,7 @@ pub struct Context {
     pub history: History,
     pub word_divider_fn: Box<Fn(&Buffer) -> Vec<(usize, usize)>>,
     pub key_bindings: KeyBindings,
+    pub buf: String,
 }
 
 impl Context {
@@ -58,6 +59,7 @@ impl Context {
             history: History::new(),
             word_divider_fn: Box::new(get_buffer_words),
             key_bindings: KeyBindings::Emacs,
+            buf: String::with_capacity(512),
         }
     }
 
