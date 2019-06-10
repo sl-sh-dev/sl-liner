@@ -1,4 +1,5 @@
 extern crate bytecount;
+extern crate itertools;
 extern crate termion;
 extern crate unicode_width;
 
