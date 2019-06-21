@@ -82,9 +82,9 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Context;
     use std::io::ErrorKind;
     use termion::event::Key::*;
-    use Context;
 
     #[derive(Default)]
     struct TestKeyMap;

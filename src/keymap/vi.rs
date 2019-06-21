@@ -1060,14 +1060,10 @@ impl KeyMap for Vi {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Buffer, Completer, Context, Editor, KeyMap};
     use std::io::Write;
     use termion::event::Key;
     use termion::event::Key::*;
-    use Buffer;
-    use Completer;
-    use Context;
-    use Editor;
-    use KeyMap;
 
     fn simulate_keys<'a, 'b, W: Write, M: KeyMap, I>(
         keymap: &mut M,

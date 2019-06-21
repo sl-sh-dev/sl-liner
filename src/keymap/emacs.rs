@@ -171,12 +171,9 @@ fn emacs_move_word<W: Write>(ed: &mut Editor<W>, direction: EmacsMoveDir) -> io:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Completer, Context, Editor, KeyMap};
     use std::io::Write;
     use termion::event::Key;
-    use Completer;
-    use Context;
-    use Editor;
-    use KeyMap;
 
     fn simulate_keys<'a, 'b, W: Write, M: KeyMap, I>(
         keymap: &mut M,
