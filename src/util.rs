@@ -66,14 +66,9 @@ pub fn remove_codes(input: &str) -> Cow<str> {
                     ']' => s = AnsiState::Osc,
                     _ => s = AnsiState::Norm,
                 },
-                AnsiState::Csi => match c {
-                    'A'...'Z' | 'a'...'z' => s = AnsiState::Norm,
-                    _ => (),
-                },
-                AnsiState::Osc => match c {
-                    '\x07' => s = AnsiState::Norm,
-                    _ => (),
-                },
+                AnsiState::Csi if c.is_ascii_alphabetic() => s = AnsiState::Norm,
+                AnsiState::Osc if c == '\x07' => s = AnsiState::Norm,
+                _ => (),
             }
         }
 
