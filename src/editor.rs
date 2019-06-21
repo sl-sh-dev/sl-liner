@@ -4,12 +4,12 @@ use std::io;
 use termion::{self, clear, color, cursor};
 
 use super::complete::Completer;
-use context::ColorClosure;
-use event::*;
+use crate::context::ColorClosure;
+use crate::event::*;
+use crate::util;
+use crate::Buffer;
+use crate::Context;
 use itertools::Itertools;
-use util;
-use Buffer;
-use Context;
 
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,13 +158,13 @@ impl<'a, W: io::Write> Editor<'a, W> {
         let mut ed = Editor {
             prompt: prompt.into(),
             cursor: 0,
-            out: out,
+            out,
             closure: f,
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
             cur_history_loc: None,
-            context: context,
+            context,
             show_completions_hint: None,
             show_autosuggestions: true,
             term_cursor_line: 1,
@@ -264,7 +264,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
     fn refresh_search(&mut self, forward: bool) {
         let search_history_loc = self.search_history_loc();
         self.history_subset_index = self.context.history.search_index(&self.new_buf);
-        if self.history_subset_index.len() > 0 {
+        if !self.history_subset_index.is_empty() {
             self.history_subset_loc = if forward {
                 Some(0)
             } else {
@@ -302,7 +302,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
         if !self.is_search() {
             self.freshen_history();
             self.refresh_search(forward);
-        } else if self.history_subset_index.len() > 0 {
+        } else if !self.history_subset_index.is_empty() {
             self.history_subset_loc = if let Some(p) = self.history_subset_loc {
                 if forward {
                     if p < self.history_subset_index.len() - 1 {
@@ -310,12 +310,10 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     } else {
                         Some(0)
                     }
+                } else if p > 0 {
+                    Some(p - 1)
                 } else {
-                    if p > 0 {
-                        Some(p - 1)
-                    } else {
-                        Some(self.history_subset_index.len() - 1)
-                    }
+                    Some(self.history_subset_index.len() - 1)
                 }
             } else {
                 None
@@ -381,7 +379,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
         let col_width = 2 + w as usize / cols;
         let cols = max(1, w as usize / col_width);
 
-        let mut lines = completions.len() / cols;
+        let lines = completions.len() / cols;
 
         let mut i = 0;
         for (index, com) in completions.iter().enumerate() {
@@ -562,7 +560,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     None => {
                         self.history_subset_index =
                             self.context.history.get_history_subset(&self.new_buf);
-                        if self.history_subset_index.len() > 0 {
+                        if !self.history_subset_index.is_empty() {
                             self.history_subset_loc = Some(self.history_subset_index.len() - 1);
                             self.cur_history_loc = Some(
                                 self.history_subset_index[self.history_subset_index.len() - 1],
@@ -574,7 +572,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
             } else {
                 match self.cur_history_loc {
                     Some(i) if i > 0 => self.cur_history_loc = Some(i - 1),
-                    None if self.context.history.len() > 0 => {
+                    None if !self.context.history.is_empty() => {
                         self.cur_history_loc = Some(self.context.history.len() - 1)
                     }
                     _ => (),
@@ -617,13 +615,13 @@ impl<'a, W: io::Write> Editor<'a, W> {
     /// Moves to the start of history (ie. the earliest history entry).
     pub fn move_to_start_of_history(&mut self) -> io::Result<()> {
         self.hist_buf_valid = false;
-        if self.context.history.len() > 0 {
-            self.cur_history_loc = Some(0);
-            self.move_cursor_to_end_of_line()
-        } else {
+        if self.context.history.is_empty() {
             self.cur_history_loc = None;
             self.no_newline = true;
             self.display()
+        } else {
+            self.cur_history_loc = Some(0);
+            self.move_cursor_to_end_of_line()
         }
     }
 
@@ -863,13 +861,13 @@ impl<'a, W: io::Write> Editor<'a, W> {
     fn search_prompt(&mut self) -> (String, usize) {
         if self.is_search() {
             // If we are searching override prompt to search prompt.
-            let (hplace, color) = if self.history_subset_index.len() > 0 {
+            let (hplace, color) = if self.history_subset_index.is_empty() {
+                (0, color::Red.fg_str())
+            } else {
                 (
                     self.history_subset_loc.unwrap_or(0) + 1,
                     color::Green.fg_str(),
                 )
-            } else {
-                (0, color::Red.fg_str())
             };
             (
                 format!(

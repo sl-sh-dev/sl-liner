@@ -41,6 +41,12 @@ pub struct History {
     compaction_writes: usize,
 }
 
+impl Default for History {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl History {
     /// Create new History structure.
     pub fn new() -> History {
@@ -121,7 +127,7 @@ impl History {
                     Err(_) => break,
                 }
             }
-            self.to_max_size();
+            self.truncate();
             if !self.load_duplicates {
                 let mut tmp_buffers: Vec<Buffer> = Vec::with_capacity(self.buffers.len());
                 // Remove duplicates from loaded history if we do not want it.
@@ -185,7 +191,7 @@ impl History {
             let mut file = BufWriter::new(File::create(&path)?);
             // Write the commands to the history file.
             for command in buf.into_iter() {
-                let _ = file.write_all(&String::from(command).as_bytes());
+                let _ = file.write_all(&command.as_bytes());
                 let _ = file.write_all(b"\n");
             }
         }
@@ -222,6 +228,11 @@ impl History {
     #[inline(always)]
     pub fn len(&self) -> usize {
         self.buffers.len()
+    }
+
+    /// Is the history empty
+    pub fn is_empty(&self) -> bool {
+        self.buffers.is_empty()
     }
 
     /// Add a command to the history buffer and remove the oldest commands when the max history
@@ -301,8 +312,7 @@ impl History {
         I: Iterator<Item = usize>,
     {
         vals.filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
-            .filter(|(_i, tested)| tested.starts_with(search_term))
-            .next()
+            .find(|(_i, tested)| tested.starts_with(search_term))
             .map(|(i, _)| i)
     }
 
@@ -331,11 +341,10 @@ impl History {
                     if starts {
                         v.push(*i);
                     }
-                    if contains && !starts && tested != search_term {
-                        return true;
-                    }
+                    contains && !starts && tested != search_term
+                } else {
+                    false
                 }
-                return false;
             })
             .collect();
         ret.append(&mut v);
@@ -356,7 +365,7 @@ impl History {
         self.file_name.as_ref().map(|s| s.as_str())
     }
 
-    fn to_max_size(&mut self) {
+    fn truncate(&mut self) {
         // Find how many lines we need to move backwards
         // in the file to remove all the old commands.
         if self.buffers.len() >= self.max_file_size {
@@ -368,7 +377,7 @@ impl History {
     }
 
     fn overwrite_history<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
-        self.to_max_size();
+        self.truncate();
         let mut file = BufWriter::new(File::create(&path)?);
 
         // Write the commands to the history file.

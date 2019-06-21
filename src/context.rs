@@ -5,7 +5,7 @@ use termion::raw::IntoRawMode;
 use super::*;
 use keymap;
 
-pub type ColorClosure = Box<Fn(&str) -> String>;
+pub type ColorClosure = Box<dyn Fn(&str) -> String>;
 
 /// The default for `Context.word_divider_fn`.
 pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
@@ -48,9 +48,15 @@ pub enum KeyBindings {
 
 pub struct Context {
     pub history: History,
-    pub word_divider_fn: Box<Fn(&Buffer) -> Vec<(usize, usize)>>,
+    pub word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
     pub key_bindings: KeyBindings,
     pub buf: String,
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Context {
@@ -103,17 +109,15 @@ impl Context {
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
-        let res = {
-            let mut stdout = stdout().into_raw_mode()?;
-            let mut ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
-            match self.key_bindings {
-                KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
-                KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
-            }
-        };
+        let stdout = stdout().into_raw_mode()?;
+        let keybindings = self.key_bindings;
+        let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
+        match keybindings {
+            KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
+            KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
+        }
 
         //self.revert_all_history();
-        res
     }
 
     fn handle_keys<'a, W: Write, M: KeyMap, C: Completer>(

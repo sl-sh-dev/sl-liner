@@ -11,6 +11,7 @@ exclude = [
     "CONTRIBUTING.md",
     ".travis.yml",
 ]
+edition = "2018"
 
 [lib]
 name = "liner"

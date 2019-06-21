@@ -1,8 +1,8 @@
-use super::complete::Completer;
-use event::*;
+use crate::complete::Completer;
+use crate::event::*;
+use crate::Editor;
 use std::io::{self, ErrorKind, Write};
 use termion::event::Key;
-use Editor;
 
 pub trait KeyMap: Default {
     fn handle_key_core<'a, W: Write>(
@@ -82,9 +82,9 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Context;
     use std::io::ErrorKind;
     use termion::event::Key::*;
-    use Context;
 
     #[derive(Default)]
     struct TestKeyMap;

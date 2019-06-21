@@ -1,9 +1,9 @@
 use std::io::{self, Write};
 use termion::event::Key;
 
-use CursorPosition;
-use Editor;
-use KeyMap;
+use crate::CursorPosition;
+use crate::Editor;
+use crate::KeyMap;
 
 /// Emacs keybindings for `Editor`. This is the default for `Context::read_line()`.
 ///
@@ -61,7 +61,7 @@ impl Emacs {
 
     fn handle_last_arg_fetch<'a, W: Write>(&mut self, ed: &mut Editor<'a, W>) -> io::Result<()> {
         // Empty history means no last arg to fetch.
-        if ed.context().history.len() == 0 {
+        if ed.context().history.is_empty() {
             return Ok(());
         }
 
@@ -171,12 +171,9 @@ fn emacs_move_word<W: Write>(ed: &mut Editor<W>, direction: EmacsMoveDir) -> io:
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Completer, Context, Editor, KeyMap};
     use std::io::Write;
     use termion::event::Key;
-    use Completer;
-    use Context;
-    use Editor;
-    use KeyMap;
 
     fn simulate_keys<'a, 'b, W: Write, M: KeyMap, I>(
         keymap: &mut M,

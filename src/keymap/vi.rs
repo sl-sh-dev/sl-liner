@@ -2,8 +2,9 @@ use std::io::{self, Write};
 use std::{cmp, mem};
 use termion::event::Key;
 
-use Editor;
-use KeyMap;
+use crate::buffer::Buffer;
+use crate::Editor;
+use crate::KeyMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharMovement {
@@ -281,7 +282,7 @@ fn vi_move_word_end<W: Write>(
     ed.move_cursor_to(cursor)
 }
 
-fn find_char(buf: &::buffer::Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
+fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
     buf.chars()
         .enumerate()
@@ -291,7 +292,7 @@ fn find_char(buf: &::buffer::Buffer, start: usize, ch: char, count: usize) -> Op
         .map(|(i, _)| i)
 }
 
-fn find_char_rev(buf: &::buffer::Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
+fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
     let rstart = buf.num_chars() - start;
     buf.chars()
@@ -393,25 +394,22 @@ impl Vi {
         ed.no_eol = self.mode() == Mode::Normal;
         self.movement_reset = self.mode() != Mode::Insert;
 
-        match last_mode {
-            Delete(start_pos) => {
-                // perform the delete operation
-                match move_type {
-                    Exclusive => ed.delete_until(start_pos)?,
-                    Inclusive => ed.delete_until_inclusive(start_pos)?,
-                }
-
-                // update the last state
-                mem::swap(&mut self.last_command, &mut self.current_command);
-                self.last_insert = self.current_insert;
-                self.last_count = self.count;
-
-                // reset our counts
-                self.count = 0;
-                self.secondary_count = 0;
+        if let Delete(start_pos) = last_mode {
+            // perform the delete operation
+            match move_type {
+                Exclusive => ed.delete_until(start_pos)?,
+                Inclusive => ed.delete_until_inclusive(start_pos)?,
             }
-            _ => {}
-        };
+
+            // update the last state
+            mem::swap(&mut self.last_command, &mut self.current_command);
+            self.last_insert = self.current_insert;
+            self.last_count = self.count;
+
+            // reset our counts
+            self.count = 0;
+            self.secondary_count = 0;
+        }
 
         // in normal mode, count goes back to 0 after movement
         if original_mode == Normal {
@@ -759,7 +757,7 @@ impl Vi {
                 ed.move_cursor_to_start_of_line()?;
                 self.pop_mode_after_movement(Exclusive, ed)
             }
-            Key::Char(i @ '0'...'9') => {
+            Key::Char(i @ '0'..='9') => {
                 let i = i.to_digit(10).unwrap();
                 // count = count * 10 + i
                 self.count = self.count.saturating_mul(10).saturating_add(i);
@@ -898,7 +896,7 @@ impl Vi {
                 self.handle_key_normal(key, ed)
             }
             // handle numeric keys
-            (Key::Char('0'...'9'), _) => self.handle_key_normal(key, ed),
+            (Key::Char('0'..='9'), _) => self.handle_key_normal(key, ed),
             (Key::Char('c'), Some(Key::Char('c'))) | (Key::Char('d'), None) => {
                 // updating the last command buffer doesn't really make sense in this context.
                 // Repeating 'dd' will simply erase and already erased line. Any other commands
@@ -1062,14 +1060,10 @@ impl KeyMap for Vi {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{Buffer, Completer, Context, Editor, KeyMap};
     use std::io::Write;
     use termion::event::Key;
     use termion::event::Key::*;
-    use Buffer;
-    use Completer;
-    use Context;
-    use Editor;
-    use KeyMap;
 
     fn simulate_keys<'a, 'b, W: Write, M: KeyMap, I>(
         keymap: &mut M,
@@ -2701,7 +2695,7 @@ mod tests {
         let out = Vec::new();
         let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
-        ed.insert_str_after_cursor("...").unwrap();
+        ed.insert_str_after_cursor("..=").unwrap();
         let pos1 = ed.cursor();
         ed.insert_str_after_cursor("word").unwrap();
         let pos2 = ed.cursor();
@@ -2723,9 +2717,9 @@ mod tests {
         let out = Vec::new();
         let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
 
-        ed.insert_str_after_cursor("...   ").unwrap();
+        ed.insert_str_after_cursor("..=   ").unwrap();
         let pos1 = ed.cursor();
-        ed.insert_str_after_cursor("...").unwrap();
+        ed.insert_str_after_cursor("..=").unwrap();
         let pos2 = ed.cursor();
         ed.insert_str_after_cursor("word").unwrap();
         let pos3 = ed.cursor();
@@ -2755,7 +2749,7 @@ mod tests {
         let pos2 = ed.cursor();
         ed.insert_str_after_cursor("some").unwrap();
         let pos3 = ed.cursor();
-        ed.insert_str_after_cursor("... ").unwrap();
+        ed.insert_str_after_cursor("..= ").unwrap();
         let pos4 = ed.cursor();
         ed.insert_str_after_cursor("words").unwrap();
         let pos5 = ed.cursor();
@@ -2816,7 +2810,7 @@ mod tests {
         let pos1 = ed.cursor();
         ed.insert_str_after_cursor("some").unwrap();
         let pos2 = ed.cursor();
-        ed.insert_str_after_cursor("... ").unwrap();
+        ed.insert_str_after_cursor("..= ").unwrap();
         ed.insert_str_after_cursor("words").unwrap();
         let pos3 = ed.cursor();
 

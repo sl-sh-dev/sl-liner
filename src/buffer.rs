@@ -88,6 +88,12 @@ impl FromIterator<char> for Buffer {
     }
 }
 
+impl Default for Buffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Buffer {
     pub fn new() -> Self {
         Buffer {
@@ -210,17 +216,13 @@ impl Buffer {
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
         let s = self.remove_raw(start, end);
         let num_removed = s.len();
-        let act = Action::Remove {
-            start: start,
-            text: s,
-        };
-        self.push_action(act);
+        self.push_action(Action::Remove { start, text: s });
         num_removed
     }
 
     pub fn insert(&mut self, start: usize, text: &[char]) {
         let act = Action::Insert {
-            start: start,
+            start,
             text: text.into(),
         };
         act.do_on(self);
