@@ -89,7 +89,11 @@ fn main() {
     loop {
         // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving liner, and the third is called on every key press
         // Basically highlight_dodo(read_line()), where on every keypress, the lambda is called
-        let res = con.read_line("[prompt]$ ", Some(Box::new(highlight_dodo)), &mut completer);
+        let res = con.read_line(
+            "[prompt]\n% ",
+            Some(Box::new(highlight_dodo)),
+            &mut completer,
+        );
 
         // We are out of the lambda, and res is the result from read_line which is an Into<String>
         match res {

@@ -98,8 +98,6 @@ pub struct Editor<'a, W: io::Write> {
     // for Vi's normal mode.
     pub no_eol: bool,
 
-    no_newline: bool,
-
     reverse_search: bool,
     forward_search: bool,
     buffer_changed: bool,
@@ -149,14 +147,25 @@ impl<'a, W: io::Write> Editor<'a, W> {
     }
 
     pub fn new_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
-        out: W,
+        mut out: W,
         prompt: P,
         f: Option<ColorClosure>,
         context: &'a mut Context,
         buffer: B,
     ) -> io::Result<Self> {
+        out.write_all("⏎".as_bytes())?;
+        for _ in 0..(util::terminal_width().unwrap_or(80) - 1) {
+            out.write_all(b" ")?; // if the line is not empty, overflow on next line
+        }
+        out.write_all("\r".as_bytes())?;
+        let mut prompt = prompt.into();
+        out.write_all(prompt.split('\n').join("\r\n").as_bytes())?;
+        if let Some(index) = prompt.rfind('\n') {
+            prompt = prompt.split_at(index + 1).1.into()
+        }
+
         let mut ed = Editor {
-            prompt: prompt.into(),
+            prompt,
             cursor: 0,
             out,
             closure: f,
@@ -169,7 +178,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             show_autosuggestions: true,
             term_cursor_line: 1,
             no_eol: false,
-            no_newline: false,
             reverse_search: false,
             forward_search: false,
             buffer_changed: false,
@@ -240,7 +248,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             Ok(false)
         } else {
             self.cursor = cur_buf!(self).num_chars();
-            self.no_newline = true;
             self._display(false)?;
             self.out.write_all(b"\r\n")?;
             self.show_completions_hint = None;
@@ -290,7 +297,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
         self.forward_search = forward;
         self.cur_history_loc = None;
         self.hist_buf_valid = false;
-        self.no_newline = true;
         self.buffer_changed = false;
     }
 
@@ -336,7 +342,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
-            self.no_newline = true;
             self.display()?;
         }
         Ok(did)
@@ -347,7 +352,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
-            self.no_newline = true;
             self.display()?;
         }
         Ok(did)
@@ -358,7 +362,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
-            self.no_newline = true;
             self.display()?;
         }
         Ok(did)
@@ -436,7 +439,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             self.show_completions_hint = Some((completions, Some(i)));
         }
         if self.show_completions_hint.is_some() {
-            self.no_newline = true;
             self.display()?;
             return Ok(());
         }
@@ -482,7 +484,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             }
 
             self.show_completions_hint = Some((completions, None));
-            self.no_newline = true;
             self.display()?;
 
             Ok(())
@@ -525,7 +526,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             let moved = cur_buf_mut!(self).remove(start, self.cursor);
             self.cursor -= moved;
         }
-        self.no_newline = true;
         self.display()
     }
 
@@ -539,7 +539,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
         );
 
         self.term_cursor_line = 1;
-        self.no_newline = true;
         self.clear_search();
         self.display()
     }
@@ -617,7 +616,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
         self.hist_buf_valid = false;
         if self.context.history.is_empty() {
             self.cur_history_loc = None;
-            self.no_newline = true;
             self.display()
         } else {
             self.cur_history_loc = Some(0);
@@ -632,7 +630,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             self.cur_history_loc = None;
             self.move_cursor_to_end_of_line()
         } else {
-            self.no_newline = true;
             self.display()
         }
     }
@@ -657,7 +654,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
         }
 
         self.cursor += cs.len();
-        self.no_newline = true;
         self.display()
     }
 
@@ -670,7 +666,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             self.cursor -= 1;
         }
 
-        self.no_newline = true;
         self.display()
     }
 
@@ -684,7 +679,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
                 buf.remove(self.cursor, self.cursor + 1);
             }
         }
-        self.no_newline = true;
         self.display()
     }
 
@@ -692,7 +686,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
     pub fn delete_all_before_cursor(&mut self) -> io::Result<()> {
         cur_buf_mut!(self).remove(0, self.cursor);
         self.cursor = 0;
-        self.no_newline = true;
         self.display()
     }
 
@@ -702,7 +695,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             let buf = cur_buf_mut!(self);
             buf.truncate(self.cursor);
         }
-        self.no_newline = true;
         self.display()
     }
 
@@ -716,7 +708,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             );
             self.cursor = cmp::min(self.cursor, position);
         }
-        self.no_newline = true;
         self.display()
     }
 
@@ -730,7 +721,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             );
             self.cursor = cmp::min(self.cursor, position);
         }
-        self.no_newline = true;
         self.display()
     }
 
@@ -743,7 +733,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
 
         self.cursor -= count;
 
-        self.no_newline = true;
         self.display()
     }
 
@@ -760,7 +749,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             self.cursor += count;
         }
 
-        self.no_newline = true;
         self.display()
     }
 
@@ -771,21 +759,18 @@ impl<'a, W: io::Write> Editor<'a, W> {
         if self.cursor > buf_len {
             self.cursor = buf_len;
         }
-        self.no_newline = true;
         self.display()
     }
 
     /// Moves the cursor to the start of the line.
     pub fn move_cursor_to_start_of_line(&mut self) -> io::Result<()> {
         self.cursor = 0;
-        self.no_newline = true;
         self.display()
     }
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
         self.cursor = cur_buf!(self).num_chars();
-        self.no_newline = true;
         self.display()
     }
 
@@ -953,12 +938,6 @@ impl<'a, W: io::Write> Editor<'a, W> {
             );
         }
 
-        if !self.no_newline {
-            self.context.buf.push_str("⏎");
-            for _ in 0..(terminal_width - 1) {
-                self.context.buf.push(' '); // if the line is not empty, owerflow on next line
-            }
-        }
         write!(&mut self.context.buf, "\r{}", clear::AfterCursor);
 
         // If we're cycling through completions, show those
@@ -970,11 +949,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
         }
 
         // Write the prompt
-        if !self.no_newline {
-            write!(&mut self.context.buf, "{}", prompt.split('\n').join("\r\n"));
-        } else {
-            write!(&mut self.context.buf, "{}", util::handle_prompt(&prompt));
-        }
+        write!(&mut self.context.buf, "{}", prompt);
 
         // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
         // We get the number of bytes in the buffer (but NOT the autosuggestion).
