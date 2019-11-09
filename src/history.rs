@@ -39,6 +39,8 @@ pub struct History {
     pub load_duplicates: bool,
     /// Writes between history compaction.
     compaction_writes: usize,
+    /// How many "throwaway" history items to remove on a push.
+    throwaways: usize,
 }
 
 impl Default for History {
@@ -61,6 +63,7 @@ impl History {
             file_size: 0,
             load_duplicates: true,
             compaction_writes: 0,
+            throwaways: 0,
         }
     }
 
@@ -235,12 +238,33 @@ impl History {
         self.buffers.is_empty()
     }
 
+    /// Adds a "throwaway" history item.  Any of these will be removed once push
+    /// is called.  Intended to allow "error" or other bad items to stick around
+    /// long enough for the user to correct without cluttering history long term.
+    pub fn push_throwaway(&mut self, new_item: Buffer) -> io::Result<()> {
+        // buffers[0] is the oldest entry
+        // the new entry goes to the end
+        if self.buffers.back().map(|b| b.to_string()) == Some(new_item.to_string()) {
+            return Ok(());
+        }
+
+        self.buffers.push_back(new_item);
+        self.throwaways += 1;
+        Ok(())
+    }
+
     /// Add a command to the history buffer and remove the oldest commands when the max history
     /// size has been met. If writing to the disk is enabled, this function will be used for
     /// logging history to the designated history file.
     pub fn push(&mut self, new_item: Buffer) -> io::Result<()> {
         // buffers[0] is the oldest entry
         // the new entry goes to the end
+
+        // Remove any throwaway items first.
+        while self.throwaways > 0 {
+            self.buffers.pop_back();
+            self.throwaways -= 1;
+        }
         if !self.append_duplicate_entries
             && self.buffers.back().map(|b| b.to_string()) == Some(new_item.to_string())
         {
