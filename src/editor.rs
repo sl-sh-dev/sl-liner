@@ -136,6 +136,11 @@ macro_rules! cur_buf {
     };
 }
 
+fn fmt_io_err(err: std::fmt::Error) -> io::Error {
+    let msg = format!("{}", err);
+    io::Error::new(io::ErrorKind::Other, msg)
+}
+
 impl<'a, W: io::Write> Editor<'a, W> {
     pub fn new<P: Into<String>>(
         out: W,
@@ -399,16 +404,18 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     "{}{}",
                     color::Black.fg_str(),
                     color::White.bg_str()
-                );
+                )
+                .map_err(fmt_io_err)?;
             }
-            write!(output_buf, "{:<1$}", com, col_width);
+            write!(output_buf, "{:<1$}", com, col_width).map_err(fmt_io_err)?;
             if Some(index) == highlighted {
                 write!(
                     output_buf,
                     "{}{}",
                     color::Reset.bg_str(),
                     color::Reset.fg_str()
-                );
+                )
+                .map_err(fmt_io_err)?;
             }
 
             i += 1;
@@ -536,7 +543,8 @@ impl<'a, W: io::Write> Editor<'a, W> {
             "{}{}",
             clear::All,
             cursor::Goto(1, 1)
-        );
+        )
+        .map_err(fmt_io_err)?;
 
         self.term_cursor_line = 1;
         self.clear_search();
@@ -935,10 +943,11 @@ impl<'a, W: io::Write> Editor<'a, W> {
                 &mut self.context.buf,
                 "{}",
                 cursor::Up(self.term_cursor_line as u16 - 1)
-            );
+            )
+            .map_err(fmt_io_err)?;
         }
 
-        write!(&mut self.context.buf, "\r{}", clear::AfterCursor);
+        write!(&mut self.context.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)?;
 
         // If we're cycling through completions, show those
         let mut completion_lines = 0;
@@ -949,7 +958,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
         }
 
         // Write the prompt
-        write!(&mut self.context.buf, "{}", prompt);
+        write!(&mut self.context.buf, "{}", prompt).map_err(fmt_io_err)?;
 
         // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
         // We get the number of bytes in the buffer (but NOT the autosuggestion).
@@ -968,7 +977,8 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     &mut self.context.buf,
                     "{}",
                     cursor::Right(prompt_width as u16)
-                );
+                )
+                .map_err(fmt_io_err)?;
             }
 
             if buf_num_remaining_bytes == 0 {
@@ -980,11 +990,13 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     None => start.to_owned(),
                 };
                 if self.is_search() {
-                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str());
+                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
+                        .map_err(fmt_io_err)?;
                 }
-                write!(&mut self.context.buf, "{}", start);
+                write!(&mut self.context.buf, "{}", start).map_err(fmt_io_err)?;
                 if !self.is_search() {
-                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str());
+                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
+                        .map_err(fmt_io_err)?;
                 }
                 self.context.buf.push_str(&line[buf_num_remaining_bytes..]);
                 buf_num_remaining_bytes = 0;
@@ -995,7 +1007,8 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     None => line,
                 };
                 if self.is_search() {
-                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str());
+                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
+                        .map_err(fmt_io_err)?;
                 }
                 self.context.buf.push_str(&written_line);
             }
@@ -1006,7 +1019,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
         }
 
         if self.is_currently_showing_autosuggestion() || self.is_search() {
-            write!(&mut self.context.buf, "{}", color::Reset.fg_str());
+            write!(&mut self.context.buf, "{}", color::Reset.fg_str()).map_err(fmt_io_err)?;
         }
 
         // at the end of the line, move the cursor down a line
@@ -1024,7 +1037,8 @@ impl<'a, W: io::Write> Editor<'a, W> {
                 &mut self.context.buf,
                 "{}",
                 cursor::Up(cursor_line_diff as u16)
-            );
+            )
+            .map_err(fmt_io_err)?;
         } else if cursor_line_diff < 0 {
             unreachable!();
         }
@@ -1039,20 +1053,22 @@ impl<'a, W: io::Write> Editor<'a, W> {
                 &mut self.context.buf,
                 "{}",
                 cursor::Left(cursor_col_diff as u16)
-            );
+            )
+            .map_err(fmt_io_err)?;
         } else if cursor_col_diff < 0 {
             write!(
                 &mut self.context.buf,
                 "{}",
                 cursor::Right((-cursor_col_diff) as u16)
-            );
+            )
+            .map_err(fmt_io_err)?;
         }
 
         self.term_cursor_line += completion_lines;
 
         {
             let out = &mut self.out;
-            out.write_all(self.context.buf.as_bytes());
+            out.write_all(self.context.buf.as_bytes())?;
             self.context.buf.clear();
             out.flush()
         }

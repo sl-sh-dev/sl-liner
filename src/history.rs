@@ -248,6 +248,9 @@ impl History {
         }
 
         let item_str = String::from(new_item.clone());
+        if !self.load_duplicates {
+            self.remove_duplicates(&item_str);
+        }
         self.buffers.push_back(new_item);
         //self.to_max_size();
         while self.buffers.len() > self.max_buffers_size {
@@ -255,6 +258,15 @@ impl History {
         }
 
         if self.inc_append && self.file_name.is_some() {
+            let file_name = self.file_name.clone().unwrap();
+            if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
+                // Leave file size alone, if it is not right trigger a reload later.
+                let mut file = BufWriter::new(inner_file);
+                let _ = file.write_all(&item_str.as_bytes());
+                let _ = file.write_all(b"\n");
+                // Save the filesize after each append so we do not reload when we do not need to.
+                self.file_size += item_str.len() as u64 + 1;
+            }
             if !self.load_duplicates {
                 // Do not want duplicates so periodically compact the history file.
                 self.compaction_writes += 1;
@@ -262,38 +274,16 @@ impl History {
                 // is to keep the history file clean and at a reasonable size (not much over max
                 // history size at it's worst).
                 if self.compaction_writes > 29 {
-                    if self.share {
-                        // Reload history, we may be out of sync.
-                        let _ = self.load_history(false);
-                        // Commit the duplicated history.
-                        if let Some(file_name) = self.file_name.clone() {
-                            let _ = self.overwrite_history(file_name);
-                        }
-                    } else {
-                        // Not using shared history so just de-dup the file without messing with
-                        // our history.
-                        if let Some(file_name) = self.file_name.clone() {
-                            let _ =
-                                History::deduplicate_history_file(file_name, self.max_file_size);
-                        }
+                    // Not using shared history so just de-dup the file without messing with
+                    // our history.
+                    if let Some(file_name) = self.file_name.clone() {
+                        let _ = History::deduplicate_history_file(file_name, self.max_file_size);
                     }
                     self.compaction_writes = 0;
                 }
             } else {
                 // If allowing duplicates then no need for compaction.
                 self.compaction_writes = 1;
-            }
-            let file_name = self.file_name.clone().unwrap();
-            if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
-                // Leave file size alone, if it is not right trigger a reload later.
-                if self.compaction_writes > 0 {
-                    // If 0 we "compacted" and nothing to write.
-                    let mut file = BufWriter::new(inner_file);
-                    let _ = file.write_all(&item_str.as_bytes());
-                    let _ = file.write_all(b"\n");
-                    // Save the filesize after each append so we do not reload when we do not need to.
-                    self.file_size += item_str.len() as u64 + 1;
-                }
             }
         }
         Ok(())
