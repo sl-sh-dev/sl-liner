@@ -878,6 +878,27 @@ impl<'a, W: io::Write> Editor<'a, W> {
         }
     }
 
+    fn display_with_suggest(
+        &mut self,
+        line: &str,
+        buf_num_remaining_bytes: usize,
+    ) -> io::Result<()> {
+        let start = &line[..buf_num_remaining_bytes];
+        let start = match self.closure {
+            Some(ref f) => f(start),
+            None => start.to_owned(),
+        };
+        if self.is_search() {
+            write!(&mut self.context.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+        }
+        write!(&mut self.context.buf, "{}", start).map_err(fmt_io_err)?;
+        if !self.is_search() {
+            write!(&mut self.context.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+        }
+        self.context.buf.push_str(&line[buf_num_remaining_bytes..]);
+        Ok(())
+    }
+
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
         fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
             let mut total = 0;
@@ -984,21 +1005,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
             if buf_num_remaining_bytes == 0 {
                 self.context.buf.push_str(&line);
             } else if line.len() > buf_num_remaining_bytes {
-                let start = &line[..buf_num_remaining_bytes];
-                let start = match self.closure {
-                    Some(ref f) => f(start),
-                    None => start.to_owned(),
-                };
-                if self.is_search() {
-                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
-                        .map_err(fmt_io_err)?;
-                }
-                write!(&mut self.context.buf, "{}", start).map_err(fmt_io_err)?;
-                if !self.is_search() {
-                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
-                        .map_err(fmt_io_err)?;
-                }
-                self.context.buf.push_str(&line[buf_num_remaining_bytes..]);
+                self.display_with_suggest(&line, buf_num_remaining_bytes)?;
                 buf_num_remaining_bytes = 0;
             } else {
                 buf_num_remaining_bytes -= line.len();

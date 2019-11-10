@@ -41,6 +41,8 @@ pub struct History {
     compaction_writes: usize,
     /// How many "throwaway" history items to remove on a push.
     throwaways: usize,
+    /// When sharing history keep this many local items at top of history.
+    pub local_share: usize,
 }
 
 impl Default for History {
@@ -64,6 +66,7 @@ impl History {
             load_duplicates: true,
             compaction_writes: 0,
             throwaways: 0,
+            local_share: 50,
         }
     }
 
@@ -116,6 +119,16 @@ impl History {
             self.clear_history();
         }
         if new_length != length {
+            let local_buffers: Option<Vec<Buffer>> =
+                if !append && self.share && self.local_share > 0 {
+                    let mut local_buffers = Vec::with_capacity(self.local_share);
+                    while let Some(buf) = self.buffers.pop_back() {
+                        local_buffers.push(buf);
+                    }
+                    Some(local_buffers)
+                } else {
+                    None
+                };
             if !append {
                 self.clear_history();
             }
@@ -128,6 +141,11 @@ impl History {
                         }
                     }
                     Err(_) => break,
+                }
+            }
+            if let Some(mut local_buffers) = local_buffers {
+                while let Some(buf) = local_buffers.pop() {
+                    self.buffers.push_back(buf);
                 }
             }
             self.truncate();
