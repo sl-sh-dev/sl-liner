@@ -41,8 +41,10 @@ pub struct History {
     compaction_writes: usize,
     /// How many "throwaway" history items to remove on a push.
     throwaways: usize,
-    /// When sharing history keep this many local items at top of history.
-    pub local_share: usize,
+    /// When sharing history keep at most this many local items at top of history.
+    pub local_share_max: usize,
+    /// When sharing history keep this many local items at top of history (session pushes).
+    local_share: usize,
 }
 
 impl Default for History {
@@ -66,7 +68,8 @@ impl History {
             load_duplicates: true,
             compaction_writes: 0,
             throwaways: 0,
-            local_share: 50,
+            local_share_max: 50,
+            local_share: 0,
         }
     }
 
@@ -282,6 +285,9 @@ impl History {
         while self.throwaways > 0 {
             self.buffers.pop_back();
             self.throwaways -= 1;
+        }
+        if self.local_share < self.local_share_max {
+            self.local_share += 1;
         }
         if !self.append_duplicate_entries
             && self.buffers.back().map(|b| b.to_string()) == Some(new_item.to_string())
