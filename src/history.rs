@@ -125,8 +125,13 @@ impl History {
             let local_buffers: Option<Vec<Buffer>> =
                 if !append && self.share && self.local_share > 0 {
                     let mut local_buffers = Vec::with_capacity(self.local_share);
+                    let mut i = 0;
                     while let Some(buf) = self.buffers.pop_back() {
                         local_buffers.push(buf);
+                        i += 1;
+                        if i == self.local_share {
+                            break;
+                        }
                     }
                     Some(local_buffers)
                 } else {
