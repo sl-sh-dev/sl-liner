@@ -116,8 +116,6 @@ impl Context {
             KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
             KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
         }
-
-        //self.revert_all_history();
     }
 
     fn handle_keys<'a, W: Write, M: KeyMap, C: Completer>(
@@ -133,11 +131,5 @@ impl Context {
         }
 
         Ok(ed.into())
-    }
-
-    pub fn revert_all_history(&mut self) {
-        for buf in &mut self.history.buffers {
-            buf.revert();
-        }
     }
 }
