@@ -899,6 +899,54 @@ impl<'a, W: io::Write> Editor<'a, W> {
         Ok(())
     }
 
+    fn show_lines(&mut self, show_autosuggest: bool, prompt_width: usize) -> io::Result<()> {
+        let buf = cur_buf!(self);
+        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
+        // We get the number of bytes in the buffer (but NOT the autosuggestion).
+        // Then, we loop and subtract from that number until it's 0, in which case we are printing
+        // the autosuggestion from here on (in a different color).
+        let lines = match self.autosuggestion {
+            Some(ref suggestion) if show_autosuggest => suggestion.lines(),
+            _ => buf.lines(),
+        };
+        let mut buf_num_remaining_bytes = buf.num_bytes();
+
+        let lines_len = lines.len();
+        for (i, line) in lines.into_iter().enumerate() {
+            if i > 0 {
+                write!(
+                    &mut self.context.buf,
+                    "{}",
+                    cursor::Right(prompt_width as u16)
+                )
+                .map_err(fmt_io_err)?;
+            }
+
+            if buf_num_remaining_bytes == 0 {
+                self.context.buf.push_str(&line);
+            } else if line.len() > buf_num_remaining_bytes {
+                self.display_with_suggest(&line, buf_num_remaining_bytes)?;
+                buf_num_remaining_bytes = 0;
+            } else {
+                buf_num_remaining_bytes -= line.len();
+                let written_line = match self.closure {
+                    Some(ref f) => f(&line),
+                    None => line,
+                };
+                if self.is_search() {
+                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
+                        .map_err(fmt_io_err)?;
+                }
+                self.context.buf.push_str(&written_line);
+            }
+
+            if i + 1 < lines_len {
+                self.context.buf.push_str("\r\n");
+            }
+        }
+        Ok(())
+    }
+
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
         fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
             let mut total = 0;
@@ -981,49 +1029,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
         // Write the prompt
         write!(&mut self.context.buf, "{}", prompt).map_err(fmt_io_err)?;
 
-        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
-        // We get the number of bytes in the buffer (but NOT the autosuggestion).
-        // Then, we loop and subtract from that number until it's 0, in which case we are printing
-        // the autosuggestion from here on (in a different color).
-        let lines = match self.autosuggestion {
-            Some(ref suggestion) if show_autosuggest => suggestion.lines(),
-            _ => buf.lines(),
-        };
-        let mut buf_num_remaining_bytes = buf.num_bytes();
-
-        let lines_len = lines.len();
-        for (i, line) in lines.into_iter().enumerate() {
-            if i > 0 {
-                write!(
-                    &mut self.context.buf,
-                    "{}",
-                    cursor::Right(prompt_width as u16)
-                )
-                .map_err(fmt_io_err)?;
-            }
-
-            if buf_num_remaining_bytes == 0 {
-                self.context.buf.push_str(&line);
-            } else if line.len() > buf_num_remaining_bytes {
-                self.display_with_suggest(&line, buf_num_remaining_bytes)?;
-                buf_num_remaining_bytes = 0;
-            } else {
-                buf_num_remaining_bytes -= line.len();
-                let written_line = match self.closure {
-                    Some(ref f) => f(&line),
-                    None => line,
-                };
-                if self.is_search() {
-                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
-                        .map_err(fmt_io_err)?;
-                }
-                self.context.buf.push_str(&written_line);
-            }
-
-            if i + 1 < lines_len {
-                self.context.buf.push_str("\r\n");
-            }
-        }
+        self.show_lines(show_autosuggest, prompt_width)?;
 
         if self.is_currently_showing_autosuggestion() || self.is_search() {
             write!(&mut self.context.buf, "{}", color::Reset.fg_str()).map_err(fmt_io_err)?;

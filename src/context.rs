@@ -51,6 +51,7 @@ pub struct Context {
     pub word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
     pub key_bindings: KeyBindings,
     pub buf: String,
+    pub vi_esc_sequence: Option<(char, char, u32)>,
 }
 
 impl Default for Context {
@@ -66,6 +67,7 @@ impl Context {
             word_divider_fn: Box::new(get_buffer_words),
             key_bindings: KeyBindings::Emacs,
             buf: String::with_capacity(512),
+            vi_esc_sequence: None,
         }
     }
 
@@ -111,10 +113,17 @@ impl Context {
     ) -> io::Result<String> {
         let stdout = stdout().into_raw_mode()?;
         let keybindings = self.key_bindings;
+        let vi_esc_sequence = self.vi_esc_sequence;
         let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
         match keybindings {
             KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
-            KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
+            KeyBindings::Vi => {
+                let mut vi = keymap::Vi::new();
+                if let Some((key1, key2, ms)) = vi_esc_sequence {
+                    vi.set_esc_sequence(key1, key2, ms);
+                }
+                Self::handle_keys(vi, ed, handler)
+            }
         }
     }
 

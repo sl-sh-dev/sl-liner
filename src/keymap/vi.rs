@@ -1,5 +1,7 @@
 use std::io::{self, Write};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
+
 use termion::event::Key;
 
 use crate::buffer::Buffer;
@@ -322,6 +324,8 @@ pub struct Vi {
     last_count: u32,
     movement_reset: bool,
     last_char_movement: Option<(char, CharMovement)>,
+    esc_sequence: Option<(char, char, u32)>,
+    last_insert_ms: u128,
 }
 
 impl Default for Vi {
@@ -338,6 +342,8 @@ impl Default for Vi {
             last_count: 0,
             movement_reset: false,
             last_char_movement: None,
+            esc_sequence: None,
+            last_insert_ms: 0,
         }
     }
 }
@@ -345,6 +351,10 @@ impl Default for Vi {
 impl Vi {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn set_esc_sequence(&mut self, key1: char, key2: char, timeout_ms: u32) {
+        self.esc_sequence = Some((key1, key2, timeout_ms));
     }
 
     /// Get the current mode.
@@ -531,6 +541,11 @@ impl Vi {
                 Ok(())
             }
             Key::Char(c) => {
+                let in_ms = if let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) {
+                    duration.as_millis()
+                } else {
+                    0
+                };
                 if self.movement_reset {
                     ed.current_buffer_mut().end_undo_group();
                     ed.current_buffer_mut().start_undo_group();
@@ -539,8 +554,28 @@ impl Vi {
                     // vim behaves as if this was 'i'
                     self.last_insert = Some(Key::Char('i'));
                 }
-                self.last_command.push(key);
-                ed.insert_after_cursor(c)
+                let mut esc = false;
+                if let Some((s1, s2, ms)) = self.esc_sequence {
+                    if let Some(Key::Char(last_c)) = self.last_command.last() {
+                        if *last_c == s1
+                            && c == s2
+                            && (in_ms > 0)
+                            && (in_ms - self.last_insert_ms) < ms as u128
+                        {
+                            esc = true;
+                        }
+                    }
+                }
+                self.last_insert_ms = in_ms;
+                if esc {
+                    ed.move_cursor_left(1)?;
+                    let pos = ed.cursor() + self.move_count_right(ed);
+                    ed.delete_until(pos)?;
+                    self.handle_key_insert(Key::Esc, ed)
+                } else {
+                    self.last_command.push(key);
+                    ed.insert_after_cursor(c)
+                }
             }
             // delete and backspace need to be included in the command buffer
             Key::Backspace | Key::Delete => {
