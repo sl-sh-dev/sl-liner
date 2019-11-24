@@ -181,8 +181,9 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     std::mem::replace(prompt, prompt.split_at(index + 1).1.to_string());
                 }
             }
-            Prompt::Dynamic { .. } => {
-                // TODO
+            Prompt::Dynamic { closure, mode } => {
+                let prompt = closure(*mode);
+                out.write_all(prompt.split('\n').join("\r\n").as_bytes())?;
             }
         }
 
