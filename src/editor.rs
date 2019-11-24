@@ -11,6 +11,22 @@ use crate::Buffer;
 use crate::Context;
 use itertools::Itertools;
 
+type PromptFn = Box<dyn Fn(Option<char>) -> String>;
+
+pub enum Prompt {
+    Static(String),
+    Dynamic {
+        closure: PromptFn,
+        mode: Option<char>,
+    },
+}
+
+impl Prompt {
+    pub fn from<P: Into<String>>(prompt: P) -> Self {
+        Prompt::Static(prompt.into())
+    }
+}
+
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CursorPosition {
@@ -60,7 +76,7 @@ impl CursorPosition {
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a, W: io::Write> {
-    prompt: String,
+    prompt: Prompt,
     out: W,
     context: &'a mut Context,
 
@@ -137,18 +153,18 @@ macro_rules! cur_buf {
 }
 
 impl<'a, W: io::Write> Editor<'a, W> {
-    pub fn new<P: Into<String>>(
+    pub fn new(
         out: W,
-        prompt: P,
+        prompt: Prompt,
         f: Option<ColorClosure>,
         context: &'a mut Context,
     ) -> io::Result<Self> {
         Editor::new_with_init_buffer(out, prompt, f, context, Buffer::new())
     }
 
-    pub fn new_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
+    pub fn new_with_init_buffer<B: Into<Buffer>>(
         mut out: W,
-        prompt: P,
+        mut prompt: Prompt,
         f: Option<ColorClosure>,
         context: &'a mut Context,
         buffer: B,
@@ -158,10 +174,16 @@ impl<'a, W: io::Write> Editor<'a, W> {
             out.write_all(b" ")?; // if the line is not empty, overflow on next line
         }
         out.write_all("\r".as_bytes())?;
-        let mut prompt = prompt.into();
-        out.write_all(prompt.split('\n').join("\r\n").as_bytes())?;
-        if let Some(index) = prompt.rfind('\n') {
-            prompt = prompt.split_at(index + 1).1.into()
+        match &mut prompt {
+            Prompt::Static(prompt) => {
+                out.write_all(prompt.split('\n').join("\r\n").as_bytes())?;
+                if let Some(index) = prompt.rfind('\n') {
+                    std::mem::replace(prompt, prompt.split_at(index + 1).1.to_string());
+                }
+            }
+            Prompt::Dynamic { .. } => {
+                // TODO
+            }
         }
 
         let mut ed = Editor {
@@ -217,9 +239,9 @@ impl<'a, W: io::Write> Editor<'a, W> {
         (words, pos)
     }
 
-    pub fn set_prompt(&mut self, prompt: String) {
-        self.prompt = prompt;
-    }
+    //pub fn set_prompt(&mut self, prompt: String) {
+    //    self.prompt = prompt;
+    //}
 
     pub fn context(&mut self) -> &mut Context {
         self.context
@@ -842,6 +864,13 @@ impl<'a, W: io::Write> Editor<'a, W> {
         self.autosuggestion.is_some()
     }
 
+    pub fn calc_prompt(&self) -> String {
+        match &self.prompt {
+            Prompt::Static(prompt) => prompt.clone(),
+            Prompt::Dynamic { closure, mode } => closure(*mode),
+        }
+    }
+
     /// Override the prompt for incremental search if needed.
     fn search_prompt(&mut self) -> (String, usize) {
         if self.is_search() {
@@ -866,7 +895,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
                 9,
             )
         } else {
-            (self.prompt.clone(), 0)
+            (self.calc_prompt(), 0)
         }
     }
 
@@ -1069,6 +1098,20 @@ impl<'a, W: io::Write> Editor<'a, W> {
 
         self._display(true)
     }
+
+    /// Modifies the prompt to reflect the Vi mode.
+    ///
+    /// This operation will be ignored if a static prompt is used, as mode changes will have no
+    /// side effect.
+    pub fn set_vi_mode(&mut self, new_mode: char) {
+        use crate::Prompt::*;
+        match &mut self.prompt {
+            Static(_) => {}
+            Dynamic { closure: _, mode } => {
+                std::mem::replace(mode, Some(new_mode));
+            }
+        };
+    }
 }
 
 impl<'a, W: io::Write> From<Editor<'a, W>> for String {
@@ -1089,6 +1132,7 @@ impl<'a, W: io::Write> From<Editor<'a, W>> for String {
 
 #[cfg(test)]
 mod tests {
+    use super::Prompt::*;
     use super::*;
     use Context;
 
@@ -1097,7 +1141,7 @@ mod tests {
     fn delete_all_after_cursor_undo() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
         ed.insert_str_after_cursor("delete all of this").unwrap();
         ed.move_cursor_to_start_of_line().unwrap();
         ed.delete_all_after_cursor().unwrap();
@@ -1109,7 +1153,7 @@ mod tests {
     fn move_cursor_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor, 3);
 
@@ -1125,7 +1169,7 @@ mod tests {
     fn cursor_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -1138,7 +1182,7 @@ mod tests {
     fn delete_until_backwards() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -1151,7 +1195,7 @@ mod tests {
     fn delete_until_forwards() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 0;
 
@@ -1164,7 +1208,7 @@ mod tests {
     fn delete_until() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 
@@ -1177,12 +1221,39 @@ mod tests {
     fn delete_until_inclusive() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 
         ed.delete_until_inclusive(1).unwrap();
         assert_eq!(ed.cursor, 1);
         assert_eq!(String::from(ed), "r");
+    }
+
+    #[test]
+    fn dynamic_prompt() {
+        let mut context = Context::new();
+        let out = Vec::new();
+        let mut ed = Editor::new(
+            out,
+            Dynamic {
+                closure: Box::new(|mode| {
+                    if let Some(mode) = mode {
+                        format!("[{}] prompt$ ", mode)
+                    } else {
+                        String::from("prompt$ ")
+                    }
+                }),
+                mode: None,
+            },
+            None,
+            &mut context,
+        )
+        .unwrap();
+        assert_eq!(&ed.calc_prompt(), "prompt$ ");
+        ed.set_vi_mode('i');
+        assert_eq!(&ed.calc_prompt(), "[i] prompt$ ");
+        ed.set_vi_mode('n');
+        assert_eq!(&ed.calc_prompt(), "[n] prompt$ ");
     }
 }
