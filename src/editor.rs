@@ -11,17 +11,17 @@ use crate::Buffer;
 use crate::Context;
 use itertools::Itertools;
 
-type PromptFn = Box<dyn Fn(Option<char>) -> String>;
+type PromptFn<'a> = Box<dyn Fn(Option<char>) -> String + 'a>;
 
-pub enum Prompt {
+pub enum Prompt<'a> {
     Static(String),
     Dynamic {
-        closure: PromptFn,
+        closure: PromptFn<'a>,
         mode: Option<char>,
     },
 }
 
-impl Prompt {
+impl<'a> Prompt<'a> {
     pub fn from<P: Into<String>>(prompt: P) -> Self {
         Prompt::Static(prompt.into())
     }
@@ -76,7 +76,7 @@ impl CursorPosition {
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a, W: io::Write> {
-    prompt: Prompt,
+    prompt: Prompt<'a>,
     out: W,
     context: &'a mut Context,
 
@@ -155,7 +155,7 @@ macro_rules! cur_buf {
 impl<'a, W: io::Write> Editor<'a, W> {
     pub fn new(
         out: W,
-        prompt: Prompt,
+        prompt: Prompt<'a>,
         f: Option<ColorClosure>,
         context: &'a mut Context,
     ) -> io::Result<Self> {
@@ -164,7 +164,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
 
     pub fn new_with_init_buffer<B: Into<Buffer>>(
         mut out: W,
-        mut prompt: Prompt,
+        mut prompt: Prompt<'a>,
         f: Option<ColorClosure>,
         context: &'a mut Context,
         buffer: B,
