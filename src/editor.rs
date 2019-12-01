@@ -38,6 +38,14 @@ impl ViStatus {
             insert: insert.into(),
         }
     }
+
+    pub fn as_str(&self) -> &str {
+        use ViPromptMode::*;
+        match self.mode {
+            Normal => &self.normal,
+            Insert => &self.insert,
+        }
+    }
 }
 
 impl Default for ViStatus {
@@ -91,6 +99,13 @@ impl Prompt {
         Prompt {
             prompt: prompt.into(),
             vi_status: None,
+        }
+    }
+
+    pub fn prefix(&self) -> &str {
+        match &self.vi_status {
+            Some(status) => status.as_str(),
+            None => "",
         }
     }
 }
@@ -950,16 +965,18 @@ impl<'a, W: io::Write> Editor<'a, W> {
                     color::Green.fg_str(),
                 )
             };
+            let prefix = self.prompt.prefix();
             (
                 format!(
-                    "(search)'{}{}{}` ({}/{}): ",
+                    "{}(search)'{}{}{}` ({}/{}): ",
+                    prefix,
                     color,
                     self.current_buffer(),
                     color::Reset.fg_str(),
                     hplace,
                     self.history_subset_index.len()
                 ),
-                9,
+                prefix.len() + 9,
             )
         } else {
             (self.prompt.to_string(), 0)
