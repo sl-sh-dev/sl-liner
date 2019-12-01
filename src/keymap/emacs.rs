@@ -171,7 +171,7 @@ fn emacs_move_word<W: Write>(ed: &mut Editor<W>, direction: EmacsMoveDir) -> io:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editor::Prompt::*;
+    use crate::editor::Prompt;
     use crate::{Completer, Context, Editor, KeyMap};
     use std::io::Write;
     use termion::event::Key;
@@ -205,7 +205,7 @@ mod tests {
     fn enter_is_done() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("done").unwrap();
         assert_eq!(ed.cursor(), 4);
@@ -220,7 +220,7 @@ mod tests {
     fn move_cursor_left() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor(), 3);
@@ -236,7 +236,7 @@ mod tests {
         let mut context = Context::new();
         let out = Vec::new();
 
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("abc def ghi").unwrap();
         assert_eq!(ed.cursor(), 11);
@@ -256,7 +256,7 @@ mod tests {
     fn cursor_movement() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor(), 5);
@@ -271,7 +271,7 @@ mod tests {
     fn ctrl_h() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("not empty").unwrap();
 

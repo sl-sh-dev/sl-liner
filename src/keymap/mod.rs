@@ -82,7 +82,7 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::editor::Prompt::*;
+    use crate::editor::Prompt;
     use crate::Context;
     use std::io::ErrorKind;
     use termion::event::Key::*;
@@ -113,7 +113,7 @@ mod tests {
     fn ctrl_d_empty() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = TestKeyMap;
 
         let res = map.handle_key(Ctrl('d'), &mut ed, &mut EmptyCompleter);
@@ -126,7 +126,7 @@ mod tests {
     fn ctrl_d_non_empty() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = TestKeyMap;
         ed.insert_str_after_cursor("not empty").unwrap();
 
@@ -139,7 +139,7 @@ mod tests {
     fn ctrl_c() {
         let mut context = Context::new();
         let out = Vec::new();
-        let mut ed = Editor::new(out, Static("prompt".to_owned()), None, &mut context).unwrap();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
         let mut map = TestKeyMap;
 
         let res = map.handle_key(Ctrl('c'), &mut ed, &mut EmptyCompleter);
