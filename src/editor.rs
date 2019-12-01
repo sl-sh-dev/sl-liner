@@ -26,6 +26,20 @@ pub struct ViStatus {
     insert: String,
 }
 
+impl ViStatus {
+    pub fn new<N, I>(mode: ViPromptMode, normal: N, insert: I) -> Self
+    where
+        N: Into<String>,
+        I: Into<String>,
+    {
+        Self {
+            mode,
+            normal: normal.into(),
+            insert: insert.into(),
+        }
+    }
+}
+
 impl Default for ViStatus {
     fn default() -> Self {
         ViStatus {
