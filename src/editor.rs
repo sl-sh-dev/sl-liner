@@ -329,9 +329,9 @@ impl<'a, W: io::Write> Editor<'a, W> {
     }
 
     pub fn set_prompt(&mut self, mut prompt: Prompt) {
-        if let Some(vi_status) = &mut self.prompt.vi_status {
-            if let Some(passed_status) = &mut prompt.vi_status {
-                vi_status.mode = passed_status.mode;
+        if let Some(passed_status) = &mut prompt.vi_status {
+            if let Some(old_status) = &self.prompt.vi_status {
+                passed_status.mode = old_status.mode;
             }
         }
         self.prompt = prompt;
