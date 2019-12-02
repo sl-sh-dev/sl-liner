@@ -73,9 +73,9 @@ fn test_history_indexing() {
     h.push(Buffer::from("b")).unwrap();
     h.push(Buffer::from("c")).unwrap();
     assert_eq!(h.len(), 3);
-    assert_eq!(String::from(h.buffers[0].clone()), "a".to_string());
-    assert_eq!(String::from(h.buffers[1].clone()), "b".to_string());
-    assert_eq!(String::from(h.buffers[2].clone()), "c".to_string());
+    assert_eq!(String::from(h[0].clone()), "a".to_string());
+    assert_eq!(String::from(h[1].clone()), "b".to_string());
+    assert_eq!(String::from(h[2].clone()), "c".to_string());
 }
 
 #[test]
@@ -134,8 +134,8 @@ fn test_reading_from_file() {
     }
     let mut h = History::new();
     h.set_file_name_and_load_history(tmp_file).unwrap();
-    assert_eq!(String::from(h.buffers[0].clone()), "a".to_string());
-    assert_eq!(String::from(h.buffers[1].clone()), "b".to_string());
-    assert_eq!(String::from(h.buffers[2].clone()), "c".to_string());
-    assert_eq!(String::from(h.buffers[3].clone()), "d".to_string());
+    assert_eq!(String::from(h[0].clone()), "a".to_string());
+    assert_eq!(String::from(h[1].clone()), "b".to_string());
+    assert_eq!(String::from(h[2].clone()), "c".to_string());
+    assert_eq!(String::from(h[3].clone()), "d".to_string());
 }
