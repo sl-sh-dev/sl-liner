@@ -3,6 +3,7 @@ use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
 use super::*;
+use crate::editor::Prompt;
 use keymap;
 
 pub type ColorClosure = Box<dyn Fn(&str) -> String>;
@@ -73,9 +74,9 @@ impl Context {
     /// The output is stdout.
     /// The returned line has the newline removed.
     /// Before returning, will revert all changes to the history buffers.
-    pub fn read_line<P: Into<String>, C: Completer>(
+    pub fn read_line<C: Completer>(
         &mut self,
-        prompt: P,
+        prompt: Prompt,
         f: Option<ColorClosure>,
         handler: &mut C,
     ) -> io::Result<String> {
@@ -85,7 +86,7 @@ impl Context {
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
     ///
     /// ```no_run
-    /// use liner::{Context, Completer};
+    /// use liner::{Context, Completer, Prompt};
     ///
     /// struct EmptyCompleter;
     ///
@@ -97,14 +98,14 @@ impl Context {
     ///
     /// let mut context = Context::new();
     /// let line =
-    ///     context.read_line_with_init_buffer("[prompt]$ ",
+    ///     context.read_line_with_init_buffer(Prompt::from("[prompt]$ "),
     ///                                        &mut EmptyCompleter,
     ///                                        Some(Box::new(|s| String::from(s))),
     ///                                        "some initial buffer");
     /// ```
-    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>, C: Completer>(
+    pub fn read_line_with_init_buffer<B: Into<Buffer>, C: Completer>(
         &mut self,
-        prompt: P,
+        prompt: Prompt,
         handler: &mut C,
         f: Option<ColorClosure>,
         buffer: B,

@@ -6,7 +6,7 @@ use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
 
-use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter};
+use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
 use regex::Regex;
 use termion::color;
 
@@ -90,7 +90,7 @@ fn main() {
         // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving liner, and the third is called on every key press
         // Basically highlight_dodo(read_line()), where on every keypress, the lambda is called
         let res = con.read_line(
-            "[prompt]\n% ",
+            Prompt::from("[prompt]\n% "),
             Some(Box::new(highlight_dodo)),
             &mut completer,
         );
