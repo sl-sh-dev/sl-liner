@@ -112,17 +112,10 @@ impl Context {
     ) -> io::Result<String> {
         let stdout = stdout().into_raw_mode()?;
         let keybindings = self.key_bindings;
+        let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
         match keybindings {
-            KeyBindings::Emacs => Self::handle_keys(
-                keymap::Emacs::new(),
-                Editor::new_with_init_buffer(stdout, Prompt::from(prompt.prompt), f, self, buffer)?,
-                handler,
-            ),
-            KeyBindings::Vi => Self::handle_keys(
-                keymap::Vi::new(),
-                Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?,
-                handler,
-            ),
+            KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
+            KeyBindings::Vi => Self::handle_keys(keymap::Vi::new(), ed, handler),
         }
 
         //self.revert_all_history();

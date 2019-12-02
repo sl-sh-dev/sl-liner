@@ -12,7 +12,7 @@ use crate::Context;
 use itertools::Itertools;
 
 /// Indicates the mode that should be currently displayed in the propmpt.
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum ViPromptMode {
     Normal,
     Insert,
@@ -328,9 +328,14 @@ impl<'a, W: io::Write> Editor<'a, W> {
         (words, pos)
     }
 
-    //pub fn set_prompt(&mut self, prompt: String) {
-    //    self.prompt = prompt;
-    //}
+    pub fn set_prompt(&mut self, mut prompt: Prompt) {
+        if let Some(vi_status) = &mut self.prompt.vi_status {
+            if let Some(passed_status) = &mut prompt.vi_status {
+                vi_status.mode = passed_status.mode;
+            }
+        }
+        self.prompt = prompt;
+    }
 
     pub fn context(&mut self) -> &mut Context {
         self.context
