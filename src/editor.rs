@@ -1,6 +1,7 @@
 use std::cmp;
 use std::fmt::{self, Write};
 use std::io;
+use strip_ansi_escapes::strip;
 use termion::{self, clear, color, cursor};
 
 use super::complete::Completer;
@@ -974,14 +975,14 @@ impl<'a, W: io::Write> Editor<'a, W> {
             (
                 format!(
                     "{}(search)'{}{}{}` ({}/{}): ",
-                    prefix,
+                    &prefix,
                     color,
                     self.current_buffer(),
                     color::Reset.fg_str(),
                     hplace,
                     self.history_subset_index.len()
                 ),
-                prefix.len() + 9,
+                strip(&prefix).unwrap().len() + 9,
             )
         } else {
             (self.prompt.to_string(), 0)
