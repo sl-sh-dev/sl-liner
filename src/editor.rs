@@ -9,7 +9,6 @@ use crate::event::*;
 use crate::util;
 use crate::Buffer;
 use crate::Context;
-use itertools::Itertools;
 
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,7 +163,12 @@ impl<'a, W: io::Write> Editor<'a, W> {
         }
         out.write_all("\r".as_bytes())?;
         let mut prompt = prompt.into();
-        out.write_all(prompt.split('\n').join("\r\n").as_bytes())?;
+        for (i, pline) in prompt.split('\n').enumerate() {
+            if i > 0 {
+                out.write_all("\r\n".as_bytes())?;
+            }
+            out.write_all(pline.as_bytes())?;
+        }
         if let Some(index) = prompt.rfind('\n') {
             prompt = prompt.split_at(index + 1).1.into()
         }
