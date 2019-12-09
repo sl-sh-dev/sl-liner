@@ -20,7 +20,7 @@ pub use buffer::*;
 mod history;
 pub use history::*;
 
-mod keymap;
+pub mod keymap;
 pub use keymap::*;
 
 mod util;

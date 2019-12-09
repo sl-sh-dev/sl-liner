@@ -1,4 +1,4 @@
-use std::io::{self, stdin, stdout, Write};
+use std::io::{self, stdin, stdout};
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
@@ -39,19 +39,10 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
     res
 }
 
-/// The key bindings to use.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum KeyBindings {
-    Vi,
-    Emacs,
-}
-
 pub struct Context {
     pub history: History,
     pub word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
-    pub key_bindings: KeyBindings,
     pub buf: String,
-    pub vi_esc_sequence: Option<(char, char, u32)>,
 }
 
 impl Default for Context {
@@ -65,9 +56,7 @@ impl Context {
         Context {
             history: History::new(),
             word_divider_fn: Box::new(get_buffer_words),
-            key_bindings: KeyBindings::Emacs,
             buf: String::with_capacity(512),
-            vi_esc_sequence: None,
         }
     }
 
@@ -75,13 +64,14 @@ impl Context {
     /// The output is stdout.
     /// The returned line has the newline removed.
     /// Before returning, will revert all changes to the history buffers.
-    pub fn read_line<P: Into<String>, C: Completer>(
+    pub fn read_line<P: Into<String>>(
         &mut self,
         prompt: P,
         f: Option<ColorClosure>,
-        handler: &mut C,
+        handler: &mut dyn Completer,
+        keymap: Option<&mut dyn KeyMap>,
     ) -> io::Result<String> {
-        self.read_line_with_init_buffer(prompt, handler, f, Buffer::new())
+        self.read_line_with_init_buffer(prompt, handler, f, Buffer::new(), keymap)
     }
 
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
@@ -102,35 +92,34 @@ impl Context {
     ///     context.read_line_with_init_buffer("[prompt]$ ",
     ///                                        &mut EmptyCompleter,
     ///                                        Some(Box::new(|s| String::from(s))),
-    ///                                        "some initial buffer");
+    ///                                        "some initial buffer",
+    ///                                        None);
     /// ```
-    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>, C: Completer>(
+    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
-        handler: &mut C,
+        handler: &mut dyn Completer,
         f: Option<ColorClosure>,
         buffer: B,
+        keymap: Option<&mut dyn KeyMap>,
     ) -> io::Result<String> {
-        let stdout = stdout().into_raw_mode()?;
-        let keybindings = self.key_bindings;
-        let vi_esc_sequence = self.vi_esc_sequence;
-        let ed = Editor::new_with_init_buffer(stdout, prompt, f, self, buffer)?;
-        match keybindings {
-            KeyBindings::Emacs => Self::handle_keys(keymap::Emacs::new(), ed, handler),
-            KeyBindings::Vi => {
-                let mut vi = keymap::Vi::new();
-                if let Some((key1, key2, ms)) = vi_esc_sequence {
-                    vi.set_esc_sequence(key1, key2, ms);
-                }
-                Self::handle_keys(vi, ed, handler)
+        let mut stdout = stdout().into_raw_mode()?;
+        let ed = Editor::new_with_init_buffer(&mut stdout, prompt, f, self, buffer)?;
+        let mut km;
+        let keymap = match keymap {
+            Some(keymap) => keymap,
+            None => {
+                km = keymap::Emacs::new();
+                &mut km
             }
-        }
+        };
+        Self::handle_keys(keymap, ed, handler)
     }
 
-    fn handle_keys<'a, W: Write, M: KeyMap, C: Completer>(
-        mut keymap: M,
-        mut ed: Editor<'a, W>,
-        handler: &mut C,
+    fn handle_keys<'a>(
+        keymap: &mut dyn KeyMap,
+        mut ed: Editor<'a>,
+        handler: &mut dyn Completer,
     ) -> io::Result<String> {
         keymap.init(&mut ed);
         for c in stdin().keys() {

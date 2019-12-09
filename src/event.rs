@@ -1,14 +1,13 @@
 use crate::Editor;
-use std::io::Write;
 use termion::event::Key;
 
-pub struct Event<'a, 'out: 'a, W: Write + 'a> {
-    pub editor: &'a mut Editor<'out, W>,
+pub struct Event<'a, 'out: 'a> {
+    pub editor: &'a mut Editor<'out>,
     pub kind: EventKind,
 }
 
-impl<'a, 'out: 'a, W: Write + 'a> Event<'a, 'out, W> {
-    pub fn new(editor: &'a mut Editor<'out, W>, kind: EventKind) -> Self {
+impl<'a, 'out: 'a> Event<'a, 'out> {
+    pub fn new(editor: &'a mut Editor<'out>, kind: EventKind) -> Self {
         Event { editor, kind }
     }
 }

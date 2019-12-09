@@ -6,6 +6,7 @@ use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
 
+use liner::keymap;
 use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter};
 use regex::Regex;
 use termion::color;
@@ -30,7 +31,7 @@ impl Completer for CommentCompleter {
         }
     }
 
-    fn on_event<W: std::io::Write>(&mut self, event: Event<W>) {
+    fn on_event(&mut self, event: Event) {
         if let EventKind::BeforeComplete = event.kind {
             let (_, pos) = event.editor.get_words_and_cursor_position();
 
@@ -86,6 +87,8 @@ fn main() {
         .set_file_name_and_load_history(history_file)
         .unwrap();
 
+    let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
+
     loop {
         // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving liner, and the third is called on every key press
         // Basically highlight_dodo(read_line()), where on every keypress, the lambda is called
@@ -93,6 +96,7 @@ fn main() {
             "[prompt]\n% ",
             Some(Box::new(highlight_dodo)),
             &mut completer,
+            Some(&mut *keymap),
         );
 
         // We are out of the lambda, and res is the result from read_line which is an Into<String>
@@ -100,11 +104,11 @@ fn main() {
             Ok(res) => {
                 match res.as_str() {
                     "emacs" => {
-                        con.key_bindings = liner::KeyBindings::Emacs;
+                        keymap = Box::new(keymap::Emacs::new());
                         println!("emacs mode");
                     }
                     "vi" => {
-                        con.key_bindings = liner::KeyBindings::Vi;
+                        keymap = Box::new(keymap::Vi::new());
                         println!("vi mode");
                     }
                     "exit" | "" => {

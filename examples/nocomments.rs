@@ -6,6 +6,7 @@ use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
 
+use liner::keymap;
 use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter};
 use regex::Regex;
 use termion::color;
@@ -29,7 +30,7 @@ impl Completer for NoCommentCompleter {
         }
     }
 
-    fn on_event<W: std::io::Write>(&mut self, event: Event<W>) {
+    fn on_event(&mut self, event: Event) {
         if let EventKind::BeforeComplete = event.kind {
             let (_, pos) = event.editor.get_words_and_cursor_position();
 
@@ -71,18 +72,25 @@ fn main() {
         .set_file_name_and_load_history(history_file)
         .unwrap();
 
+    let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
+
     loop {
-        let res = con.read_line("[prompt]$ ", Some(Box::new(highlight_dodo)), &mut completer);
+        let res = con.read_line(
+            "[prompt]$ ",
+            Some(Box::new(highlight_dodo)),
+            &mut completer,
+            Some(&mut *keymap),
+        );
 
         match res {
             Ok(res) => {
                 match res.as_str() {
                     "emacs" => {
-                        con.key_bindings = liner::KeyBindings::Emacs;
+                        keymap = Box::new(keymap::Emacs::new());
                         println!("emacs mode");
                     }
                     "vi" => {
-                        con.key_bindings = liner::KeyBindings::Vi;
+                        keymap = Box::new(keymap::Vi::new());
                         println!("vi mode");
                     }
                     "exit" | "" => {

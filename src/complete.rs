@@ -1,10 +1,9 @@
 use super::event::Event;
-use std::io::Write;
 use std::path::PathBuf;
 
 pub trait Completer {
     fn completions(&mut self, start: &str) -> Vec<String>;
-    fn on_event<W: Write>(&mut self, _event: Event<W>) {}
+    fn on_event(&mut self, _event: Event) {}
 }
 
 pub struct BasicCompleter {
