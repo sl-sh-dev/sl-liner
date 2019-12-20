@@ -122,7 +122,7 @@ impl Context {
         handler: &mut dyn Completer,
     ) -> io::Result<String> {
         keymap.init(&mut ed);
-        for c in stdin().keys() {
+        for c in stdin().lock().keys() {
             if keymap.handle_key(c.unwrap(), &mut ed, handler)? {
                 break;
             }
