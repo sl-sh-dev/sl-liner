@@ -6,6 +6,30 @@ pub trait Completer {
     fn on_event(&mut self, _event: Event) {}
 }
 
+pub struct EmptyCompleter {
+    empty: Vec<String>,
+}
+
+impl EmptyCompleter {
+    pub fn new() -> EmptyCompleter {
+        EmptyCompleter {
+            empty: Vec::with_capacity(0),
+        }
+    }
+}
+
+impl Default for EmptyCompleter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Completer for EmptyCompleter {
+    fn completions(&mut self, _start: &str) -> Vec<String> {
+        self.empty.clone()
+    }
+}
+
 pub struct BasicCompleter {
     prefixes: Vec<String>,
 }

@@ -79,7 +79,8 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Context;
+    use crate::context::get_buffer_words;
+    use crate::History;
     use std::io::ErrorKind;
     use termion::event::Key::*;
 
@@ -103,9 +104,19 @@ mod tests {
     #[test]
     /// when the current buffer is empty, ctrl-d generates and eof error
     fn ctrl_d_empty() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = TestKeyMap;
 
         let res = map.handle_key(Ctrl('d'), &mut ed, &mut EmptyCompleter);
@@ -116,9 +127,19 @@ mod tests {
     #[test]
     /// when the current buffer is not empty, ctrl-d should be ignored
     fn ctrl_d_non_empty() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = TestKeyMap;
         ed.insert_str_after_cursor("not empty").unwrap();
 
@@ -129,9 +150,19 @@ mod tests {
     #[test]
     /// ctrl-c should generate an error
     fn ctrl_c() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = TestKeyMap;
 
         let res = map.handle_key(Ctrl('c'), &mut ed, &mut EmptyCompleter);

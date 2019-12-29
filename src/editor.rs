@@ -1,4 +1,5 @@
 use std::cmp;
+use std::cmp::Ordering;
 use std::fmt::Write;
 use std::io;
 use termion::{self, clear, color, cursor};
@@ -8,7 +9,7 @@ use crate::context::ColorClosure;
 use crate::event::*;
 use crate::util;
 use crate::Buffer;
-use crate::Context;
+use crate::History;
 
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,7 +62,9 @@ impl CursorPosition {
 pub struct Editor<'a> {
     prompt: String,
     out: &'a mut dyn io::Write,
-    context: &'a mut Context,
+    history: &'a mut History,
+    word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
+    buf: &'a mut String,
 
     // A closure that is evaluated just before we write to out.
     // This allows us to do custom syntax highlighting and other fun stuff.
@@ -115,7 +118,7 @@ macro_rules! cur_buf_mut {
         match $s.cur_history_loc {
             Some(i) => {
                 if !$s.hist_buf_valid {
-                    $s.hist_buf.copy_buffer(&$s.context.history[i]);
+                    $s.hist_buf.copy_buffer(&$s.history[i]);
                     $s.hist_buf_valid = true;
                 }
                 &mut $s.hist_buf
@@ -129,7 +132,7 @@ macro_rules! cur_buf {
     ($s:expr) => {
         match $s.cur_history_loc {
             Some(_) if $s.hist_buf_valid => &$s.hist_buf,
-            Some(i) => &$s.context.history[i],
+            Some(i) => &$s.history[i],
             _ => &$s.new_buf,
         }
     };
@@ -145,16 +148,20 @@ impl<'a> Editor<'a> {
         out: &'a mut dyn io::Write,
         prompt: P,
         f: Option<ColorClosure>,
-        context: &'a mut Context,
+        history: &'a mut History,
+        word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
+        buf: &'a mut String,
     ) -> io::Result<Self> {
-        Editor::new_with_init_buffer(out, prompt, f, context, Buffer::new())
+        Editor::new_with_init_buffer(out, prompt, f, history, word_divider_fn, buf, Buffer::new())
     }
 
     pub fn new_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
         out: &'a mut dyn io::Write,
         prompt: P,
         f: Option<ColorClosure>,
-        context: &'a mut Context,
+        history: &'a mut History,
+        word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
+        buf: &'a mut String,
         buffer: B,
     ) -> io::Result<Self> {
         out.write_all("⏎".as_bytes())?;
@@ -182,7 +189,9 @@ impl<'a> Editor<'a> {
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
             cur_history_loc: None,
-            context,
+            history,
+            word_divider_fn,
+            buf,
             show_completions_hint: None,
             show_autosuggestions: true,
             term_cursor_line: 1,
@@ -203,6 +212,11 @@ impl<'a> Editor<'a> {
         Ok(ed)
     }
 
+    pub fn set_closure(&mut self, closure: ColorClosure) -> &mut Self {
+        self.closure = Some(closure);
+        self
+    }
+
     fn is_search(&self) -> bool {
         self.reverse_search || self.forward_search
     }
@@ -220,7 +234,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn get_words_and_cursor_position(&self) -> (Vec<(usize, usize)>, CursorPosition) {
-        let word_fn = &self.context.word_divider_fn;
+        let word_fn = &self.word_divider_fn;
         let words = word_fn(cur_buf!(self));
         let pos = CursorPosition::get(self.cursor, &words);
         (words, pos)
@@ -230,8 +244,8 @@ impl<'a> Editor<'a> {
         self.prompt = prompt;
     }
 
-    pub fn context(&mut self) -> &mut Context {
-        self.context
+    pub fn history(&mut self) -> &mut History {
+        self.history
     }
 
     pub fn cursor(&self) -> usize {
@@ -270,8 +284,8 @@ impl<'a> Editor<'a> {
     }
 
     fn freshen_history(&mut self) {
-        if self.context.history.share && !self.history_fresh {
-            let _ = self.context.history.load_history(false);
+        if self.history.share && !self.history_fresh {
+            let _ = self.history.load_history(false);
             self.history_fresh = true;
         }
     }
@@ -279,7 +293,7 @@ impl<'a> Editor<'a> {
     /// Refresh incremental search, either when started or when the buffer changes.
     fn refresh_search(&mut self, forward: bool) {
         let search_history_loc = self.search_history_loc();
-        self.history_subset_index = self.context.history.search_index(&self.new_buf);
+        self.history_subset_index = self.history.search_index(&self.new_buf);
         if !self.history_subset_index.is_empty() {
             self.history_subset_loc = if forward {
                 Some(0)
@@ -395,11 +409,13 @@ impl<'a> Editor<'a> {
 
         let mut i = 0;
         for (index, com) in completions.iter().enumerate() {
-            if i == cols {
-                output_buf.push_str("\r\n");
-                i = 0;
-            } else if i > cols {
-                unreachable!()
+            match i.cmp(&cols) {
+                Ordering::Greater => unreachable!(),
+                Ordering::Less => {}
+                Ordering::Equal => {
+                    output_buf.push_str("\r\n");
+                    i = 0;
+                }
             }
 
             if Some(index) == highlighted {
@@ -542,13 +558,7 @@ impl<'a> Editor<'a> {
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
-        write!(
-            &mut self.context.buf,
-            "{}{}",
-            clear::All,
-            cursor::Goto(1, 1)
-        )
-        .map_err(fmt_io_err)?;
+        write!(&mut self.buf, "{}{}", clear::All, cursor::Goto(1, 1)).map_err(fmt_io_err)?;
 
         self.term_cursor_line = 1;
         self.clear_search();
@@ -569,8 +579,7 @@ impl<'a> Editor<'a> {
                         self.cur_history_loc = Some(self.history_subset_index[i - 1]);
                     }
                     None => {
-                        self.history_subset_index =
-                            self.context.history.get_history_subset(&self.new_buf);
+                        self.history_subset_index = self.history.get_history_subset(&self.new_buf);
                         if !self.history_subset_index.is_empty() {
                             self.history_subset_loc = Some(self.history_subset_index.len() - 1);
                             self.cur_history_loc = Some(
@@ -583,8 +592,8 @@ impl<'a> Editor<'a> {
             } else {
                 match self.cur_history_loc {
                     Some(i) if i > 0 => self.cur_history_loc = Some(i - 1),
-                    None if !self.context.history.is_empty() => {
-                        self.cur_history_loc = Some(self.context.history.len() - 1)
+                    None if !self.history.is_empty() => {
+                        self.cur_history_loc = Some(self.history.len() - 1)
                     }
                     _ => (),
                 }
@@ -613,9 +622,7 @@ impl<'a> Editor<'a> {
                 }
             } else {
                 match self.cur_history_loc.take() {
-                    Some(i) if i < self.context.history.len() - 1 => {
-                        self.cur_history_loc = Some(i + 1)
-                    }
+                    Some(i) if i < self.history.len() - 1 => self.cur_history_loc = Some(i + 1),
                     _ => self.history_fresh = false,
                 }
             }
@@ -626,7 +633,7 @@ impl<'a> Editor<'a> {
     /// Moves to the start of history (ie. the earliest history entry).
     pub fn move_to_start_of_history(&mut self) -> io::Result<()> {
         self.hist_buf_valid = false;
-        if self.context.history.is_empty() {
+        if self.history.is_empty() {
             self.cur_history_loc = None;
             self.display()
         } else {
@@ -833,7 +840,7 @@ impl<'a> Editor<'a> {
         if self.hist_buf_valid {
             return None;
         }
-        let context_history = &self.context.history;
+        let context_history = &self.history;
         let autosuggestion = if self.is_search() {
             self.search_history_loc().map(|i| &context_history[i])
         } else if self.show_autosuggestions {
@@ -893,13 +900,13 @@ impl<'a> Editor<'a> {
             None => start.to_owned(),
         };
         if self.is_search() {
-            write!(&mut self.context.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+            write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
         }
-        write!(&mut self.context.buf, "{}", start).map_err(fmt_io_err)?;
+        write!(&mut self.buf, "{}", start).map_err(fmt_io_err)?;
         if !self.is_search() {
-            write!(&mut self.context.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+            write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
         }
-        self.context.buf.push_str(&line[buf_num_remaining_bytes..]);
+        self.buf.push_str(&line[buf_num_remaining_bytes..]);
         Ok(())
     }
 
@@ -918,16 +925,12 @@ impl<'a> Editor<'a> {
         let lines_len = lines.len();
         for (i, line) in lines.into_iter().enumerate() {
             if i > 0 {
-                write!(
-                    &mut self.context.buf,
-                    "{}",
-                    cursor::Right(prompt_width as u16)
-                )
-                .map_err(fmt_io_err)?;
+                write!(&mut self.buf, "{}", cursor::Right(prompt_width as u16))
+                    .map_err(fmt_io_err)?;
             }
 
             if buf_num_remaining_bytes == 0 {
-                self.context.buf.push_str(&line);
+                self.buf.push_str(&line);
             } else if line.len() > buf_num_remaining_bytes {
                 self.display_with_suggest(&line, buf_num_remaining_bytes)?;
                 buf_num_remaining_bytes = 0;
@@ -938,14 +941,13 @@ impl<'a> Editor<'a> {
                     None => line,
                 };
                 if self.is_search() {
-                    write!(&mut self.context.buf, "{}", color::Yellow.fg_str())
-                        .map_err(fmt_io_err)?;
+                    write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
                 }
-                self.context.buf.push_str(&written_line);
+                self.buf.push_str(&written_line);
             }
 
             if i + 1 < lines_len {
-                self.context.buf.push_str("\r\n");
+                self.buf.push_str("\r\n");
             }
         }
         Ok(())
@@ -1008,40 +1010,39 @@ impl<'a> Editor<'a> {
 
         let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
-        self.context.buf.push_str("\x1B[?1000l\x1B[?1l");
+        self.buf.push_str("\x1B[?1000l\x1B[?1l");
 
         // Move the term cursor to the same line as the prompt.
         if self.term_cursor_line > 1 {
             write!(
-                &mut self.context.buf,
+                &mut self.buf,
                 "{}",
                 cursor::Up(self.term_cursor_line as u16 - 1)
             )
             .map_err(fmt_io_err)?;
         }
 
-        write!(&mut self.context.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)?;
+        write!(&mut self.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)?;
 
         // If we're cycling through completions, show those
         let mut completion_lines = 0;
         if let Some((completions, i)) = self.show_completions_hint.as_ref() {
-            completion_lines =
-                1 + Self::print_completion_list(completions, *i, &mut self.context.buf)?;
-            self.context.buf.push_str("\r\n");
+            completion_lines = 1 + Self::print_completion_list(completions, *i, &mut self.buf)?;
+            self.buf.push_str("\r\n");
         }
 
         // Write the prompt
-        write!(&mut self.context.buf, "{}", prompt).map_err(fmt_io_err)?;
+        write!(&mut self.buf, "{}", prompt).map_err(fmt_io_err)?;
 
         self.show_lines(show_autosuggest, prompt_width)?;
 
         if self.is_currently_showing_autosuggestion() || self.is_search() {
-            write!(&mut self.context.buf, "{}", color::Reset.fg_str()).map_err(fmt_io_err)?;
+            write!(&mut self.buf, "{}", color::Reset.fg_str()).map_err(fmt_io_err)?;
         }
 
         // at the end of the line, move the cursor down a line
         if new_total_width % terminal_width == 0 {
-            self.context.buf.push_str("\r\n");
+            self.buf.push_str("\r\n");
         }
 
         self.term_cursor_line = (new_total_width_to_cursor + terminal_width) / terminal_width;
@@ -1049,15 +1050,11 @@ impl<'a> Editor<'a> {
         // The term cursor is now on the bottom line. We may need to move the term cursor up
         // to the line where the true cursor is.
         let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
-        if cursor_line_diff > 0 {
-            write!(
-                &mut self.context.buf,
-                "{}",
-                cursor::Up(cursor_line_diff as u16)
-            )
-            .map_err(fmt_io_err)?;
-        } else if cursor_line_diff < 0 {
-            unreachable!();
+        match cursor_line_diff.cmp(&0) {
+            Ordering::Greater => write!(&mut self.buf, "{}", cursor::Up(cursor_line_diff as u16))
+                .map_err(fmt_io_err)?,
+            Ordering::Less => unreachable!(),
+            Ordering::Equal => {}
         }
 
         // Now that we are on the right line, we must move the term cursor left or right
@@ -1065,28 +1062,25 @@ impl<'a> Editor<'a> {
         let cursor_col_diff = new_total_width as isize
             - new_total_width_to_cursor as isize
             - cursor_line_diff * terminal_width as isize;
-        if cursor_col_diff > 0 {
-            write!(
-                &mut self.context.buf,
-                "{}",
-                cursor::Left(cursor_col_diff as u16)
-            )
-            .map_err(fmt_io_err)?;
-        } else if cursor_col_diff < 0 {
-            write!(
-                &mut self.context.buf,
-                "{}",
-                cursor::Right((-cursor_col_diff) as u16)
-            )
-            .map_err(fmt_io_err)?;
+        match cursor_col_diff.cmp(&0) {
+            Ordering::Greater => write!(&mut self.buf, "{}", cursor::Left(cursor_col_diff as u16))
+                .map_err(fmt_io_err)?,
+            Ordering::Less => {
+                write!(
+                    &mut self.buf,
+                    "{}",
+                    cursor::Right((-cursor_col_diff) as u16)
+                )
+                .map_err(fmt_io_err)?;
+            }
+            Ordering::Equal => {}
         }
-
         self.term_cursor_line += completion_lines;
 
         {
             let out = &mut self.out;
-            out.write_all(self.context.buf.as_bytes())?;
-            self.context.buf.clear();
+            out.write_all(self.buf.as_bytes())?;
+            self.buf.clear();
             out.flush()
         }
     }
@@ -1111,7 +1105,7 @@ impl<'a> From<Editor<'a>> for String {
                 if ed.hist_buf_valid {
                     ed.hist_buf
                 } else {
-                    ed.context.history[i].clone()
+                    ed.history[i].clone()
                 }
             }
             _ => ed.new_buf,
@@ -1123,14 +1117,26 @@ impl<'a> From<Editor<'a>> for String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use Context;
+    use crate::context::get_buffer_words;
+    use crate::History;
 
     #[test]
     /// test undoing delete_all_after_cursor
     fn delete_all_after_cursor_undo() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+
         ed.insert_str_after_cursor("delete all of this").unwrap();
         ed.move_cursor_to_start_of_line().unwrap();
         ed.delete_all_after_cursor().unwrap();
@@ -1140,9 +1146,19 @@ mod tests {
 
     #[test]
     fn move_cursor_left() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor, 3);
 
@@ -1156,9 +1172,19 @@ mod tests {
 
     #[test]
     fn cursor_movement() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -1169,9 +1195,19 @@ mod tests {
 
     #[test]
     fn delete_until_backwards() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor, 5);
 
@@ -1182,9 +1218,19 @@ mod tests {
 
     #[test]
     fn delete_until_forwards() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 0;
 
@@ -1195,9 +1241,19 @@ mod tests {
 
     #[test]
     fn delete_until() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 
@@ -1208,9 +1264,19 @@ mod tests {
 
     #[test]
     fn delete_until_inclusive() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         ed.cursor = 4;
 

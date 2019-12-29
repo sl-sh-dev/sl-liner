@@ -19,8 +19,7 @@ use crate::KeyMap;
 /// }
 ///
 /// let mut context = Context::new();
-/// let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
-/// let res = context.read_line("[prompt]$ ", None, &mut EmptyCompleter, Some(&mut *keymap));
+/// let res = context.read_line("[prompt]$ ", None);
 /// ```
 #[derive(Default, Clone)]
 pub struct Emacs {
@@ -71,7 +70,7 @@ impl Emacs {
 
     fn handle_last_arg_fetch<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
         // Empty history means no last arg to fetch.
-        if ed.context().history.is_empty() {
+        if ed.history().is_empty() {
             return Ok(());
         }
 
@@ -80,7 +79,7 @@ impl Emacs {
             Some(x) => x - 1,
             None => ed
                 .current_history_location()
-                .unwrap_or(ed.context().history.len() - 1),
+                .unwrap_or(ed.history().len() - 1),
         };
 
         // If did a last arg fetch just before this, we need to delete it so it can be replaced by
@@ -93,7 +92,7 @@ impl Emacs {
         }
 
         // Actually insert it
-        let buf = ed.context().history[history_index].clone();
+        let buf = ed.history()[history_index].clone();
         if let Some(last_arg) = buf.last_arg() {
             ed.insert_chars_after_cursor(last_arg)?;
         }
@@ -181,7 +180,8 @@ fn emacs_move_word(ed: &mut Editor, direction: EmacsMoveDir) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Completer, Context, Editor, KeyMap};
+    use crate::context::get_buffer_words;
+    use crate::{Completer, Editor, History, KeyMap};
     use termion::event::Key;
 
     fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) -> bool
@@ -207,9 +207,19 @@ mod tests {
 
     #[test]
     fn enter_is_done() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let mut words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &mut words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("done").unwrap();
         assert_eq!(ed.cursor(), 4);
@@ -222,9 +232,19 @@ mod tests {
 
     #[test]
     fn move_cursor_left() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let mut words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &mut words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor(), 3);
@@ -237,10 +257,20 @@ mod tests {
 
     #[test]
     fn move_word() {
-        let mut context = Context::new();
         let mut out = Vec::new();
 
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let mut words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &mut words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("abc def ghi").unwrap();
         assert_eq!(ed.cursor(), 11);
@@ -258,9 +288,19 @@ mod tests {
 
     #[test]
     fn cursor_movement() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let mut words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &mut words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor(), 5);
@@ -273,9 +313,19 @@ mod tests {
     #[test]
     /// ctrl-h should act as backspace
     fn ctrl_h() {
-        let mut context = Context::new();
         let mut out = Vec::new();
-        let mut ed = Editor::new(&mut out, "prompt".to_owned(), None, &mut context).unwrap();
+        let mut history = History::new();
+        let mut words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            "prompt".to_owned(),
+            None,
+            &mut history,
+            &mut words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("not empty").unwrap();
 

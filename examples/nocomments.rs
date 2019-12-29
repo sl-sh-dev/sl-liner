@@ -55,7 +55,7 @@ impl Completer for NoCommentCompleter {
 
 fn main() {
     let mut con = Context::new();
-    let mut completer = NoCommentCompleter { inner: None };
+    con.set_completer(Box::new(NoCommentCompleter { inner: None }));
 
     let history_file = match args().nth(1) {
         Some(file_name) => {
@@ -72,25 +72,18 @@ fn main() {
         .set_file_name_and_load_history(history_file)
         .unwrap();
 
-    let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
-
     loop {
-        let res = con.read_line(
-            "[prompt]$ ",
-            Some(Box::new(highlight_dodo)),
-            &mut completer,
-            Some(&mut *keymap),
-        );
+        let res = con.read_line("[prompt]$ ", Some(Box::new(highlight_dodo)));
 
         match res {
             Ok(res) => {
                 match res.as_str() {
                     "emacs" => {
-                        keymap = Box::new(keymap::Emacs::new());
+                        con.set_keymap(Box::new(keymap::Emacs::new()));
                         println!("emacs mode");
                     }
                     "vi" => {
-                        keymap = Box::new(keymap::Vi::new());
+                        con.set_keymap(Box::new(keymap::Vi::new()));
                         println!("vi mode");
                     }
                     "exit" | "" => {

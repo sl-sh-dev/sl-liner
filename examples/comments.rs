@@ -70,7 +70,7 @@ impl Completer for CommentCompleter {
 
 fn main() {
     let mut con = Context::new();
-    let mut completer = CommentCompleter { inner: None };
+    con.set_completer(Box::new(CommentCompleter { inner: None }));
 
     let history_file = match args().nth(1) {
         Some(file_name) => {
@@ -87,28 +87,21 @@ fn main() {
         .set_file_name_and_load_history(history_file)
         .unwrap();
 
-    let mut keymap: Box<dyn keymap::KeyMap> = Box::new(keymap::Emacs::new());
-
     loop {
         // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving liner, and the third is called on every key press
         // Basically highlight_dodo(read_line()), where on every keypress, the lambda is called
-        let res = con.read_line(
-            "[prompt]\n% ",
-            Some(Box::new(highlight_dodo)),
-            &mut completer,
-            Some(&mut *keymap),
-        );
+        let res = con.read_line("[prompt]\n% ", Some(Box::new(highlight_dodo)));
 
         // We are out of the lambda, and res is the result from read_line which is an Into<String>
         match res {
             Ok(res) => {
                 match res.as_str() {
                     "emacs" => {
-                        keymap = Box::new(keymap::Emacs::new());
+                        con.set_keymap(Box::new(keymap::Emacs::new()));
                         println!("emacs mode");
                     }
                     "vi" => {
-                        keymap = Box::new(keymap::Vi::new());
+                        con.set_keymap(Box::new(keymap::Vi::new()));
                         println!("vi mode");
                     }
                     "exit" | "" => {

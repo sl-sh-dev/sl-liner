@@ -41,8 +41,10 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
 
 pub struct Context {
     pub history: History,
-    pub word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
-    pub buf: String,
+    word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
+    buf: String,
+    handler: Box<dyn Completer>,
+    keymap: Box<dyn KeyMap>,
 }
 
 impl Default for Context {
@@ -57,7 +59,27 @@ impl Context {
             history: History::new(),
             word_divider_fn: Box::new(get_buffer_words),
             buf: String::with_capacity(512),
+            handler: Box::new(EmptyCompleter::new()),
+            keymap: Box::new(keymap::Emacs::new()),
         }
+    }
+
+    pub fn set_completer(&mut self, completer: Box<dyn Completer>) -> &mut Self {
+        self.handler = completer;
+        self
+    }
+
+    pub fn set_keymap(&mut self, keymap: Box<dyn KeyMap>) -> &mut Self {
+        self.keymap = keymap;
+        self
+    }
+
+    pub fn set_word_divider(
+        &mut self,
+        word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
+    ) -> &mut Self {
+        self.word_divider_fn = word_divider_fn;
+        self
     }
 
     /// Creates an `Editor` and feeds it keypresses from stdin until the line is entered.
@@ -68,10 +90,8 @@ impl Context {
         &mut self,
         prompt: P,
         f: Option<ColorClosure>,
-        handler: &mut dyn Completer,
-        keymap: Option<&mut dyn KeyMap>,
     ) -> io::Result<String> {
-        self.read_line_with_init_buffer(prompt, handler, f, Buffer::new(), keymap)
+        self.read_line_with_buffer(prompt, f, Buffer::new())
     }
 
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
@@ -88,42 +108,35 @@ impl Context {
     /// }
     ///
     /// let mut context = Context::new();
+    /// context.set_completer(Box::new(EmptyCompleter{}));
     /// let line =
-    ///     context.read_line_with_init_buffer("[prompt]$ ",
-    ///                                        &mut EmptyCompleter,
+    ///     context.read_line_with_buffer("[prompt]$ ",
     ///                                        Some(Box::new(|s| String::from(s))),
-    ///                                        "some initial buffer",
-    ///                                        None);
+    ///                                        "some initial buffer");
     /// ```
-    pub fn read_line_with_init_buffer<P: Into<String>, B: Into<Buffer>>(
+    pub fn read_line_with_buffer<P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
-        handler: &mut dyn Completer,
         f: Option<ColorClosure>,
         buffer: B,
-        keymap: Option<&mut dyn KeyMap>,
     ) -> io::Result<String> {
-        let mut stdout = stdout().into_raw_mode()?;
-        let ed = Editor::new_with_init_buffer(&mut stdout, prompt, f, self, buffer)?;
-        let mut km;
-        let keymap = match keymap {
-            Some(keymap) => keymap,
-            None => {
-                km = keymap::Emacs::new();
-                &mut km
-            }
-        };
-        Self::handle_keys(keymap, ed, handler)
-    }
-
-    fn handle_keys<'a>(
-        keymap: &mut dyn KeyMap,
-        mut ed: Editor<'a>,
-        handler: &mut dyn Completer,
-    ) -> io::Result<String> {
-        keymap.init(&mut ed);
+        let stdout = stdout();
+        let mut stdout = stdout.lock().into_raw_mode()?;
+        let mut ed = Editor::new_with_init_buffer(
+            &mut stdout,
+            prompt,
+            f,
+            &mut self.history,
+            &self.word_divider_fn,
+            &mut self.buf,
+            buffer,
+        )?;
+        self.keymap.init(&mut ed);
         for c in stdin().lock().keys() {
-            if keymap.handle_key(c.unwrap(), &mut ed, handler)? {
+            if self
+                .keymap
+                .handle_key(c.unwrap(), &mut ed, &mut *self.handler)?
+            {
                 break;
             }
         }
