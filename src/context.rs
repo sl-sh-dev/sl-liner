@@ -91,7 +91,7 @@ impl Context {
         prompt: P,
         f: Option<ColorClosure>,
     ) -> io::Result<String> {
-        self.read_line_with_buffer(prompt, f, Buffer::new())
+        self.edit_line(prompt, f, Buffer::new())
     }
 
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
@@ -110,11 +110,11 @@ impl Context {
     /// let mut context = Context::new();
     /// context.set_completer(Box::new(EmptyCompleter{}));
     /// let line =
-    ///     context.read_line_with_buffer("[prompt]$ ",
+    ///     context.edit_line("[prompt]$ ",
     ///                                        Some(Box::new(|s| String::from(s))),
     ///                                        "some initial buffer");
     /// ```
-    pub fn read_line_with_buffer<P: Into<String>, B: Into<Buffer>>(
+    pub fn edit_line<P: Into<String>, B: Into<Buffer>>(
         &mut self,
         prompt: P,
         f: Option<ColorClosure>,
