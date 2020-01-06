@@ -515,6 +515,10 @@ impl History {
             ))
         }
     }
+
+    pub fn get_context(&self, index: usize) -> &Option<Vec<String>> {
+        &self.buffers[index].context
+    }
 }
 
 impl Index<usize> for History {

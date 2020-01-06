@@ -197,9 +197,87 @@ fn test_shared_history() {
     h1.push(Buffer::from("a")).unwrap();
     h1.set_search_context(Some("/a/b/3".to_string()));
     h1.push(Buffer::from("a")).unwrap();
+    assert_eq!(h2.load_history(false).is_ok(), true);
+    assert_eq!(String::from(h2[1].clone()), "a".to_string());
+    assert_eq!(h1.get_context(3).as_ref().unwrap().len(), 5);
+    assert_eq!(
+        h1.get_context(3)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a".to_string()),
+        true
+    );
+    assert_eq!(
+        h1.get_context(3)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b".to_string()),
+        true
+    );
+    assert_eq!(
+        h1.get_context(3)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b/1".to_string()),
+        true
+    );
+    assert_eq!(
+        h1.get_context(3)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b/2".to_string()),
+        true
+    );
+    assert_eq!(
+        h1.get_context(3)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b/3".to_string()),
+        true
+    );
+    assert_eq!(h2.get_context(1).as_ref().unwrap().len(), 5);
+    assert_eq!(
+        h2.get_context(1)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a".to_string()),
+        true
+    );
+    assert_eq!(
+        h2.get_context(1)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b".to_string()),
+        true
+    );
+    assert_eq!(
+        h2.get_context(1)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b/1".to_string()),
+        true
+    );
+    assert_eq!(
+        h2.get_context(1)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b/2".to_string()),
+        true
+    );
+    assert_eq!(
+        h2.get_context(1)
+            .as_ref()
+            .unwrap()
+            .contains(&"/a/b/3".to_string()),
+        true
+    );
     h1.set_search_context(Some("/a/b/4".to_string()));
     h1.push(Buffer::from("a")).unwrap();
     h1.set_search_context(Some("/a/b/1".to_string()));
     h1.push(Buffer::from("a")).unwrap();
-    // XXX TODO- verify the contexts.
+    assert_eq!(h2.load_history(false).is_ok(), true);
+    assert_eq!(h1.get_context(3).as_ref().unwrap().len(), 1);
+    assert_eq!(h1.get_context(3).as_ref().unwrap().get(0).unwrap(), "*");
+    assert_eq!(h2.get_context(1).as_ref().unwrap().len(), 1);
+    assert_eq!(h2.get_context(1).as_ref().unwrap().get(0).unwrap(), "*");
 }
