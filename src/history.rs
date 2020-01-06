@@ -8,7 +8,6 @@ use std::{
     ops::Index,
     ops::IndexMut,
     path::Path,
-    //time::Duration,
 };
 
 const DEFAULT_MAX_SIZE: usize = 1000;
@@ -26,21 +25,11 @@ pub struct History {
     /// Store a filename to save history into; if None don't save history
     file_name: Option<String>,
     /// Maximal number of buffers stored in the memory
-    /// TODO: just make this public?
     max_buffers_size: usize,
     /// Maximal number of lines stored in the file
-    // TODO: just make this public?
     max_file_size: usize,
-    // TODO set from environment variable?
-    pub append_duplicate_entries: bool,
-    /// Append each entry to history file as entered?
-    pub inc_append: bool,
-    /// Share history across ion's with the same history file (combine with inc_append).
-    pub share: bool,
     /// Last filesize of history file, used to optimize history sharing.
-    pub file_size: u64,
-    /// Allow loading duplicate entries, need to know this for loading history files.
-    pub load_duplicates: bool,
+    file_size: u64,
     /// Writes between history compaction.
     compaction_writes: usize,
     /// How many "throwaway" history items to remove on a push.
@@ -48,9 +37,9 @@ pub struct History {
     /// When sharing history keep this many local items at top of history (session pushes).
     local_share: usize,
     /// Max number of contexts for an item before it is just * (wildcard).
-    pub max_contexts: usize,
+    max_contexts: usize,
     /// The current context to use for history searches.
-    pub search_context: Option<String>,
+    search_context: Option<String>,
 }
 
 impl Default for History {
@@ -67,17 +56,21 @@ impl History {
             file_name: None,
             max_buffers_size: DEFAULT_MAX_SIZE,
             max_file_size: DEFAULT_MAX_SIZE,
-            append_duplicate_entries: false,
-            inc_append: false,
-            share: false,
             file_size: 0,
-            load_duplicates: true,
             compaction_writes: 0,
             throwaways: 0,
             local_share: 0,
             max_contexts: 5,
             search_context: None,
         }
+    }
+
+    pub fn set_max_contexts(&mut self, n: usize) {
+        self.max_contexts = n;
+    }
+
+    pub fn set_search_context(&mut self, context: Option<String>) {
+        self.search_context = context;
     }
 
     /// Clears out the history.
@@ -87,13 +80,12 @@ impl History {
 
     /// Loads the history file from the saved path and appends it to the end of the history if append
     /// is true otherwise replace history.
-    pub fn load_history(&mut self, append: bool) -> io::Result<u64> {
+    pub fn load_history(&mut self, append: bool) -> io::Result<()> {
         if let Some(path) = self.file_name.clone() {
             let file_size = self.file_size;
             self.load_history_file_test(&path, file_size, append)
                 .map(|l| {
                     self.file_size = l;
-                    l
                 })
         } else {
             Err(io::Error::new(
@@ -129,61 +121,60 @@ impl History {
             self.clear_history();
         }
         if new_length != length {
-            let local_buffers: Option<Vec<HistoryItem>> =
-                if !append && self.share && self.local_share > 0 {
-                    let mut local_buffers = Vec::with_capacity(self.local_share);
-                    let mut i = 0;
-                    while let Some(buf) = self.buffers.pop_back() {
-                        local_buffers.push(buf);
-                        i += 1;
-                        if i == self.local_share {
-                            break;
-                        }
+            let local_buffers: Option<Vec<HistoryItem>> = if !append && self.local_share > 0 {
+                let mut local_buffers = Vec::with_capacity(self.local_share);
+                let mut i = 0;
+                while let Some(buf) = self.buffers.pop_back() {
+                    local_buffers.push(buf);
+                    i += 1;
+                    if i == self.local_share {
+                        break;
                     }
-                    Some(local_buffers)
-                } else {
-                    None
-                };
+                }
+                Some(local_buffers)
+            } else {
+                None
+            };
             if !append {
                 self.clear_history();
             }
-            History::load_buffers(&path, &mut self.buffers, self.max_contexts)?;
+            self.load_buffers(&path)?;
+            // Put any locally added history on "top" and take care of context.
             if let Some(mut local_buffers) = local_buffers {
                 while let Some(buf) = local_buffers.pop() {
-                    self.buffers.push_back(buf);
+                    self.add_buffer(buf);
                 }
             }
             self.truncate();
-            if !self.load_duplicates {
-                let mut tmp_buffers: Vec<HistoryItem> = Vec::with_capacity(self.buffers.len());
-                // Remove duplicates from loaded history if we do not want it.
-                while let Some(buf) = self.buffers.pop_back() {
-                    if let Some(mut old_context) =
-                        self.remove_duplicates(&buf.buffer.to_string()[..])
-                    {
-                        if let Some(context) = &buf.context {
-                            for ctx in context {
-                                if !old_context.contains(&ctx) {
-                                    old_context.push(ctx.to_string());
-                                }
-                            }
-                        }
-                    }
-                    tmp_buffers.push(buf);
-                }
-                while let Some(buf) = tmp_buffers.pop() {
-                    self.buffers.push_back(buf);
-                }
-            }
         }
         Ok(new_length)
     }
 
-    fn load_buffers<P: AsRef<Path>>(
-        path: &P,
-        buf: &mut VecDeque<HistoryItem>,
-        max_contexts: usize,
-    ) -> io::Result<String> {
+    fn add_buffer(&mut self, mut buf: HistoryItem) {
+        if let Some(mut old_context) = self.remove_duplicates(&buf.buffer.to_string()[..]) {
+            let mut has_wild = false;
+            if let Some(context) = &buf.context {
+                let astrik = "*".to_string();
+                if old_context.contains(&astrik) || context.contains(&astrik) {
+                    has_wild = true;
+                } else {
+                    for ctx in context {
+                        if !old_context.contains(&ctx) {
+                            old_context.push(ctx.to_string());
+                        }
+                    }
+                }
+            }
+            if old_context.len() > self.max_contexts || has_wild {
+                old_context.clear();
+                old_context.push("*".to_string());
+            }
+            buf.context = Some(old_context);
+        }
+        self.buffers.push_back(buf);
+    }
+
+    fn load_buffers<P: AsRef<Path>>(&mut self, path: &P) -> io::Result<()> {
         let path = path.as_ref();
         let file = if path.exists() {
             File::open(path)?
@@ -201,13 +192,13 @@ impl History {
                         for c in line[6..].split(':') {
                             cvec.push(c.to_string());
                         }
-                        if cvec.len() > max_contexts {
+                        if cvec.len() > self.max_contexts {
                             cvec.clear();
                             cvec.push("*".to_string());
                         }
                         context = if !cvec.is_empty() { Some(cvec) } else { None }
                     } else if !line.starts_with('#') {
-                        buf.push_back(HistoryItem {
+                        self.add_buffer(HistoryItem {
                             context,
                             buffer: Buffer::from(line),
                         });
@@ -217,40 +208,7 @@ impl History {
                 Err(_) => break,
             }
         }
-        Ok("Loaded buffers.".to_string())
-    }
-
-    /// Removes duplicates and trims a history file to max_file_size.
-    /// Primarily if inc_append is set without shared history.
-    /// Static because it should have no side effects on a history object.
-    fn deduplicate_history_file<P: AsRef<Path>>(
-        path: P,
-        max_file_size: usize,
-        max_contexts: usize,
-    ) -> io::Result<String> {
-        let mut buf: VecDeque<HistoryItem> = VecDeque::new();
-        History::load_buffers(&path, &mut buf, max_contexts)?;
-        let org_length = buf.len();
-        if buf.len() >= max_file_size {
-            let pop_out = buf.len() - max_file_size;
-            for _ in 0..pop_out {
-                buf.pop_front();
-            }
-        }
-        let mut tmp_buffers: Vec<HistoryItem> = Vec::with_capacity(buf.len());
-        // Remove duplicates from loaded history if we do not want it.
-        while let Some(line) = buf.pop_back() {
-            buf.retain(|buffer| buffer.buffer != line.buffer);
-            tmp_buffers.push(line);
-        }
-        while let Some(line) = tmp_buffers.pop() {
-            buf.push_back(line);
-        }
-
-        if org_length != buf.len() {
-            History::write_buffers(&buf, path)?;
-        }
-        Ok("De-duplicated history file.".to_string())
+        Ok(())
     }
 
     /// Set history file name and at the same time load the history.
@@ -321,32 +279,36 @@ impl History {
             self.throwaways -= 1;
         }
         self.local_share += 1;
-        if !self.append_duplicate_entries
-            && self.buffers.back().map(|b| b.buffer.to_string()) == Some(new_item.to_string())
+        let mut same_last_context = true;
+        if let Some(context) = &self.search_context {
+            if let Some(last_context) = self.buffers.back().map(|b| &b.context) {
+                if let Some(last_context) = last_context {
+                    same_last_context = last_context.contains(&context);
+                }
+            }
+        }
+        if self.buffers.back().map(|b| b.buffer.to_string()) == Some(new_item.to_string())
+            && same_last_context
         {
             return Ok(());
         }
 
         let item_str = String::from(new_item.clone());
-        let context = if !self.load_duplicates {
-            if let Some(mut old_context) = self.remove_duplicates(&item_str) {
-                if let Some(context) = &self.search_context {
-                    if !old_context.contains(context) {
-                        old_context.push(context.to_string());
-                    }
+        let context = if let Some(mut old_context) = self.remove_duplicates(&item_str) {
+            let mut has_wild = false;
+            if let Some(context) = &self.search_context {
+                let astrik = "*".to_string();
+                if old_context.contains(&astrik) || context.contains(&astrik) {
+                    has_wild = true;
+                } else if !old_context.contains(context) {
+                    old_context.push(context.to_string());
                 }
-                if old_context.len() > self.max_contexts {
-                    old_context.clear();
-                    old_context.push("*".to_string());
-                }
-                Some(old_context)
-            } else if let Some(context) = &self.search_context {
-                let mut c = Vec::new();
-                c.push(context.to_string());
-                Some(c)
-            } else {
-                None
             }
+            if old_context.len() > self.max_contexts || has_wild {
+                old_context.clear();
+                old_context.push("*".to_string());
+            }
+            Some(old_context)
         } else if let Some(context) = &self.search_context {
             let mut c = Vec::new();
             c.push(context.to_string());
@@ -355,7 +317,7 @@ impl History {
             None
         };
 
-        if self.inc_append && self.file_name.is_some() {
+        if self.file_name.is_some() {
             let file_name = self.file_name.clone().unwrap();
             if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
                 // Leave file size alone, if it is not right trigger a reload later.
@@ -363,36 +325,29 @@ impl History {
                 // Save the filesize after each append so we do not reload when we do not need to.
                 self.file_size += History::write_item(&mut file, &context, &item_str) as u64;
             }
-            if !self.load_duplicates {
-                // Do not want duplicates so periodically compact the history file.
-                self.compaction_writes += 1;
-                // Every 30 writes "compact" the history file by writing just in memory history.  This
-                // is to keep the history file clean and at a reasonable size (not much over max
-                // history size at it's worst).
-                if self.compaction_writes > 29 {
-                    // Not using shared history so just de-dup the file without messing with
-                    // our history.
-                    if let Some(file_name) = self.file_name.clone() {
-                        let _ = History::deduplicate_history_file(
-                            file_name,
-                            self.max_file_size,
-                            self.max_contexts,
-                        );
-                    }
-                    self.compaction_writes = 0;
-                }
-            } else {
-                // If allowing duplicates then no need for compaction.
-                self.compaction_writes = 1;
-            }
         }
         self.buffers.push_back(HistoryItem {
             context,
             buffer: new_item,
         });
-        //self.to_max_size();
         while self.buffers.len() > self.max_buffers_size {
             self.buffers.pop_front();
+        }
+        if self.file_name.is_some() {
+            let _ = self.load_history(false);
+            // Do not want duplicates so periodically compact the history file.
+            self.compaction_writes += 1;
+            // Every 30 writes "compact" the history file by writing just in memory history.  This
+            // is to keep the history file clean and at a reasonable size (not much over max
+            // history size at it's worst).
+            if self.compaction_writes > 29 {
+                // Not using shared history so just de-dup the file without messing with
+                // our history.
+                if self.file_name.is_some() {
+                    let _ = self.commit_to_file();
+                }
+                self.compaction_writes = 0;
+            }
         }
         Ok(())
     }
@@ -439,7 +394,7 @@ impl History {
     }
 
     /// Go through the history and try to find an index (newest to oldest) which starts the same
-    /// as the new buffer given to this function as argument.  Starts at curr_position.  Does no wrap.
+    /// as the new buffer given to this function as argument.  Starts at curr_position.  Does not wrap.
     pub fn get_newest_match(
         &self,
         curr_position: Option<usize>,
@@ -535,35 +490,29 @@ impl History {
         ret
     }
 
-    fn write_buffers<P: AsRef<Path>>(
-        buffers: &VecDeque<HistoryItem>,
-        path: P,
-    ) -> io::Result<String> {
+    fn write_buffers<P: AsRef<Path>>(buffers: &VecDeque<HistoryItem>, path: P) -> io::Result<()> {
         let mut file = BufWriter::new(File::create(&path)?);
 
         // Write the commands to the history file.
         for command in buffers.iter().cloned() {
             let _ = History::write_item(&mut file, &command.context, &String::from(command.buffer));
         }
-        Ok("Wrote history to file.".to_string())
+        Ok(())
     }
 
-    fn overwrite_history<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
+    pub fn commit_to_file_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<()> {
         self.truncate();
         History::write_buffers(&self.buffers, path)
     }
 
-    pub fn commit_to_file_path<P: AsRef<Path>>(&mut self, path: P) -> io::Result<String> {
-        if self.inc_append {
-            Ok("Nothing to commit.".to_string())
-        } else {
-            self.overwrite_history(path)
-        }
-    }
-
-    pub fn commit_to_file(&mut self) {
+    pub fn commit_to_file(&mut self) -> io::Result<()> {
         if let Some(file_name) = self.file_name.clone() {
-            let _ = self.commit_to_file_path(file_name);
+            self.commit_to_file_path(file_name)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "History filename not set, can not commit!",
+            ))
         }
     }
 }

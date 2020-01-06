@@ -118,5 +118,7 @@ fn main() {
         }
     }
     // Ensure that all writes to the history file are written before exiting.
-    con.history.commit_to_file();
+    if let Err(err) = con.history.commit_to_file() {
+        println!("Error saving history file: {}", err);
+    }
 }

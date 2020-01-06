@@ -284,8 +284,7 @@ impl<'a> Editor<'a> {
     }
 
     fn freshen_history(&mut self) {
-        if self.history.share && !self.history_fresh {
-            let _ = self.history.load_history(false);
+        if !self.history_fresh && self.history.load_history(false).is_ok() {
             self.history_fresh = true;
         }
     }
