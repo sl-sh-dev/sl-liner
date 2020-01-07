@@ -7,7 +7,7 @@ use std::io;
 use std::mem::replace;
 
 use liner::keymap;
-use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter};
+use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
 use regex::Regex;
 use termion::color;
 
@@ -73,7 +73,7 @@ fn main() {
         .unwrap();
 
     loop {
-        let res = con.read_line("[prompt]$ ", Some(Box::new(highlight_dodo)));
+        let res = con.read_line(Prompt::from("[prompt]$ "), Some(Box::new(highlight_dodo)));
 
         match res {
             Ok(res) => {

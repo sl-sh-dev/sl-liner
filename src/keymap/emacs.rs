@@ -19,7 +19,7 @@ use crate::KeyMap;
 /// }
 ///
 /// let mut context = Context::new();
-/// let res = context.read_line("[prompt]$ ", None);
+/// let res = context.read_line(Prompt::from("[prompt]$ "), None);
 /// ```
 #[derive(Default, Clone)]
 pub struct Emacs {
@@ -181,6 +181,7 @@ fn emacs_move_word(ed: &mut Editor, direction: EmacsMoveDir) -> io::Result<()> {
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
+    use crate::editor::Prompt;
     use crate::{Completer, Editor, History, KeyMap};
     use termion::event::Key;
 
@@ -213,7 +214,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &mut words,
@@ -238,7 +239,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &mut words,
@@ -264,7 +265,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &mut words,
@@ -294,7 +295,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &mut words,
@@ -319,7 +320,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &mut words,

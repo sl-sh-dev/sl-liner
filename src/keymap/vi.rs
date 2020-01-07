@@ -322,7 +322,7 @@ fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<u
 ///
 /// let mut context = Context::new();
 /// context.set_keymap(Box::new(keymap::Vi::new()));
-/// let res = context.read_line("[prompt]$ ", None);
+/// let res = context.read_line(Prompt::from("[prompt]$ "), None);
 /// ```
 #[derive(Clone)]
 pub struct Vi {
@@ -374,31 +374,53 @@ impl Vi {
         self.mode_stack.mode()
     }
 
-    fn set_mode<'a>(&mut self, mode: Mode, ed: &mut Editor<'a>) {
+    fn set_mode<'a>(&mut self, mode: Mode, ed: &mut Editor<'a>) -> io::Result<()> {
         use self::Mode::*;
-        self.set_mode_preserve_last(mode, ed);
+        self.set_mode_preserve_last(mode, ed)?;
         if mode == Insert {
             self.last_count = 0;
             self.last_command.clear();
         }
+        Ok(())
     }
 
-    fn set_mode_preserve_last<'a>(&mut self, mode: Mode, ed: &mut Editor<'a>) {
+    fn set_editor_mode<'a>(&self, ed: &mut Editor<'a>) -> io::Result<()> {
+        use crate::editor::ViPromptMode;
+        use Mode::*;
+        if let Some(mode) = match self.mode() {
+            Insert => Some(ViPromptMode::Insert),
+            Normal => Some(ViPromptMode::Normal),
+            _ => None, // Leave the last one
+        } {
+            ed.set_vi_mode(mode);
+            ed.display()
+        } else {
+            Ok(())
+        }
+    }
+
+    fn set_mode_preserve_last<'a>(
+        &mut self,
+        mode: Mode,
+        mut ed: &mut Editor<'a>,
+    ) -> io::Result<()> {
         use self::Mode::*;
 
         ed.no_eol = mode == Normal;
         self.movement_reset = mode != Insert;
         self.mode_stack.push(mode);
+        self.set_editor_mode(&mut ed)?;
 
         if mode == Insert || mode == Tilde {
             ed.current_buffer_mut().start_undo_group();
         }
+        Ok(())
     }
 
     fn pop_mode_after_movement<'a>(
         &mut self,
         move_type: MoveType,
-        ed: &mut Editor<'a>,
+        mut ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         use self::Mode::*;
         use self::MoveType::*;
@@ -438,10 +460,10 @@ impl Vi {
             self.count = 0;
         }
 
-        Ok(())
+        self.set_editor_mode(&mut ed)
     }
 
-    fn pop_mode<'a>(&mut self, ed: &mut Editor<'a>) {
+    fn pop_mode<'a>(&mut self, mut ed: &mut Editor<'a>) -> io::Result<()> {
         use self::Mode::*;
 
         let last_mode = self.mode_stack.pop();
@@ -455,13 +477,15 @@ impl Vi {
         if last_mode == Tilde {
             ed.display().unwrap();
         }
+        self.set_editor_mode(&mut ed)
     }
 
     /// Return to normal mode.
-    fn normal_mode_abort<'a>(&mut self, ed: &mut Editor<'a>) {
+    fn normal_mode_abort<'a>(&mut self, mut ed: &mut Editor<'a>) -> io::Result<()> {
         self.mode_stack.clear();
         ed.no_eol = true;
         self.count = 0;
+        self.set_editor_mode(&mut ed)
     }
 
     /// When doing a move, 0 should behave the same as 1 as far as the count goes.
@@ -541,8 +565,7 @@ impl Vi {
                 }
                 // cursor moves to the left when switching from insert to normal mode
                 ed.move_cursor_left(1)?;
-                self.pop_mode(ed);
-                Ok(())
+                self.pop_mode(ed)
             }
             Key::Char(c) => {
                 let in_ms = if let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) {
@@ -633,37 +656,33 @@ impl Vi {
             }
             Key::Char('i') => {
                 self.last_insert = Some(key);
-                self.set_mode(Insert, ed);
-                Ok(())
+                self.set_mode(Insert, ed)
             }
             Key::Char('a') => {
                 self.last_insert = Some(key);
-                self.set_mode(Insert, ed);
+                self.set_mode(Insert, ed)?;
                 ed.move_cursor_right(1)
             }
             Key::Char('A') => {
                 self.last_insert = Some(key);
-                self.set_mode(Insert, ed);
+                self.set_mode(Insert, ed)?;
                 ed.move_cursor_to_end_of_line()
             }
             Key::Char('I') => {
                 self.last_insert = Some(key);
-                self.set_mode(Insert, ed);
+                self.set_mode(Insert, ed)?;
                 ed.move_cursor_to_start_of_line()
             }
             Key::Char('s') => {
                 self.last_insert = Some(key);
-                self.set_mode(Insert, ed);
+                self.set_mode(Insert, ed)?;
                 let pos = ed.cursor() + self.move_count_right(ed);
                 ed.delete_until(pos)?;
                 self.last_count = self.count;
                 self.count = 0;
                 Ok(())
             }
-            Key::Char('r') => {
-                self.set_mode(Mode::Replace, ed);
-                Ok(())
-            }
+            Key::Char('r') => self.set_mode(Mode::Replace, ed),
             Key::Char('d') | Key::Char('c') => {
                 self.current_command.clear();
 
@@ -675,11 +694,11 @@ impl Vi {
                     // handle special 'c' key stuff
                     self.current_insert = Some(key);
                     self.current_command.clear();
-                    self.set_mode(Insert, ed);
+                    self.set_mode(Insert, ed)?;
                 }
 
                 let start_pos = ed.cursor();
-                self.set_mode(Mode::Delete(start_pos), ed);
+                self.set_mode(Mode::Delete(start_pos), ed)?;
                 self.secondary_count = self.count;
                 self.count = 0;
                 Ok(())
@@ -702,7 +721,7 @@ impl Vi {
                 self.count = 0;
                 self.last_count = 0;
 
-                self.set_mode_preserve_last(Insert, ed);
+                self.set_mode_preserve_last(Insert, ed)?;
                 ed.delete_all_after_cursor()
             }
             Key::Char('.') => {
@@ -735,22 +754,10 @@ impl Vi {
                 ed.move_down()?;
                 self.pop_mode_after_movement(Exclusive, ed)
             }
-            Key::Char('t') => {
-                self.set_mode(Mode::MoveToChar(RightUntil), ed);
-                Ok(())
-            }
-            Key::Char('T') => {
-                self.set_mode(Mode::MoveToChar(LeftUntil), ed);
-                Ok(())
-            }
-            Key::Char('f') => {
-                self.set_mode(Mode::MoveToChar(RightAt), ed);
-                Ok(())
-            }
-            Key::Char('F') => {
-                self.set_mode(Mode::MoveToChar(LeftAt), ed);
-                Ok(())
-            }
+            Key::Char('t') => self.set_mode(Mode::MoveToChar(RightUntil), ed),
+            Key::Char('T') => self.set_mode(Mode::MoveToChar(LeftUntil), ed),
+            Key::Char('f') => self.set_mode(Mode::MoveToChar(RightAt), ed),
+            Key::Char('F') => self.set_mode(Mode::MoveToChar(LeftAt), ed),
             Key::Char(';') => self.handle_key_move_to_char(key, Repeat, ed),
             Key::Char(',') => self.handle_key_move_to_char(key, ReverseRepeat, ed),
             Key::Char('w') => {
@@ -783,10 +790,7 @@ impl Vi {
                 move_word_ws_back(ed, count)?;
                 self.pop_mode_after_movement(Exclusive, ed)
             }
-            Key::Char('g') => {
-                self.set_mode(Mode::G, ed);
-                Ok(())
-            }
+            Key::Char('g') => self.set_mode(Mode::G, ed),
             // if count is 0, 0 should move to start of line
             Key::Char('0') if self.count == 0 => {
                 ed.move_cursor_to_start_of_line()?;
@@ -821,7 +825,7 @@ impl Vi {
                 self.last_command.push(key);
                 self.last_count = self.count;
 
-                self.set_mode(Tilde, ed);
+                self.set_mode(Tilde, ed)?;
                 for _ in 0..self.move_count_right(ed) {
                     let c = ed.current_buffer().char_after(ed.cursor()).unwrap();
                     if c.is_lowercase() {
@@ -838,7 +842,7 @@ impl Vi {
                         ed.move_cursor_right(1)?;
                     }
                 }
-                self.pop_mode(ed);
+                self.pop_mode(ed)?;
                 Ok(())
             }
             Key::Char('u') => {
@@ -888,11 +892,11 @@ impl Vi {
 
                     ed.move_cursor_left(1)?;
                 }
-                self.pop_mode(ed);
+                self.pop_mode(ed)?;
             }
             // not a char
             _ => {
-                self.normal_mode_abort(ed);
+                self.normal_mode_abort(ed)?;
             }
         };
 
@@ -939,14 +943,10 @@ impl Vi {
                 ed.delete_all_after_cursor()?;
 
                 // return to the previous mode
-                self.pop_mode(ed);
-                Ok(())
+                self.pop_mode(ed)
             }
             // not a delete or change command, back to normal mode
-            _ => {
-                self.normal_mode_abort(ed);
-                Ok(())
-            }
+            _ => self.normal_mode_abort(ed),
         }
     }
 
@@ -972,8 +972,7 @@ impl Vi {
             (_, ReverseRepeat, Some((c, RightAt))) => (Key::Char(c), LeftAt),
             // repeat with no last_char_movement, invalid
             (_, Repeat, None) | (_, ReverseRepeat, None) => {
-                self.normal_mode_abort(ed);
-                return Ok(());
+                return self.normal_mode_abort(ed);
             }
             // pass valid keys through as is
             (Key::Char(c), _, _) => {
@@ -984,8 +983,7 @@ impl Vi {
             }
             // all other combinations are invalid, abort
             _ => {
-                self.normal_mode_abort(ed);
-                return Ok(());
+                return self.normal_mode_abort(ed);
             }
         };
 
@@ -1050,10 +1048,7 @@ impl Vi {
             }
 
             // not a supported command
-            _ => {
-                self.normal_mode_abort(ed);
-                Ok(())
-            }
+            _ => self.normal_mode_abort(ed),
         };
 
         self.count = 0;
@@ -1062,7 +1057,7 @@ impl Vi {
 }
 
 impl KeyMap for Vi {
-    fn init<'a>(&mut self, ed: &mut Editor<'a>) {
+    fn init<'a>(&mut self, mut ed: &mut Editor<'a>) {
         self.mode_stack.clear();
         self.mode_stack.push(Mode::Insert);
         self.current_command.clear();
@@ -1077,6 +1072,7 @@ impl KeyMap for Vi {
         self.last_char_movement = None;
         // since we start in insert mode, we need to start an undo group
         ed.current_buffer_mut().start_undo_group();
+        let _ = self.set_editor_mode(&mut ed);
     }
 
     fn handle_key_core<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
@@ -1096,6 +1092,7 @@ impl KeyMap for Vi {
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
+    use crate::editor::Prompt;
     use crate::{Buffer, Completer, Editor, History, KeyMap};
     use termion::event::Key;
     use termion::event::Key::*;
@@ -1129,7 +1126,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1155,7 +1152,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1181,7 +1178,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1206,7 +1203,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1242,7 +1239,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1280,7 +1277,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1312,7 +1309,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1356,7 +1353,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1388,7 +1385,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1421,7 +1418,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1487,7 +1484,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1515,7 +1512,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1550,7 +1547,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1578,7 +1575,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1619,7 +1616,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1654,7 +1651,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1750,7 +1747,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1841,7 +1838,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1866,7 +1863,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1904,7 +1901,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1931,7 +1928,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1958,7 +1955,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -1986,7 +1983,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2023,7 +2020,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2060,7 +2057,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2101,7 +2098,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2128,7 +2125,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2166,7 +2163,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2192,7 +2189,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2222,7 +2219,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2253,7 +2250,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2279,7 +2276,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2311,7 +2308,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2343,7 +2340,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2374,7 +2371,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2414,7 +2411,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2456,7 +2453,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2494,7 +2491,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2534,7 +2531,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2564,7 +2561,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2594,7 +2591,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2623,7 +2620,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2649,7 +2646,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2689,7 +2686,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2727,7 +2724,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2752,7 +2749,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2782,7 +2779,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2812,7 +2809,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2842,7 +2839,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2872,7 +2869,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2901,7 +2898,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2927,7 +2924,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2957,7 +2954,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -2987,7 +2984,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3024,7 +3021,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3051,7 +3048,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3082,7 +3079,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3113,7 +3110,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3144,7 +3141,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3175,7 +3172,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3202,7 +3199,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3233,7 +3230,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3259,7 +3256,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3286,7 +3283,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3317,7 +3314,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3352,7 +3349,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3386,7 +3383,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3418,7 +3415,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3454,7 +3451,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3526,7 +3523,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3575,7 +3572,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3605,7 +3602,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3635,7 +3632,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3673,7 +3670,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3702,7 +3699,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3731,7 +3728,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3761,7 +3758,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3803,7 +3800,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3845,7 +3842,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3883,7 +3880,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3913,7 +3910,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3953,7 +3950,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -3995,7 +3992,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4039,7 +4036,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4080,7 +4077,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4121,7 +4118,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4167,7 +4164,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4195,7 +4192,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4224,7 +4221,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4252,7 +4249,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4281,7 +4278,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4311,7 +4308,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4350,7 +4347,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4378,7 +4375,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4406,7 +4403,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4434,7 +4431,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4462,7 +4459,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4490,7 +4487,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4520,7 +4517,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4558,7 +4555,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4578,7 +4575,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4598,7 +4595,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4618,7 +4615,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4638,7 +4635,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4661,7 +4658,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4684,7 +4681,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4707,7 +4704,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4727,7 +4724,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4755,7 +4752,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4796,7 +4793,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4838,7 +4835,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4876,7 +4873,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4916,7 +4913,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -4970,7 +4967,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5012,7 +5009,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5059,7 +5056,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5088,7 +5085,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5135,7 +5132,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5176,7 +5173,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5215,7 +5212,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5262,7 +5259,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5290,7 +5287,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5314,7 +5311,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5338,7 +5335,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5366,7 +5363,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5390,7 +5387,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5418,7 +5415,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5446,7 +5443,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5474,7 +5471,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -5499,7 +5496,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,

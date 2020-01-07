@@ -80,6 +80,7 @@ pub use emacs::Emacs;
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
+    use crate::editor::Prompt;
     use crate::History;
     use std::io::ErrorKind;
     use termion::event::Key::*;
@@ -110,7 +111,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -133,7 +134,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
@@ -156,7 +157,7 @@ mod tests {
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
-            "prompt".to_owned(),
+            Prompt::from("prompt"),
             None,
             &mut history,
             &words,
