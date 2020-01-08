@@ -2,7 +2,6 @@ use std::cmp;
 use std::cmp::Ordering;
 use std::fmt::{self, Write};
 use std::io;
-use strip_ansi_escapes::strip;
 use termion::{self, clear, color, cursor};
 
 use super::complete::Completer;
@@ -12,100 +11,44 @@ use crate::util;
 use crate::Buffer;
 use crate::History;
 
-/// Indicates the mode that should be currently displayed in the propmpt.
-#[derive(Clone, Copy, Debug)]
-pub enum ViPromptMode {
-    Normal,
-    Insert,
-}
-
-/// Holds the current mode and the indicators for all modes.
-#[derive(Debug)]
-pub struct ViStatus {
-    pub mode: ViPromptMode,
-    normal: String,
-    insert: String,
-}
-
-impl ViStatus {
-    pub fn new<N, I>(mode: ViPromptMode, normal: N, insert: I) -> Self
-    where
-        N: Into<String>,
-        I: Into<String>,
-    {
-        Self {
-            mode,
-            normal: normal.into(),
-            insert: insert.into(),
-        }
-    }
-
-    pub fn as_str(&self) -> &str {
-        use ViPromptMode::*;
-        match self.mode {
-            Normal => &self.normal,
-            Insert => &self.insert,
-        }
-    }
-}
-
-impl Default for ViStatus {
-    fn default() -> Self {
-        ViStatus {
-            mode: ViPromptMode::Insert,
-            normal: String::from("[N] "),
-            insert: String::from("[I] "),
-        }
-    }
-}
-
-impl fmt::Display for ViStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ViPromptMode::*;
-        match self.mode {
-            Normal => write!(f, "{}", self.normal),
-            Insert => write!(f, "{}", self.insert),
-        }
-    }
-}
-
 /// User-defined prompt.
 ///
 /// # Examples
 ///
-/// For Emacs mode, you simply define a static prompt that holds a string.
+/// You simply define a static prompt that holds a string.
+/// The prefix and suffix fields are intended for keybinds to change the
+/// prompt (ie the mode in vi).
 /// ```
 /// # use liner::Prompt;
 /// let prompt = Prompt::from("prompt$ ");
 /// assert_eq!(&prompt.to_string(), "prompt$ ");
 /// ```
-///
-/// You can also display Vi mode indicator in your prompt.
-/// ```
-/// # use liner::{Prompt, ViStatus, ViPromptMode};
-/// let prompt = Prompt {
-///     prompt: "prompt$ ".into(),
-///     vi_status: Some(ViStatus::default()),
-/// };
-/// assert_eq!(&prompt.to_string(), "[I] prompt$ ");
-/// ```
 pub struct Prompt {
+    pub prefix: Option<String>,
     pub prompt: String,
-    pub vi_status: Option<ViStatus>,
+    pub suffix: Option<String>,
 }
 
 impl Prompt {
     /// Constructs a static prompt.
     pub fn from<P: Into<String>>(prompt: P) -> Self {
         Prompt {
+            prefix: None,
             prompt: prompt.into(),
-            vi_status: None,
+            suffix: None,
         }
     }
 
     pub fn prefix(&self) -> &str {
-        match &self.vi_status {
-            Some(status) => status.as_str(),
+        match &self.prefix {
+            Some(prefix) => prefix,
+            None => "",
+        }
+    }
+
+    pub fn suffix(&self) -> &str {
+        match &self.suffix {
+            Some(suffix) => suffix,
             None => "",
         }
     }
@@ -113,10 +56,7 @@ impl Prompt {
 
 impl fmt::Display for Prompt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(status) = &self.vi_status {
-            write!(f, "{}", status)?
-        }
-        write!(f, "{}", self.prompt)
+        write!(f, "{}{}{}", self.prefix(), self.prompt, self.suffix())
     }
 }
 
@@ -278,23 +218,6 @@ impl<'a> Editor<'a> {
             out.write_all(b" ")?; // if the line is not empty, overflow on next line
         }
         out.write_all("\r".as_bytes())?;
-        let Prompt {
-            mut prompt,
-            vi_status,
-        } = prompt;
-        for (i, pline) in prompt.split('\n').enumerate() {
-            if i > 0 {
-                out.write_all("\r\n".as_bytes())?;
-            }
-            out.write_all(pline.as_bytes())?;
-        }
-        if let Some(index) = prompt.rfind('\n') {
-            prompt = prompt.split_at(index + 1).1.into()
-        }
-        if let Some(index) = prompt.rfind('\n') {
-            prompt = prompt.split_at(index + 1).1.into()
-        }
-        let prompt = Prompt { prompt, vi_status };
         let mut ed = Editor {
             prompt,
             cursor: 0,
@@ -353,15 +276,6 @@ impl<'a> Editor<'a> {
         let words = word_fn(cur_buf!(self));
         let pos = CursorPosition::get(self.cursor, &words);
         (words, pos)
-    }
-
-    pub fn set_prompt(&mut self, mut prompt: Prompt) {
-        if let Some(passed_status) = &mut prompt.vi_status {
-            if let Some(old_status) = &self.prompt.vi_status {
-                passed_status.mode = old_status.mode;
-            }
-        }
-        self.prompt = prompt;
     }
 
     pub fn history(&mut self) -> &mut History {
@@ -981,7 +895,7 @@ impl<'a> Editor<'a> {
     }
 
     /// Override the prompt for incremental search if needed.
-    fn search_prompt(&mut self) -> (String, usize) {
+    fn search_prompt(&mut self) -> String {
         if self.is_search() {
             // If we are searching override prompt to search prompt.
             let (hplace, color) = if self.history_subset_index.is_empty() {
@@ -993,20 +907,19 @@ impl<'a> Editor<'a> {
                 )
             };
             let prefix = self.prompt.prefix();
-            (
-                format!(
-                    "{}(search)'{}{}{}` ({}/{}): ",
-                    &prefix,
-                    color,
-                    self.current_buffer(),
-                    color::Reset.fg_str(),
-                    hplace,
-                    self.history_subset_index.len()
-                ),
-                strip(&prefix).unwrap().len() + 9,
+            let suffix = self.prompt.suffix();
+            format!(
+                "{}(search)'{}{}{}` ({}/{}):{} ",
+                &prefix,
+                color,
+                self.current_buffer(),
+                color::Reset.fg_str(),
+                hplace,
+                self.history_subset_index.len(),
+                &suffix
             )
         } else {
-            (self.prompt.to_string(), 0)
+            self.prompt.to_string()
         }
     }
 
@@ -1089,7 +1002,7 @@ impl<'a> Editor<'a> {
             total
         }
 
-        let (prompt, rev_prompt_width) = self.search_prompt();
+        let prompt = self.search_prompt();
 
         let terminal_width = util::terminal_width()?;
         let prompt_width = util::last_prompt_line_width(&prompt);
@@ -1123,11 +1036,8 @@ impl<'a> Editor<'a> {
 
         // Total number of terminal spaces taken up by prompt and buffer
         let new_total_width = calc_width(prompt_width, &buf_widths, terminal_width);
-        let new_total_width_to_cursor = if self.is_search() {
-            calc_width(rev_prompt_width, &buf_widths_to_cursor, terminal_width)
-        } else {
-            calc_width(prompt_width, &buf_widths_to_cursor, terminal_width)
-        };
+        let new_total_width_to_cursor =
+            calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
 
         let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
@@ -1218,14 +1128,16 @@ impl<'a> Editor<'a> {
         self._display(true)
     }
 
-    /// Modifies the prompt to reflect the Vi mode.
-    ///
-    /// This operation will be ignored if a static prompt is used, as mode changes will have no
-    /// side effect.
-    pub fn set_vi_mode(&mut self, mode: ViPromptMode) {
-        if let Some(status) = &mut self.prompt.vi_status {
-            status.mode = mode;
-        }
+    /// Modifies the prompt prefix.
+    /// Useful to reflect a keybinding mode (vi insert/normal for instance).
+    pub fn set_prompt_prefix<P: Into<String>>(&mut self, prefix: P) {
+        self.prompt.prefix = Some(prefix.into());
+    }
+
+    /// Modifies the prompt suffix.
+    /// Useful to reflect a keybinding mode (vi insert/normal for instance).
+    pub fn set_prompt_suffix<S: Into<String>>(&mut self, suffix: S) {
+        self.prompt.suffix = Some(suffix.into());
     }
 }
 

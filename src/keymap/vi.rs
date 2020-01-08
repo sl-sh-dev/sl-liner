@@ -338,6 +338,10 @@ pub struct Vi {
     last_char_movement: Option<(char, CharMovement)>,
     esc_sequence: Option<(char, char, u32)>,
     last_insert_ms: u128,
+    normal_prompt_prefix: Option<String>,
+    normal_prompt_suffix: Option<String>,
+    insert_prompt_prefix: Option<String>,
+    insert_prompt_suffix: Option<String>,
 }
 
 impl Default for Vi {
@@ -356,6 +360,10 @@ impl Default for Vi {
             last_char_movement: None,
             esc_sequence: None,
             last_insert_ms: 0,
+            normal_prompt_prefix: None,
+            normal_prompt_suffix: None,
+            insert_prompt_prefix: None,
+            insert_prompt_suffix: None,
         }
     }
 }
@@ -363,6 +371,22 @@ impl Default for Vi {
 impl Vi {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn set_normal_prompt_prefix(&mut self, prefix: Option<String>) {
+        self.normal_prompt_prefix = prefix;
+    }
+
+    pub fn set_normal_prompt_suffix(&mut self, suffix: Option<String>) {
+        self.normal_prompt_suffix = suffix;
+    }
+
+    pub fn set_insert_prompt_prefix(&mut self, prefix: Option<String>) {
+        self.insert_prompt_prefix = prefix;
+    }
+
+    pub fn set_insert_prompt_suffix(&mut self, suffix: Option<String>) {
+        self.insert_prompt_suffix = suffix;
     }
 
     pub fn set_esc_sequence(&mut self, key1: char, key2: char, timeout_ms: u32) {
@@ -385,18 +409,27 @@ impl Vi {
     }
 
     fn set_editor_mode<'a>(&self, ed: &mut Editor<'a>) -> io::Result<()> {
-        use crate::editor::ViPromptMode;
         use Mode::*;
-        if let Some(mode) = match self.mode() {
-            Insert => Some(ViPromptMode::Insert),
-            Normal => Some(ViPromptMode::Normal),
-            _ => None, // Leave the last one
-        } {
-            ed.set_vi_mode(mode);
-            ed.display()
-        } else {
-            Ok(())
+        match self.mode() {
+            Insert => {
+                if let Some(prefix) = &self.insert_prompt_prefix {
+                    ed.set_prompt_prefix(prefix);
+                }
+                if let Some(suffix) = &self.insert_prompt_suffix {
+                    ed.set_prompt_suffix(suffix);
+                }
+            }
+            Normal => {
+                if let Some(prefix) = &self.normal_prompt_prefix {
+                    ed.set_prompt_prefix(prefix);
+                }
+                if let Some(suffix) = &self.normal_prompt_suffix {
+                    ed.set_prompt_suffix(suffix);
+                }
+            }
+            _ => {} // Leave the last one
         }
+        ed.display()
     }
 
     fn set_mode_preserve_last<'a>(
