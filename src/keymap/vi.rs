@@ -414,17 +414,25 @@ impl Vi {
             Insert => {
                 if let Some(prefix) = &self.insert_prompt_prefix {
                     ed.set_prompt_prefix(prefix);
+                } else {
+                    ed.clear_prompt_prefix();
                 }
                 if let Some(suffix) = &self.insert_prompt_suffix {
                     ed.set_prompt_suffix(suffix);
+                } else {
+                    ed.clear_prompt_suffix();
                 }
             }
             Normal => {
                 if let Some(prefix) = &self.normal_prompt_prefix {
                     ed.set_prompt_prefix(prefix);
+                } else {
+                    ed.clear_prompt_prefix();
                 }
                 if let Some(suffix) = &self.normal_prompt_suffix {
                     ed.set_prompt_suffix(suffix);
+                } else {
+                    ed.clear_prompt_suffix();
                 }
             }
             _ => {} // Leave the last one

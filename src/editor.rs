@@ -1134,10 +1134,22 @@ impl<'a> Editor<'a> {
         self.prompt.prefix = Some(prefix.into());
     }
 
+    /// Clears the prompt prefix.
+    /// Useful to reflect a keybinding mode (vi insert/normal for instance).
+    pub fn clear_prompt_prefix(&mut self) {
+        self.prompt.prefix = None;
+    }
+
     /// Modifies the prompt suffix.
     /// Useful to reflect a keybinding mode (vi insert/normal for instance).
     pub fn set_prompt_suffix<S: Into<String>>(&mut self, suffix: S) {
         self.prompt.suffix = Some(suffix.into());
+    }
+
+    /// Clears the prompt prefix.
+    /// Useful to reflect a keybinding mode (vi insert/normal for instance).
+    pub fn clear_prompt_suffix(&mut self) {
+        self.prompt.suffix = None;
     }
 }
 
