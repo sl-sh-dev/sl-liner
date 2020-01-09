@@ -218,6 +218,25 @@ impl<'a> Editor<'a> {
             out.write_all(b" ")?; // if the line is not empty, overflow on next line
         }
         out.write_all("\r".as_bytes())?;
+        let Prompt {
+            prefix,
+            mut prompt,
+            suffix,
+        } = prompt;
+        for (i, pline) in prompt.split('\n').enumerate() {
+            if i > 0 {
+                out.write_all("\r\n".as_bytes())?;
+            }
+            out.write_all(pline.as_bytes())?;
+        }
+        if let Some(index) = prompt.rfind('\n') {
+            prompt = prompt.split_at(index + 1).1.into()
+        }
+        let prompt = Prompt {
+            prefix,
+            prompt,
+            suffix,
+        };
         let mut ed = Editor {
             prompt,
             cursor: 0,
