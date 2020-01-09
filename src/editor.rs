@@ -1086,10 +1086,6 @@ impl<'a> Editor<'a> {
 
         self.show_lines(show_autosuggest, prompt_width)?;
 
-        if self.is_currently_showing_autosuggestion() || self.is_search() {
-            write!(&mut self.buf, "{}", color::Reset.fg_str()).map_err(fmt_io_err)?;
-        }
-
         // at the end of the line, move the cursor down a line
         if new_total_width % terminal_width == 0 {
             self.buf.push_str("\r\n");
@@ -1129,6 +1125,13 @@ impl<'a> Editor<'a> {
 
         {
             let out = &mut self.out;
+            write!(
+                &mut self.buf,
+                "{}{}",
+                color::Reset.fg_str(),
+                color::Reset.bg_str()
+            )
+            .map_err(fmt_io_err)?;
             out.write_all(self.buf.as_bytes())?;
             self.buf.clear();
             out.flush()
