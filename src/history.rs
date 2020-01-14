@@ -24,10 +24,8 @@ pub struct History {
     buffers: VecDeque<HistoryItem>,
     /// Store a filename to save history into; if None don't save history
     file_name: Option<String>,
-    /// Maximal number of buffers stored in the memory
-    max_buffers_size: usize,
-    /// Maximal number of lines stored in the file
-    max_file_size: usize,
+    /// Maximum number of history items
+    max_history_size: usize,
     /// Last filesize of history file, used to optimize history sharing.
     file_size: u64,
     /// Writes between history compaction.
@@ -54,8 +52,7 @@ impl History {
         History {
             buffers: VecDeque::with_capacity(DEFAULT_MAX_SIZE),
             file_name: None,
-            max_buffers_size: DEFAULT_MAX_SIZE,
-            max_file_size: DEFAULT_MAX_SIZE,
+            max_history_size: DEFAULT_MAX_SIZE,
             file_size: 0,
             compaction_writes: 0,
             throwaways: 0,
@@ -227,14 +224,9 @@ impl History {
         }
     }
 
-    /// Set maximal number of buffers stored in memory
-    pub fn set_max_buffers_size(&mut self, size: usize) {
-        self.max_buffers_size = size;
-    }
-
-    /// Set maximal number of entries in history file
-    pub fn set_max_file_size(&mut self, size: usize) {
-        self.max_file_size = size;
+    /// Set maximal number of buffers in history
+    pub fn set_max_history_size(&mut self, size: usize) {
+        self.max_history_size = size;
     }
 
     /// Number of items in history.
@@ -330,7 +322,7 @@ impl History {
             context,
             buffer: new_item,
         });
-        while self.buffers.len() > self.max_buffers_size {
+        while self.buffers.len() > self.max_history_size {
             self.buffers.pop_front();
         }
         if self.file_name.is_some() {
@@ -458,8 +450,8 @@ impl History {
     fn truncate(&mut self) {
         // Find how many lines we need to move backwards
         // in the file to remove all the old commands.
-        if self.buffers.len() >= self.max_file_size {
-            let pop_out = self.buffers.len() - self.max_file_size;
+        if self.buffers.len() >= self.max_history_size {
+            let pop_out = self.buffers.len() - self.max_history_size;
             for _ in 0..pop_out {
                 self.buffers.pop_front();
             }

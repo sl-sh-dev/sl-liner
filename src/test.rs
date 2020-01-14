@@ -81,7 +81,7 @@ fn test_history_indexing() {
 #[test]
 fn test_in_memory_history_truncating() {
     let mut h = History::new();
-    h.set_max_buffers_size(2);
+    h.set_max_history_size(2);
     for _ in 0..4 {
         h.push(Buffer::from("a")).unwrap();
         h.push(Buffer::from("b")).unwrap();
@@ -97,7 +97,7 @@ fn test_in_file_history_truncating() {
     {
         let mut h = History::new();
         let _ = h.set_file_name_and_load_history(&tmp_file).unwrap();
-        h.set_max_file_size(5);
+        h.set_max_history_size(5);
         for bytes in b'a'..b'z' {
             h.push(Buffer::from(format!("{}", bytes as char))).unwrap();
         }
