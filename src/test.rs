@@ -73,9 +73,9 @@ fn test_history_indexing() {
     h.push(Buffer::from("b")).unwrap();
     h.push(Buffer::from("c")).unwrap();
     assert_eq!(h.len(), 3);
-    assert_eq!(String::from(h[0].clone()), "a".to_string());
-    assert_eq!(String::from(h[1].clone()), "b".to_string());
-    assert_eq!(String::from(h[2].clone()), "c".to_string());
+    assert_eq!(&h[0], "a");
+    assert_eq!(&h[1], "b");
+    assert_eq!(&h[2], "c");
 }
 
 #[test]
@@ -134,10 +134,10 @@ fn test_reading_from_file() {
     }
     let mut h = History::new();
     h.set_file_name_and_load_history(tmp_file).unwrap();
-    assert_eq!(String::from(h[0].clone()), "a".to_string());
-    assert_eq!(String::from(h[1].clone()), "b".to_string());
-    assert_eq!(String::from(h[2].clone()), "c".to_string());
-    assert_eq!(String::from(h[3].clone()), "d".to_string());
+    assert_eq!(&h[0], "a");
+    assert_eq!(&h[1], "b");
+    assert_eq!(&h[2], "c");
+    assert_eq!(&h[3], "d");
 }
 
 #[test]
@@ -170,27 +170,27 @@ fn test_shared_history() {
     assert_eq!(h1.load_history(false).is_ok(), true);
     assert_eq!(h1.len(), 4);
     assert_eq!(h2.len(), 4);
-    assert_eq!(String::from(h1[0].clone()), "c".to_string());
-    assert_eq!(String::from(h1[1].clone()), "d".to_string());
-    assert_eq!(String::from(h1[2].clone()), "a".to_string());
-    assert_eq!(String::from(h1[3].clone()), "b".to_string());
-    assert_eq!(String::from(h2[0].clone()), "a".to_string());
-    assert_eq!(String::from(h2[1].clone()), "b".to_string());
-    assert_eq!(String::from(h2[2].clone()), "c".to_string());
-    assert_eq!(String::from(h2[3].clone()), "d".to_string());
+    assert_eq!(&h1[0], "c");
+    assert_eq!(&h1[1], "d");
+    assert_eq!(&h1[2], "a");
+    assert_eq!(&h1[3], "b");
+    assert_eq!(&h2[0], "a");
+    assert_eq!(&h2[1], "b");
+    assert_eq!(&h2[2], "c");
+    assert_eq!(&h2[3], "d");
 
     h1.set_search_context(Some("/a/b".to_string()));
     h1.push(Buffer::from("a")).unwrap();
-    assert_eq!(String::from(h1[0].clone()), "c".to_string());
-    assert_eq!(String::from(h1[1].clone()), "d".to_string());
-    assert_eq!(String::from(h1[2].clone()), "b".to_string());
-    assert_eq!(String::from(h1[3].clone()), "a".to_string());
+    assert_eq!(&h1[0], "c");
+    assert_eq!(&h1[1], "d");
+    assert_eq!(&h1[2], "b");
+    assert_eq!(&h1[3], "a");
     assert_eq!(h2.load_history(false).is_ok(), true);
     assert_eq!(h2.len(), 4);
-    assert_eq!(String::from(h2[0].clone()), "b".to_string());
-    assert_eq!(String::from(h2[1].clone()), "a".to_string());
-    assert_eq!(String::from(h2[2].clone()), "c".to_string());
-    assert_eq!(String::from(h2[3].clone()), "d".to_string());
+    assert_eq!(&h2[0], "b");
+    assert_eq!(&h2[1], "a");
+    assert_eq!(&h2[2], "c");
+    assert_eq!(&h2[3], "d");
     h1.set_search_context(Some("/a/b/1".to_string()));
     h1.push(Buffer::from("a")).unwrap();
     h1.set_search_context(Some("/a/b/2".to_string()));
@@ -198,7 +198,7 @@ fn test_shared_history() {
     h1.set_search_context(Some("/a/b/3".to_string()));
     h1.push(Buffer::from("a")).unwrap();
     assert_eq!(h2.load_history(false).is_ok(), true);
-    assert_eq!(String::from(h2[1].clone()), "a".to_string());
+    assert_eq!(&h2[1], "a");
     assert_eq!(h1.get_context(3).as_ref().unwrap().len(), 5);
     assert_eq!(
         h1.get_context(3)

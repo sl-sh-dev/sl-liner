@@ -97,7 +97,7 @@ fn main() {
                     break;
                 }
 
-                con.history.push(res.into()).unwrap();
+                con.history.push(res).unwrap();
             }
             Err(e) => {
                 match e.kind() {

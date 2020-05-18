@@ -1387,8 +1387,8 @@ mod tests {
     #[test]
     fn vi_normal_history_cursor_eol() {
         let mut history = History::new();
-        history.push("data hostory".into()).unwrap();
-        history.push("data history".into()).unwrap();
+        history.push("data hostory").unwrap();
+        history.push("data history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1417,10 +1417,10 @@ mod tests {
     #[test]
     fn vi_normal_history() {
         let mut history = History::new();
-        history.push("data second".into()).unwrap();
-        history.push("skip1".into()).unwrap();
-        history.push("data one".into()).unwrap();
-        history.push("skip2".into()).unwrap();
+        history.push("data second").unwrap();
+        history.push("skip1").unwrap();
+        history.push("data one").unwrap();
+        history.push("skip2").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1450,10 +1450,10 @@ mod tests {
     fn vi_search_history() {
         // Test incremental search as well as vi binding in search mode.
         let mut history = History::new();
-        history.push("data pat second".into()).unwrap();
-        history.push("skip1".into()).unwrap();
-        history.push("data pat one".into()).unwrap();
-        history.push("skip2".into()).unwrap();
+        history.push("data pat second").unwrap();
+        history.push("skip1").unwrap();
+        history.push("data pat one").unwrap();
+        history.push("skip2").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1518,8 +1518,8 @@ mod tests {
     #[test]
     fn vi_normal_delete() {
         let mut history = History::new();
-        history.push("history".into()).unwrap();
-        history.push("history".into()).unwrap();
+        history.push("history").unwrap();
+        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);

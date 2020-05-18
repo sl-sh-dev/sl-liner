@@ -1,6 +1,7 @@
 use std::io;
 use termion::event::Key;
 
+use crate::buffer::Buffer;
 use crate::CursorPosition;
 use crate::Editor;
 use crate::KeyMap;
@@ -92,7 +93,7 @@ impl Emacs {
         }
 
         // Actually insert it
-        let buf = ed.history()[history_index].clone();
+        let buf: Buffer = ed.history()[history_index].into();
         if let Some(last_arg) = buf.last_arg() {
             ed.insert_chars_after_cursor(last_arg)?;
         }

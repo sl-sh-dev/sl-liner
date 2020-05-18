@@ -167,7 +167,7 @@ macro_rules! cur_buf_mut {
         match $s.cur_history_loc {
             Some(i) => {
                 if !$s.hist_buf_valid {
-                    $s.hist_buf.copy_buffer(&$s.history[i]);
+                    $s.hist_buf.copy_buffer(&$s.history[i].into());
                     $s.hist_buf_valid = true;
                 }
                 &mut $s.hist_buf
@@ -181,7 +181,7 @@ macro_rules! cur_buf {
     ($s:expr) => {
         match $s.cur_history_loc {
             Some(_) if $s.hist_buf_valid => &$s.hist_buf,
-            Some(i) => &$s.history[i],
+            //Some(i) => &$s.history[i],
             _ => &$s.new_buf,
         }
     };
@@ -217,7 +217,7 @@ impl<'a> Editor<'a> {
         for _ in 0..(util::terminal_width().unwrap_or(80) - 1) {
             out.write_all(b" ")?; // if the line is not empty, overflow on next line
         }
-        out.write_all("\r".as_bytes())?;
+        out.write_all(b"\r")?;
         let Prompt {
             prefix,
             mut prompt,
@@ -225,7 +225,7 @@ impl<'a> Editor<'a> {
         } = prompt;
         for (i, pline) in prompt.split('\n').enumerate() {
             if i > 0 {
-                out.write_all("\r\n".as_bytes())?;
+                out.write_all(b"\r\n")?;
             }
             out.write_all(pline.as_bytes())?;
         }
@@ -345,7 +345,7 @@ impl<'a> Editor<'a> {
     /// Refresh incremental search, either when started or when the buffer changes.
     fn refresh_search(&mut self, forward: bool) {
         let search_history_loc = self.search_history_loc();
-        self.history_subset_index = self.history.search_index(&self.new_buf);
+        self.history_subset_index = self.history.search_index(&self.new_buf.to_string());
         if !self.history_subset_index.is_empty() {
             self.history_subset_loc = if forward {
                 Some(0)
@@ -631,7 +631,8 @@ impl<'a> Editor<'a> {
                         self.cur_history_loc = Some(self.history_subset_index[i - 1]);
                     }
                     None => {
-                        self.history_subset_index = self.history.get_history_subset(&self.new_buf);
+                        self.history_subset_index =
+                            self.history.get_history_subset(&self.new_buf.to_string());
                         if !self.history_subset_index.is_empty() {
                             self.history_subset_loc = Some(self.history_subset_index.len() - 1);
                             self.cur_history_loc = Some(
@@ -650,6 +651,8 @@ impl<'a> Editor<'a> {
                     _ => (),
                 }
             }
+            self.hist_buf_valid = false;
+            cur_buf_mut!(self);
             self.move_cursor_to_end_of_line()
         }
     }
@@ -678,6 +681,8 @@ impl<'a> Editor<'a> {
                     _ => self.history_fresh = false,
                 }
             }
+            self.hist_buf_valid = false;
+            cur_buf_mut!(self);
             self.move_cursor_to_end_of_line()
         }
     }
@@ -687,9 +692,12 @@ impl<'a> Editor<'a> {
         self.hist_buf_valid = false;
         if self.history.is_empty() {
             self.cur_history_loc = None;
+            self.hist_buf_valid = false;
             self.display()
         } else {
             self.cur_history_loc = Some(0);
+            self.hist_buf_valid = false;
+            cur_buf_mut!(self);
             self.move_cursor_to_end_of_line()
         }
     }
@@ -699,6 +707,7 @@ impl<'a> Editor<'a> {
         self.hist_buf_valid = false;
         if self.cur_history_loc.is_some() {
             self.cur_history_loc = None;
+            self.hist_buf_valid = false;
             self.move_cursor_to_end_of_line()
         } else {
             self.display()
@@ -900,13 +909,13 @@ impl<'a> Editor<'a> {
                 .map(|i| &context_history[i])
                 .or_else(|| {
                     context_history
-                        .get_newest_match(Some(context_history.len()), &self.new_buf)
+                        .get_newest_match(Some(context_history.len()), &self.new_buf.to_string())
                         .map(|i| &context_history[i])
                 })
         } else {
             None
         };
-        autosuggestion.cloned()
+        autosuggestion.map(|hist| hist.into())
     }
 
     pub fn is_currently_showing_autosuggestion(&self) -> bool {
@@ -1182,7 +1191,7 @@ impl<'a> From<Editor<'a>> for String {
                 if ed.hist_buf_valid {
                     ed.hist_buf
                 } else {
-                    ed.history[i].clone()
+                    ed.history[i].into()
                 }
             }
             _ => ed.new_buf,

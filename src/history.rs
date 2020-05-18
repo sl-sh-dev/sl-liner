@@ -1,12 +1,9 @@
-use super::*;
-
 use std::{
     collections::VecDeque,
     fs::File,
     io::{self, Write},
     io::{BufRead, BufReader, BufWriter},
     ops::Index,
-    ops::IndexMut,
     path::Path,
 };
 
@@ -15,7 +12,8 @@ const DEFAULT_MAX_SIZE: usize = 1000;
 #[derive(Clone, Debug)]
 struct HistoryItem {
     context: Option<Vec<String>>,
-    buffer: Buffer,
+    //buffer: Buffer,
+    buffer: String,
 }
 
 /// Structure encapsulating command history
@@ -197,7 +195,7 @@ impl History {
                     } else if !line.starts_with('#') {
                         self.add_buffer(HistoryItem {
                             context,
-                            buffer: Buffer::from(line),
+                            buffer: line, //Buffer::from(line),
                         });
                         context = None;
                     }
@@ -243,7 +241,8 @@ impl History {
     /// Adds a "throwaway" history item.  Any of these will be removed once push
     /// is called.  Intended to allow "error" or other bad items to stick around
     /// long enough for the user to correct without cluttering history long term.
-    pub fn push_throwaway(&mut self, new_item: Buffer) -> io::Result<()> {
+    pub fn push_throwaway(&mut self, new_item: impl Into<String>) -> io::Result<()> {
+        let new_item: String = new_item.into();
         // buffers[0] is the oldest entry
         // the new entry goes to the end
         if self.buffers.back().map(|b| b.buffer.to_string()) == Some(new_item.to_string()) {
@@ -261,7 +260,8 @@ impl History {
     /// Add a command to the history buffer and remove the oldest commands when the max history
     /// size has been met. If writing to the disk is enabled, this function will be used for
     /// logging history to the designated history file.
-    pub fn push(&mut self, new_item: Buffer) -> io::Result<()> {
+    pub fn push(&mut self, new_item: impl Into<String>) -> io::Result<()> {
+        let new_item: String = new_item.into();
         // buffers[0] is the oldest entry
         // the new entry goes to the end
 
@@ -285,7 +285,7 @@ impl History {
             return Ok(());
         }
 
-        let item_str = String::from(new_item.clone());
+        let item_str = new_item.to_string(); //String::from(new_item.clone());
         let context = if let Some(mut old_context) = self.remove_duplicates(&item_str) {
             let mut has_wild = false;
             if let Some(context) = &self.search_context {
@@ -348,7 +348,7 @@ impl History {
     fn remove_duplicates(&mut self, input: &str) -> Option<Vec<String>> {
         let mut ret = None;
         self.buffers.retain(|buffer| {
-            let command = buffer.buffer.lines().concat();
+            let command = &buffer.buffer; // XXX.lines().concat();
             if command == input {
                 ret = buffer.context.clone();
             }
@@ -357,7 +357,7 @@ impl History {
         ret
     }
 
-    fn get_match<I>(&self, vals: I, search_term: &Buffer) -> Option<usize>
+    fn get_match<I>(&self, vals: I, search_term: &str) -> Option<usize>
     where
         I: Iterator<Item = usize>,
     {
@@ -387,11 +387,7 @@ impl History {
 
     /// Go through the history and try to find an index (newest to oldest) which starts the same
     /// as the new buffer given to this function as argument.  Starts at curr_position.  Does not wrap.
-    pub fn get_newest_match(
-        &self,
-        curr_position: Option<usize>,
-        new_buff: &Buffer,
-    ) -> Option<usize> {
+    pub fn get_newest_match(&self, curr_position: Option<usize>, new_buff: &str) -> Option<usize> {
         let pos = curr_position.unwrap_or_else(|| self.buffers.len());
         if pos > 0 {
             self.get_match((0..pos).rev(), new_buff)
@@ -400,7 +396,7 @@ impl History {
         }
     }
 
-    pub fn get_history_subset(&self, search_term: &Buffer) -> Vec<usize> {
+    pub fn get_history_subset(&self, search_term: &str) -> Vec<usize> {
         let mut v1: Vec<usize> = Vec::new();
         let mut v2: Vec<usize> = Vec::new();
         let mut ret: Vec<usize> = (0..self.len())
@@ -422,7 +418,7 @@ impl History {
                     } else if starts {
                         v2.push(*i);
                     }
-                    contains && !starts && &tested.buffer != search_term
+                    contains && !starts && tested.buffer != search_term
                 } else {
                     false
                 }
@@ -433,7 +429,7 @@ impl History {
         ret
     }
 
-    pub fn search_index(&self, search_term: &Buffer) -> Vec<usize> {
+    pub fn search_index(&self, search_term: &str) -> Vec<usize> {
         (0..self.len())
             .filter_map(|i| self.buffers.get(i).map(|t| (i, t)))
             .filter(|(_i, tested)| tested.buffer.contains(search_term))
@@ -444,7 +440,7 @@ impl History {
     /// Get the history file name.
     #[inline(always)]
     pub fn file_name(&self) -> Option<&str> {
-        self.file_name.as_ref().map(|s| s.as_str())
+        self.file_name.as_deref().map(|s| s)
     }
 
     fn truncate(&mut self) {
@@ -487,7 +483,7 @@ impl History {
 
         // Write the commands to the history file.
         for command in buffers.iter().cloned() {
-            let _ = History::write_item(&mut file, &command.context, &String::from(command.buffer));
+            let _ = History::write_item(&mut file, &command.context, &command.buffer);
         }
         Ok(())
     }
@@ -514,15 +510,11 @@ impl History {
 }
 
 impl Index<usize> for History {
-    type Output = Buffer;
+    //type Output = Buffer;
+    type Output = str;
 
-    fn index(&self, index: usize) -> &Buffer {
-        &self.buffers[index].buffer
+    fn index(&self, index: usize) -> &str {
+        &self.buffers[index].buffer // XXX
     }
 }
 
-impl IndexMut<usize> for History {
-    fn index_mut(&mut self, index: usize) -> &mut Buffer {
-        &mut self.buffers[index].buffer
-    }
-}

@@ -117,7 +117,7 @@ fn main() {
                     break;
                 }
 
-                con.history.push(res.into()).unwrap();
+                con.history.push(res).unwrap();
             }
             // If there was an error, get what type it was(remember, we still are in the match{}
             // from waaay above)
