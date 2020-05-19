@@ -898,7 +898,7 @@ impl<'a> Editor<'a> {
     /// Return None if nothing found.
     fn current_autosuggestion(&mut self) -> Option<Buffer> {
         // If we are editing a previous history item no autosuggestion.
-        if self.hist_buf_valid {
+        if self.hist_buf_valid || self.new_buf.num_chars() == 0 {
             return None;
         }
         let context_history = &self.history;

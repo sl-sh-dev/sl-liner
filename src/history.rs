@@ -1,5 +1,5 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     fs::File,
     io::{self, Write},
     io::{BufRead, BufReader, BufWriter},
@@ -12,8 +12,33 @@ const DEFAULT_MAX_SIZE: usize = 1000;
 #[derive(Clone, Debug)]
 struct HistoryItem {
     context: Option<Vec<String>>,
-    //buffer: Buffer,
     buffer: String,
+}
+
+impl HistoryItem {
+    fn merge_context(&mut self, other_context: &Option<Vec<String>>, max_contexts: usize) {
+        if let Some(my_context) = &mut self.context {
+            let mut has_wild = false;
+            if let Some(context) = other_context {
+                let astrik = "*".to_string();
+                if my_context.contains(&astrik) || context.contains(&astrik) {
+                    has_wild = true;
+                } else {
+                    for ctx in context {
+                        if !my_context.contains(ctx) {
+                            my_context.push(ctx.to_string());
+                        }
+                    }
+                }
+            }
+            if my_context.len() > max_contexts || has_wild {
+                my_context.clear();
+                my_context.push("*".to_string());
+            }
+        } else {
+            self.context = other_context.clone();
+        }
+    }
 }
 
 /// Structure encapsulating command history
@@ -116,6 +141,7 @@ impl History {
             self.clear_history();
         }
         if new_length != length {
+            let mut dups: HashMap<String, (usize, Option<Vec<String>>)> = HashMap::new();
             let local_buffers: Option<Vec<HistoryItem>> = if !append && self.local_share > 0 {
                 let mut local_buffers = Vec::with_capacity(self.local_share);
                 let mut i = 0;
@@ -133,43 +159,47 @@ impl History {
             if !append {
                 self.clear_history();
             }
-            self.load_buffers(&path)?;
+            self.load_buffers(&path, &mut dups)?;
             // Put any locally added history on "top" and take care of context.
             if let Some(mut local_buffers) = local_buffers {
                 while let Some(buf) = local_buffers.pop() {
-                    self.add_buffer(buf);
+                    self.add_buffer(buf, &mut dups);
                 }
             }
+            self.buffers.retain(|buf| {
+                if let Some(mut dup) = dups.get_mut(&buf.buffer) {
+                    if dup.0 > 1 {
+                        dup.0 -= 1;
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                }
+            });
             self.truncate();
         }
         Ok(new_length)
     }
 
-    fn add_buffer(&mut self, mut buf: HistoryItem) {
-        if let Some(mut old_context) = self.remove_duplicates(&buf.buffer.to_string()[..]) {
-            let mut has_wild = false;
-            if let Some(context) = &buf.context {
-                let astrik = "*".to_string();
-                if old_context.contains(&astrik) || context.contains(&astrik) {
-                    has_wild = true;
-                } else {
-                    for ctx in context {
-                        if !old_context.contains(&ctx) {
-                            old_context.push(ctx.to_string());
-                        }
-                    }
-                }
-            }
-            if old_context.len() > self.max_contexts || has_wild {
-                old_context.clear();
-                old_context.push("*".to_string());
-            }
-            buf.context = Some(old_context);
-        }
+    fn add_buffer(
+        &mut self,
+        mut buf: HistoryItem,
+        dups: &mut HashMap<String, (usize, Option<Vec<String>>)>,
+    ) {
+        let mut dup = dups.entry(buf.buffer.clone()).or_insert((0, None));
+        dup.0 += 1;
+        buf.merge_context(&dup.1, self.max_contexts);
+        dup.1 = buf.context.clone();
         self.buffers.push_back(buf);
     }
 
-    fn load_buffers<P: AsRef<Path>>(&mut self, path: &P) -> io::Result<()> {
+    fn load_buffers<P: AsRef<Path>>(
+        &mut self,
+        path: &P,
+        dups: &mut HashMap<String, (usize, Option<Vec<String>>)>,
+    ) -> io::Result<()> {
         let path = path.as_ref();
         let file = if path.exists() {
             File::open(path)?
@@ -193,10 +223,11 @@ impl History {
                         }
                         context = if !cvec.is_empty() { Some(cvec) } else { None }
                     } else if !line.starts_with('#') {
-                        self.add_buffer(HistoryItem {
+                        let buf = HistoryItem {
                             context,
-                            buffer: line, //Buffer::from(line),
-                        });
+                            buffer: line,
+                        };
+                        self.add_buffer(buf, dups);
                         context = None;
                     }
                 }
@@ -510,11 +541,9 @@ impl History {
 }
 
 impl Index<usize> for History {
-    //type Output = Buffer;
     type Output = str;
 
     fn index(&self, index: usize) -> &str {
         &self.buffers[index].buffer // XXX
     }
 }
-
