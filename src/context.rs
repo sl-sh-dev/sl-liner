@@ -1,4 +1,7 @@
+use std::fs::OpenOptions;
 use std::io::{self, stdin, stdout};
+use std::os::unix::fs::OpenOptionsExt;
+
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
@@ -129,12 +132,45 @@ impl Context {
             buffer,
         )?;
         self.keymap.init(&mut ed);
-        for c in stdin().lock().keys() {
-            if self
-                .keymap
-                .handle_key(c.unwrap(), &mut ed, &mut *self.handler)?
-            {
-                break;
+
+        if termion::is_tty(&stdin()) {
+            let tty = OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_NONBLOCK)
+                .open("/dev/tty")
+                .unwrap();
+            let sleep_millis = std::time::Duration::from_millis(10);
+            ed.use_closure(false);
+            let mut displayed = false;
+            let mut sleep_ms = 0;
+            for c in tty.keys() {
+                if let Ok(key) = c {
+                    if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
+                        break;
+                    }
+                    displayed = false;
+                    sleep_ms = 0;
+                } else {
+                    if !displayed && sleep_ms > 250 {
+                        ed.use_closure(true);
+                        ed.display()?;
+                        ed.use_closure(false);
+                        displayed = true;
+                    }
+                    std::thread::sleep(sleep_millis);
+                    sleep_ms += 10;
+                }
+            }
+        } else {
+            // No tty, so don't bother with the color closure.
+            ed.use_closure(false);
+            for c in stdin().lock().keys() {
+                if self
+                    .keymap
+                    .handle_key(c.unwrap(), &mut ed, &mut *self.handler)?
+                {
+                    break;
+                }
             }
         }
 

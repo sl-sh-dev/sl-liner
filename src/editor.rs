@@ -118,6 +118,10 @@ pub struct Editor<'a> {
     // A closure that is evaluated just before we write to out.
     // This allows us to do custom syntax highlighting and other fun stuff.
     closure: Option<ColorClosure>,
+    // Use the closure if it is set.
+    use_closure: bool,
+    // Last string that was colorized and last colorized version.
+    color_lines: Option<(String, String)>,
 
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
@@ -242,6 +246,8 @@ impl<'a> Editor<'a> {
             cursor: 0,
             out,
             closure: f,
+            use_closure: true,
+            color_lines: None,
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
@@ -272,6 +278,10 @@ impl<'a> Editor<'a> {
     pub fn set_closure(&mut self, closure: ColorClosure) -> &mut Self {
         self.closure = Some(closure);
         self
+    }
+
+    pub fn use_closure(&mut self, use_closure: bool) {
+        self.use_closure = use_closure;
     }
 
     fn is_search(&self) -> bool {
@@ -951,16 +961,36 @@ impl<'a> Editor<'a> {
         }
     }
 
+    fn colorize(&mut self, line: &str) -> String {
+        match self.closure {
+            Some(ref f) if self.use_closure => {
+                let color = f(line);
+                self.color_lines = Some((line.to_string(), color.clone()));
+                color
+            }
+            Some(_) => {
+                if let Some((old_line, colorized)) = &self.color_lines {
+                    if line.starts_with(old_line) {
+                        let mut new_line = colorized.clone();
+                        new_line.push_str(&line[old_line.len()..]);
+                        new_line
+                    } else {
+                        line.to_owned()
+                    }
+                } else {
+                    line.to_owned()
+                }
+            }
+            _ => line.to_owned(),
+        }
+    }
+
     fn display_with_suggest(
         &mut self,
         line: &str,
         buf_num_remaining_bytes: usize,
     ) -> io::Result<()> {
-        let start = &line[..buf_num_remaining_bytes];
-        let start = match self.closure {
-            Some(ref f) => f(start),
-            None => start.to_owned(),
-        };
+        let start = self.colorize(&line[..buf_num_remaining_bytes]);
         if self.is_search() {
             write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
         }
@@ -998,10 +1028,7 @@ impl<'a> Editor<'a> {
                 buf_num_remaining_bytes = 0;
             } else {
                 buf_num_remaining_bytes -= line.len();
-                let written_line = match self.closure {
-                    Some(ref f) => f(&line),
-                    None => line,
-                };
+                let written_line = self.colorize(&line);
                 if self.is_search() {
                     write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
                 }
