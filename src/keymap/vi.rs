@@ -80,6 +80,7 @@ fn is_movement_key(key: Key) -> bool {
         | Key::Char(' ')
         | Key::Home
         | Key::End
+        | Key::Char('^')
         | Key::Char('$')
         | Key::Char('t')
         | Key::Char('f')
@@ -787,6 +788,10 @@ impl Vi {
                 self.count = self.count.saturating_mul(10).saturating_add(i);
                 Ok(())
             }
+            Key::Char('^') => {
+                ed.move_cursor_to_start_of_line()?;
+                self.pop_mode_after_movement(Exclusive, ed)
+            }
             Key::Char('$') => {
                 ed.move_cursor_to_end_of_line()?;
                 self.pop_mode_after_movement(Exclusive, ed)
@@ -1163,6 +1168,30 @@ mod tests {
         simulate_keys(&mut map, &mut ed, [Left, Left, Right].iter());
 
         assert_eq!(ed.cursor(), 4);
+    }
+
+    #[test]
+    fn move_cursor_start_end() {
+        let mut context = Context::new();
+        let out = Vec::new();
+        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        let test_str = "let there be tests";
+        ed.insert_str_after_cursor(test_str).unwrap();
+        assert_eq!(ed.cursor(), test_str.len());
+
+        simulate_keys(&mut map, &mut ed, [Esc, Char('^')].iter());
+        assert_eq!(ed.cursor(), 0);
+
+        simulate_keys(&mut map, &mut ed, [Char('^')].iter());
+        assert_eq!(ed.cursor(), 0);
+
+        simulate_keys(&mut map, &mut ed, [Char('$')].iter());
+        assert_eq!(ed.cursor(), test_str.len() - 1);
+
+        simulate_keys(&mut map, &mut ed, [Char('$')].iter());
+        assert_eq!(ed.cursor(), test_str.len() - 1);
     }
 
     #[test]
