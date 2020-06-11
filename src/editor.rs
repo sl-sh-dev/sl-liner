@@ -266,7 +266,7 @@ impl<'a, W: io::Write> Editor<'a, W> {
         for _ in 0..(util::terminal_width().unwrap_or(80) - 1) {
             out.write_all(b" ")?; // if the line is not empty, overflow on next line
         }
-        out.write_all("\r".as_bytes())?;
+        out.write_all("\r \r".as_bytes())?; // Erase the "⏎" if nothing overwrites it
         let Prompt {
             mut prompt,
             vi_status,
