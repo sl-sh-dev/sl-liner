@@ -963,7 +963,7 @@ impl<'a> Editor<'a> {
 
     fn colorize(&mut self, line: &str) -> String {
         match self.closure {
-            Some(ref f) if self.use_closure => {
+            Some(ref mut f) if self.use_closure => {
                 let color = f(line);
                 self.color_lines = Some((line.to_string(), color.clone()));
                 color

@@ -569,7 +569,7 @@ impl Vi {
         }
 
         // restore the last command
-        mem::replace(&mut self.last_command, keys);
+        self.last_command = keys;
 
         Ok(())
     }
