@@ -133,31 +133,52 @@ impl Context {
         self.keymap.init(&mut ed);
 
         if termion::is_tty(&stdin()) {
-            let tty = OpenOptions::new()
-                .read(true)
-                .custom_flags(libc::O_NONBLOCK)
-                .open("/dev/tty")
-                .unwrap();
             let sleep_millis = std::time::Duration::from_millis(10);
             ed.use_closure(false);
             let mut displayed = false;
             let mut sleep_ms = 0;
-            for c in tty.keys() {
-                if let Ok(key) = c {
-                    if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
-                        break;
-                    }
-                    displayed = false;
-                    sleep_ms = 0;
+            let mut done = false;
+            while !done {
+                // Use non-blocking io until the color closure is called
+                // then switch to blocking until input.  This keeps liner
+                // from burning a small percent of CPU in many cases.
+                let (tty, non_block) = if displayed {
+                    (
+                        OpenOptions::new().read(true).open("/dev/tty").unwrap(),
+                        false,
+                    )
                 } else {
-                    if !displayed && sleep_ms > 250 {
-                        ed.use_closure(true);
-                        ed.display()?;
-                        ed.use_closure(false);
-                        displayed = true;
+                    (
+                        OpenOptions::new()
+                            .read(true)
+                            .custom_flags(libc::O_NONBLOCK)
+                            .open("/dev/tty")
+                            .unwrap(),
+                        true,
+                    )
+                };
+                for c in tty.keys() {
+                    if let Ok(key) = c {
+                        if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
+                            done = true;
+                            break;
+                        }
+                        displayed = false;
+                        sleep_ms = 0;
+                        if !non_block {
+                            break;
+                        }
+                    } else {
+                        if !displayed && sleep_ms > 250 {
+                            ed.use_closure(true);
+                            ed.display()?;
+                            ed.use_closure(false);
+                            displayed = true;
+                            break;
+                        }
+                        std::thread::sleep(sleep_millis);
+                        sleep_ms += 10;
                     }
-                    std::thread::sleep(sleep_millis);
-                    sleep_ms += 10;
                 }
             }
         } else {
