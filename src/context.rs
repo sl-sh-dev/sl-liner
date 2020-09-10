@@ -96,7 +96,7 @@ impl Context {
         self.edit_line(prompt, f, Buffer::new())
     }
 
-    fn select_tty(tty_fd: RawFd, timeout_ms: i64) -> io::Result<c_int> {
+    fn select_tty(tty_fd: RawFd, timeout_ms: suseconds_t) -> io::Result<c_int> {
         let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
         unsafe {
             libc::FD_ZERO(&mut rfdset);
