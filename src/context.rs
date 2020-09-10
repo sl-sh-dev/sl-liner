@@ -5,6 +5,9 @@ use std::os::unix::fs::OpenOptionsExt;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
+use libc::{self, c_int, suseconds_t, time_t, timeval};
+use std::os::unix::io::{AsRawFd, RawFd};
+
 use super::*;
 use crate::editor::Prompt;
 
@@ -93,6 +96,44 @@ impl Context {
         self.edit_line(prompt, f, Buffer::new())
     }
 
+    fn select_tty(tty_fd: RawFd, timeout_ms: i64) -> io::Result<c_int> {
+        let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+        unsafe {
+            libc::FD_ZERO(&mut rfdset);
+            libc::FD_SET(tty_fd, &mut rfdset);
+        }
+        let res = if timeout_ms > 0 {
+            let mut tv = timeval {
+                tv_sec: 0 as time_t,
+                tv_usec: timeout_ms * 1000 as suseconds_t,
+            };
+            unsafe {
+                libc::select(
+                    tty_fd + 1,
+                    &mut rfdset,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    &mut tv,
+                )
+            }
+        } else {
+            unsafe {
+                libc::select(
+                    tty_fd + 1,
+                    &mut rfdset,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                )
+            }
+        };
+        if res < 0 {
+            Err(io::Error::from_raw_os_error(res))
+        } else {
+            Ok(res)
+        }
+    }
+
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
     ///
     /// ```no_run
@@ -133,51 +174,43 @@ impl Context {
         self.keymap.init(&mut ed);
 
         if termion::is_tty(&stdin()) {
-            let sleep_millis = std::time::Duration::from_millis(10);
-            ed.use_closure(false);
-            let mut displayed = false;
-            let mut sleep_ms = 0;
-            let mut done = false;
-            while !done {
-                // Use non-blocking io until the color closure is called
-                // then switch to blocking until input.  This keeps liner
-                // from burning a small percent of CPU in many cases.
-                let (tty, non_block) = if displayed {
-                    (
-                        OpenOptions::new().read(true).open("/dev/tty").unwrap(),
-                        false,
-                    )
-                } else {
-                    (
-                        OpenOptions::new()
-                            .read(true)
-                            .custom_flags(libc::O_NONBLOCK)
-                            .open("/dev/tty")
-                            .unwrap(),
-                        true,
-                    )
-                };
-                for c in tty.keys() {
-                    if let Ok(key) = c {
-                        if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
-                            done = true;
-                            break;
-                        }
-                        displayed = false;
-                        sleep_ms = 0;
-                        if !non_block {
-                            break;
-                        }
-                    } else {
-                        if !displayed && sleep_ms > 250 {
+            let mut reset = true;
+            while reset {
+                reset = false;
+                ed.use_closure(false);
+                let mut sleep_ms = 0;
+                let mut done = false;
+                let tty = OpenOptions::new()
+                    .read(true)
+                    .custom_flags(libc::O_NONBLOCK)
+                    .open("/dev/tty")
+                    .unwrap();
+                let tty_fd = tty.as_raw_fd();
+                let keys = &mut tty.keys();
+                while !done {
+                    if let Ok(res) = Context::select_tty(tty_fd, sleep_ms) {
+                        if res > 0 {
+                            for c in &mut *keys {
+                                if let Ok(key) = c {
+                                    if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
+                                        done = true;
+                                        break;
+                                    }
+                                    sleep_ms = 200;
+                                } else {
+                                    break;
+                                }
+                            }
+                        } else {
                             ed.use_closure(true);
                             ed.display()?;
                             ed.use_closure(false);
-                            displayed = true;
-                            break;
+                            sleep_ms = 0;
                         }
-                        std::thread::sleep(sleep_millis);
-                        sleep_ms += 10;
+                    } else {
+                        //something wrong- reset...
+                        reset = true;
+                        break;
                     }
                 }
             }
