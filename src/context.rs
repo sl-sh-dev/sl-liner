@@ -103,9 +103,10 @@ impl Context {
             libc::FD_SET(tty_fd, &mut rfdset);
         }
         let res = if timeout_ms > 0 {
+            let milli_mult: suseconds_t = 1000;
             let mut tv = timeval {
                 tv_sec: 0 as time_t,
-                tv_usec: timeout_ms * 1000 as suseconds_t,
+                tv_usec: timeout_ms * milli_mult,
             };
             unsafe {
                 libc::select(
