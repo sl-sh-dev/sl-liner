@@ -23,7 +23,8 @@ name = "liner"
 
 [dependencies]
 bytecount = "0.6.0"
-termion = "1.5.4"
+#termion = "1.5.4"
+termion = { git = "https://github.com/sstanfield/termion.git" }
 unicode-width = "0.1.6"
 libc = "0.2"
 

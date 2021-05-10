@@ -5,7 +5,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 
-use libc::{self, c_int, suseconds_t, time_t, timeval};
+use libc::{self, c_int, suseconds_t, timeval};
 use std::os::unix::io::{AsRawFd, RawFd};
 
 use super::*;
@@ -105,7 +105,7 @@ impl Context {
         let res = if timeout_ms > 0 {
             let milli_mult: suseconds_t = 1000;
             let mut tv = timeval {
-                tv_sec: 0 as time_t,
+                tv_sec: 0,
                 tv_usec: timeout_ms * milli_mult,
             };
             unsafe {

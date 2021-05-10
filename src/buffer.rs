@@ -59,13 +59,13 @@ impl From<Buffer> for String {
 
 impl From<String> for Buffer {
     fn from(s: String) -> Self {
-        Buffer::from_iter(s.chars())
+        s.chars().collect()
     }
 }
 
 impl<'a> From<&'a str> for Buffer {
     fn from(s: &'a str) -> Self {
-        Buffer::from_iter(s.chars())
+        s.chars().collect()
     }
 }
 

@@ -304,10 +304,8 @@ impl History {
         self.local_share += 1;
         let mut same_last_context = true;
         if let Some(context) = &self.search_context {
-            if let Some(last_context) = self.buffers.back().map(|b| &b.context) {
-                if let Some(last_context) = last_context {
-                    same_last_context = last_context.contains(&context);
-                }
+            if let Some(Some(last_context)) = self.buffers.back().map(|b| &b.context) {
+                same_last_context = last_context.contains(&context);
             }
         }
         if self.buffers.back().map(|b| b.buffer.to_string()) == Some(new_item.to_string())
@@ -333,8 +331,7 @@ impl History {
             }
             Some(old_context)
         } else if let Some(context) = &self.search_context {
-            let mut c = Vec::new();
-            c.push(context.to_string());
+            let c = vec![context.to_string()];
             Some(c)
         } else {
             None
@@ -471,7 +468,7 @@ impl History {
     /// Get the history file name.
     #[inline(always)]
     pub fn file_name(&self) -> Option<&str> {
-        self.file_name.as_deref().map(|s| s)
+        self.file_name.as_deref()
     }
 
     fn truncate(&mut self) {

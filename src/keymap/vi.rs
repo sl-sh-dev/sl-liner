@@ -67,32 +67,32 @@ impl ModeStack {
 }
 
 fn is_movement_key(key: Key) -> bool {
-    match key {
+    matches!(
+        key,
         Key::Char('h')
-        | Key::Char('l')
-        | Key::Left
-        | Key::Right
-        | Key::Char('w')
-        | Key::Char('W')
-        | Key::Char('b')
-        | Key::Char('B')
-        | Key::Char('e')
-        | Key::Char('E')
-        | Key::Char('g')
-        | Key::Backspace
-        | Key::Char(' ')
-        | Key::Home
-        | Key::End
-        | Key::Char('^')
-        | Key::Char('$')
-        | Key::Char('t')
-        | Key::Char('f')
-        | Key::Char('T')
-        | Key::Char('F')
-        | Key::Char(';')
-        | Key::Char(',') => true,
-        _ => false,
-    }
+            | Key::Char('l')
+            | Key::Left
+            | Key::Right
+            | Key::Char('w')
+            | Key::Char('W')
+            | Key::Char('b')
+            | Key::Char('B')
+            | Key::Char('e')
+            | Key::Char('E')
+            | Key::Char('g')
+            | Key::Backspace
+            | Key::Char(' ')
+            | Key::Home
+            | Key::End
+            | Key::Char('^')
+            | Key::Char('$')
+            | Key::Char('t')
+            | Key::Char('f')
+            | Key::Char('T')
+            | Key::Char('F')
+            | Key::Char(';')
+            | Key::Char(',')
+    )
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -167,7 +167,7 @@ fn vi_move_word(
         Whitespace,
         Keyword,
         NonKeyword,
-    };
+    }
 
     let mut cursor = ed.cursor();
     'repeat: for _ in 0..count {
@@ -236,7 +236,7 @@ fn vi_move_word_end(
         EndOnWord,
         EndOnOther,
         EndOnWhitespace,
-    };
+    }
 
     let mut cursor = ed.cursor();
     'repeat: for _ in 0..count {
@@ -1243,9 +1243,19 @@ mod tests {
 
     #[test]
     fn move_cursor_start_end() {
-        let mut context = Context::new();
-        let out = Vec::new();
-        let mut ed = Editor::new(out, Prompt::from("prompt"), None, &mut context).unwrap();
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
         let test_str = "let there be tests";

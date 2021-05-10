@@ -11,10 +11,11 @@ fn assert_cursor_pos(s: &str, cursor: usize, expected_pos: CursorPosition) {
     let pos = CursorPosition::get(cursor, &words[..]);
     assert!(
         expected_pos == pos,
-        format!(
-            "buffer: {:?}, cursor: {}, expected pos: {:?}, pos: {:?}",
-            s, cursor, expected_pos, pos
-        )
+        "buffer: {:?}, cursor: {}, expected pos: {:?}, pos: {:?}",
+        s,
+        cursor,
+        expected_pos,
+        pos
     );
 }
 

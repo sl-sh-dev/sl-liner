@@ -45,9 +45,9 @@ impl Completer for NoCommentCompleter {
 
             if filename {
                 let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                replace(&mut self.inner, Some(completer));
+                replace(&mut self.inner, Some(completer)).unwrap();
             } else {
-                replace(&mut self.inner, None);
+                replace(&mut self.inner, None).unwrap();
             }
         }
     }
