@@ -221,7 +221,7 @@ impl<'a> Editor<'a> {
         for _ in 0..(util::terminal_width().unwrap_or(80) - 1) {
             out.write_all(b" ")?; // if the line is not empty, overflow on next line
         }
-        out.write_all(b"\r")?;
+        out.write_all("\r \r".as_bytes())?; // Erase the "⏎" if nothing overwrites it
         let Prompt {
             prefix,
             mut prompt,
