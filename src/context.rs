@@ -1,12 +1,10 @@
-use std::fs::OpenOptions;
 use std::io::{self, stdin, stdout};
-use std::os::unix::fs::OpenOptionsExt;
+use std::time;
 
+use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
-
-use libc::{self, c_int, suseconds_t, timeval};
-use std::os::unix::io::{AsRawFd, RawFd};
+use termion::termasync::{async_stdin, AsyncBlocker};
 
 use super::*;
 use crate::editor::Prompt;
@@ -51,6 +49,8 @@ pub struct Context {
     buf: String,
     handler: Box<dyn Completer>,
     keymap: Box<dyn KeyMap>,
+    keys: Option<Box<dyn Iterator<Item = Result<Key, io::Error>>>>,
+    blocker: Option<AsyncBlocker>,
 }
 
 impl Default for Context {
@@ -67,6 +67,8 @@ impl Context {
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),
+            keys: None,
+            blocker: None,
         }
     }
 
@@ -96,43 +98,93 @@ impl Context {
         self.edit_line(prompt, f, Buffer::new())
     }
 
-    fn select_tty(tty_fd: RawFd, timeout_ms: suseconds_t) -> io::Result<c_int> {
-        let mut rfdset = unsafe { std::mem::MaybeUninit::uninit().assume_init() };
-        unsafe {
-            libc::FD_ZERO(&mut rfdset);
-            libc::FD_SET(tty_fd, &mut rfdset);
+    fn read_tty<B: Into<Buffer>>(
+        &mut self,
+        prompt: Prompt,
+        f: Option<ColorClosure>,
+        buffer: B,
+    ) -> io::Result<String> {
+        let stdout = stdout();
+        let mut stdout = stdout.lock().into_raw_mode()?;
+        let mut ed = Editor::new_with_init_buffer(
+            &mut stdout,
+            prompt,
+            f,
+            &mut self.history,
+            &self.word_divider_fn,
+            &mut self.buf,
+            buffer,
+        )?;
+        self.keymap.init(&mut ed);
+        ed.use_closure(false);
+        let mut do_color = false;
+        if self.keys.is_none() {
+            let mut tty = async_stdin()?;
+            self.blocker = Some(tty.blocker());
+            self.keys = Some(Box::new(tty.keys()));
         }
-        let res = if timeout_ms > 0 {
-            let milli_mult: suseconds_t = 1000;
-            let mut tv = timeval {
-                tv_sec: 0,
-                tv_usec: timeout_ms * milli_mult,
-            };
-            unsafe {
-                libc::select(
-                    tty_fd + 1,
-                    &mut rfdset,
-                    std::ptr::null_mut(),
-                    std::ptr::null_mut(),
-                    &mut tv,
-                )
+        if let Some(keys) = &mut self.keys {
+            //while let Some(c) = keys.next() {
+            for c in keys {
+                match c {
+                    Ok(key) => {
+                        do_color = true;
+                        if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
+                            break;
+                        }
+                    }
+                    Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                        if do_color {
+                            if let Some(blocker) = &mut self.blocker {
+                                if blocker.block_timeout(time::Duration::from_millis(200)) {
+                                    ed.use_closure(true);
+                                    ed.display()?;
+                                    ed.use_closure(false);
+                                    do_color = false;
+                                }
+                            }
+                        } else if let Some(blocker) = &mut self.blocker {
+                                blocker.block();
+                            }
+                    }
+                    Err(err) => {
+                        return Err(err);
+                    }
+                }
             }
-        } else {
-            unsafe {
-                libc::select(
-                    tty_fd + 1,
-                    &mut rfdset,
-                    std::ptr::null_mut(),
-                    std::ptr::null_mut(),
-                    std::ptr::null_mut(),
-                )
-            }
-        };
-        if res < 0 {
-            Err(io::Error::from_raw_os_error(res))
-        } else {
-            Ok(res)
         }
+        Ok(ed.into())
+    }
+
+    fn read_stdin<B: Into<Buffer>>(
+        &mut self,
+        prompt: Prompt,
+        f: Option<ColorClosure>,
+        buffer: B,
+    ) -> io::Result<String> {
+        let stdout = stdout();
+        let mut stdout = stdout.lock().into_raw_mode()?;
+        let mut ed = Editor::new_with_init_buffer(
+            &mut stdout,
+            prompt,
+            f,
+            &mut self.history,
+            &self.word_divider_fn,
+            &mut self.buf,
+            buffer,
+        )?;
+        self.keymap.init(&mut ed);
+        // No tty, so don't bother with the color closure.
+        ed.use_closure(false);
+        for c in stdin().lock().keys() {
+            if self
+                .keymap
+                .handle_key(c.unwrap(), &mut ed, &mut *self.handler)?
+            {
+                break;
+            }
+        }
+        Ok(ed.into())
     }
 
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
@@ -161,73 +213,10 @@ impl Context {
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
-        let stdout = stdout();
-        let mut stdout = stdout.lock().into_raw_mode()?;
-        let mut ed = Editor::new_with_init_buffer(
-            &mut stdout,
-            prompt,
-            f,
-            &mut self.history,
-            &self.word_divider_fn,
-            &mut self.buf,
-            buffer,
-        )?;
-        self.keymap.init(&mut ed);
-
         if termion::is_tty(&stdin()) {
-            let mut reset = true;
-            while reset {
-                reset = false;
-                ed.use_closure(false);
-                let mut sleep_ms = 0;
-                let mut done = false;
-                let tty = OpenOptions::new()
-                    .read(true)
-                    .custom_flags(libc::O_NONBLOCK)
-                    .open("/dev/tty")
-                    .unwrap();
-                let tty_fd = tty.as_raw_fd();
-                let keys = &mut tty.keys();
-                while !done {
-                    if let Ok(res) = Context::select_tty(tty_fd, sleep_ms) {
-                        if res > 0 {
-                            for c in &mut *keys {
-                                if let Ok(key) = c {
-                                    if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
-                                        done = true;
-                                        break;
-                                    }
-                                    sleep_ms = 200;
-                                } else {
-                                    break;
-                                }
-                            }
-                        } else {
-                            ed.use_closure(true);
-                            ed.display()?;
-                            ed.use_closure(false);
-                            sleep_ms = 0;
-                        }
-                    } else {
-                        //something wrong- reset...
-                        reset = true;
-                        break;
-                    }
-                }
-            }
+            self.read_tty(prompt, f, buffer)
         } else {
-            // No tty, so don't bother with the color closure.
-            ed.use_closure(false);
-            for c in stdin().lock().keys() {
-                if self
-                    .keymap
-                    .handle_key(c.unwrap(), &mut ed, &mut *self.handler)?
-                {
-                    break;
-                }
-            }
+            self.read_stdin(prompt, f, buffer)
         }
-
-        Ok(ed.into())
     }
 }

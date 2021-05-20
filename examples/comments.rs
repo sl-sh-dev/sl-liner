@@ -104,8 +104,8 @@ fn main() {
                         con.set_keymap(Box::new(keymap::Vi::new()));
                         println!("vi mode");
                     }
-                    "exit" | "" => {
-                        println!("exiting...");
+                    "exit" => {
+                        println!("exit...");
                         break;
                     }
                     // If all else fails, do nothing
@@ -113,11 +113,10 @@ fn main() {
                 }
 
                 // If we typed nothing, don't continue down to pushing to history
-                if res.is_empty() {
-                    break;
+                if !res.is_empty() {
+                    //break;
+                    con.history.push(res).unwrap();
                 }
-
-                con.history.push(res).unwrap();
             }
             // If there was an error, get what type it was(remember, we still are in the match{}
             // from waaay above)
@@ -127,13 +126,14 @@ fn main() {
                     io::ErrorKind::Interrupted => {}
                     // ctrl-d pressed
                     io::ErrorKind::UnexpectedEof => {
-                        println!("exiting...");
+                        println!("exiting (eof)...");
                         break;
                     }
                     _ => {
                         // Ensure that all writes to the history file
                         // are written before exiting due to error.
-                        panic!("error: {:?}", e)
+                        //panic!("error: {:?}", e)
+                        println!("error: {:?}", e)
                     }
                 }
             }
