@@ -1,6 +1,6 @@
 [package]
-name = "redox_liner"
-version = "0.5.1" # remember to update README
+name = "sl-liner"
+version = "0.6.0" # remember to update README
 authors = [
     "MovingtoMars <definitelynotliam@gmail.com>",
     "Michael Aaron Murphy <mmstickman@gmail.com>",
@@ -8,8 +8,8 @@ authors = [
     "Jeremy Soller <jackpot51@gmail.com>",
 ]
 description = "A library offering readline-like functionality."
-repository = "https://gitlab.redox-os.org/redox-os/liner"
-homepage = "https://gitlab.redox-os.org/redox-os/liner"
+repository = "https://github.com/sl-sh-dev/sl-liner"
+homepage = "https://github.com/sl-sh-dev/sl-liner"
 keywords = ["readline", "line", "input", "editor", "completion"]
 license = "MIT"
 exclude = [
@@ -19,13 +19,11 @@ exclude = [
 edition = "2018"
 
 [lib]
-name = "liner"
+name = "sl_liner"
 
 [dependencies]
 bytecount = "0.6.0"
-#termion = "1.5.4"
-termion = { git = "https://github.com/sstanfield/termion.git" }
-#termion = { path = "../termion" }
+sl-console = { git = "https://github.com/sl-sh-dev/sl-console.git" }
 unicode-width = "0.1.6"
 
 [dev-dependencies]

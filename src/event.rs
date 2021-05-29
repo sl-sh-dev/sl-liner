@@ -1,5 +1,5 @@
 use crate::Editor;
-use termion::event::Key;
+use sl_console::event::Key;
 
 pub struct Event<'a, 'out: 'a> {
     pub editor: &'a mut Editor<'out>,

@@ -2,7 +2,7 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
 
-use termion::event::Key;
+use sl_console::event::Key;
 
 use crate::buffer::Buffer;
 use crate::Editor;
@@ -311,8 +311,8 @@ fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<u
 /// Vi keybindings for `Editor`.
 ///
 /// ```
-/// use liner::*;
-/// use liner::keymap;
+/// use sl_liner::*;
+/// use sl_liner::keymap;
 ///
 /// struct EmptyCompleter;
 /// impl Completer for EmptyCompleter {
@@ -1140,8 +1140,8 @@ mod tests {
     use crate::context::get_buffer_words;
     use crate::editor::Prompt;
     use crate::{Buffer, Completer, Editor, History, KeyMap};
-    use termion::event::Key;
-    use termion::event::Key::*;
+    use sl_console::event::Key;
+    use sl_console::event::Key::*;
 
     fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) -> bool
     where

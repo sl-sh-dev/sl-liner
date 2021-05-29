@@ -1,15 +1,15 @@
-extern crate liner;
 extern crate regex;
-extern crate termion;
+extern crate sl_console;
+extern crate sl_liner;
 
 use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
 
-use liner::keymap;
-use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
 use regex::Regex;
-use termion::color;
+use sl_console::color;
+use sl_liner::keymap;
+use sl_liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen
 fn highlight_dodo(s: &str) -> String {
@@ -88,7 +88,7 @@ fn main() {
         .unwrap();
 
     loop {
-        // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving liner, and the third is called on every key press
+        // Reads the line, the first arg is the prompt, the second arg is a function called on every bit of text leaving sl_liner, and the third is called on every key press
         // Basically highlight_dodo(read_line()), where on every keypress, the lambda is called
         let res = con.read_line(Prompt::from("[prompt]\n% "), Some(Box::new(highlight_dodo)));
 

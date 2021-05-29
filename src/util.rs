@@ -92,7 +92,7 @@ pub fn terminal_width() -> io::Result<usize> {
     if cfg!(test) {
         Ok(80_usize)
     } else {
-        let (mut size_col, _) = ::termion::terminal_size()?;
+        let (mut size_col, _) = ::sl_console::terminal_size()?;
         if size_col == 0 {
             size_col = 80;
         }

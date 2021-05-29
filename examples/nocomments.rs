@@ -1,15 +1,15 @@
-extern crate liner;
 extern crate regex;
-extern crate termion;
+extern crate sl_console;
+extern crate sl_liner;
 
 use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
 
-use liner::keymap;
-use liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
 use regex::Regex;
-use termion::color;
+use sl_console::color;
+use sl_liner::keymap;
+use sl_liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
 
 fn highlight_dodo(s: &str) -> String {
     let reg_exp = Regex::new("(?P<k>dodo)").unwrap();

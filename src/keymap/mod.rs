@@ -1,8 +1,8 @@
 use crate::complete::Completer;
 use crate::event::*;
 use crate::Editor;
+use sl_console::event::Key;
 use std::io::{self, ErrorKind};
-use termion::event::Key;
 
 pub trait KeyMap {
     //: Default {
@@ -82,8 +82,8 @@ mod tests {
     use crate::context::get_buffer_words;
     use crate::editor::Prompt;
     use crate::History;
+    use sl_console::event::Key::*;
     use std::io::ErrorKind;
-    use termion::event::Key::*;
 
     #[derive(Default)]
     struct TestKeyMap;

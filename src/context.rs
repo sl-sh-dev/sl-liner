@@ -1,10 +1,9 @@
 use std::io::{self, stdin, stdout};
 use std::time;
 
-use termion::event::Key;
-use termion::input::TermRead;
-use termion::raw::IntoRawMode;
-use termion::termasync::{async_stdin, AsyncBlocker};
+use sl_console::console::*;
+use sl_console::input::TermRead;
+use sl_console::raw::IntoRawMode;
 
 use super::*;
 use crate::editor::Prompt;
@@ -49,8 +48,6 @@ pub struct Context {
     buf: String,
     handler: Box<dyn Completer>,
     keymap: Box<dyn KeyMap>,
-    keys: Option<Box<dyn Iterator<Item = Result<Key, io::Error>>>>,
-    blocker: Option<AsyncBlocker>,
 }
 
 impl Default for Context {
@@ -67,8 +64,6 @@ impl Context {
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),
-            keys: None,
-            blocker: None,
         }
     }
 
@@ -104,10 +99,12 @@ impl Context {
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
-        let stdout = stdout();
-        let mut stdout = stdout.lock().into_raw_mode()?;
+        //let stdout = stdout();
+        //let mut stdout = stdout.lock().into_raw_mode()?;
+        let mut conout = conout()?;
+        let mut conin = conin()?;
         let mut ed = Editor::new_with_init_buffer(
-            &mut stdout,
+            &mut conout,
             prompt,
             f,
             &mut self.history,
@@ -118,38 +115,30 @@ impl Context {
         self.keymap.init(&mut ed);
         ed.use_closure(false);
         let mut do_color = false;
-        if self.keys.is_none() {
-            let mut tty = async_stdin()?;
-            self.blocker = Some(tty.blocker());
-            self.keys = Some(Box::new(tty.keys()));
-        }
-        if let Some(keys) = &mut self.keys {
-            //while let Some(c) = keys.next() {
-            for c in keys {
-                match c {
-                    Ok(key) => {
-                        do_color = true;
-                        if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
-                            break;
+        conin.set_blocking(false);
+        loop {
+            let c = conin.get_key();
+            match c {
+                Ok(key) => {
+                    do_color = true;
+                    if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
+                        break;
+                    }
+                }
+                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                    if do_color {
+                        if !conin.poll_timeout(time::Duration::from_millis(200)) {
+                            ed.use_closure(true);
+                            ed.display()?;
+                            ed.use_closure(false);
+                            do_color = false;
                         }
+                    } else {
+                        conin.poll();
                     }
-                    Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
-                        if do_color {
-                            if let Some(blocker) = &mut self.blocker {
-                                if blocker.block_timeout(time::Duration::from_millis(200)) {
-                                    ed.use_closure(true);
-                                    ed.display()?;
-                                    ed.use_closure(false);
-                                    do_color = false;
-                                }
-                            }
-                        } else if let Some(blocker) = &mut self.blocker {
-                                blocker.block();
-                            }
-                    }
-                    Err(err) => {
-                        return Err(err);
-                    }
+                }
+                Err(err) => {
+                    return Err(err);
                 }
             }
         }
@@ -190,7 +179,7 @@ impl Context {
     /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
     ///
     /// ```no_run
-    /// use liner::{Context, Completer, Prompt};
+    /// use sl_liner::{Context, Completer, Prompt};
     ///
     /// struct EmptyCompleter;
     ///
@@ -213,7 +202,7 @@ impl Context {
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
-        if termion::is_tty(&stdin()) {
+        if sl_console::is_tty(&stdin()) {
             self.read_tty(prompt, f, buffer)
         } else {
             self.read_stdin(prompt, f, buffer)

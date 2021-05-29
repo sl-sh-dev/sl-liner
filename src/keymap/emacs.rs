@@ -1,5 +1,5 @@
+use sl_console::event::Key;
 use std::io;
-use termion::event::Key;
 
 use crate::buffer::Buffer;
 use crate::CursorPosition;
@@ -9,8 +9,8 @@ use crate::KeyMap;
 /// Emacs keybindings for `Editor`. This is the default for `Context::read_line()`.
 ///
 /// ```
-/// use liner::*;
-/// use liner::keymap;
+/// use sl_liner::*;
+/// use sl_liner::keymap;
 ///
 /// struct EmptyCompleter;
 /// impl Completer for EmptyCompleter {
@@ -184,7 +184,7 @@ mod tests {
     use crate::context::get_buffer_words;
     use crate::editor::Prompt;
     use crate::{Completer, Editor, History, KeyMap};
-    use termion::event::Key;
+    use sl_console::event::Key;
 
     fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) -> bool
     where

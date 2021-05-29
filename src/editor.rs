@@ -1,8 +1,8 @@
+use sl_console::{self, clear, color, cursor};
 use std::cmp;
 use std::cmp::Ordering;
 use std::fmt::{self, Write};
 use std::io;
-use termion::{self, clear, color, cursor};
 
 use super::complete::Completer;
 use crate::context::ColorClosure;
@@ -19,7 +19,7 @@ use crate::History;
 /// The prefix and suffix fields are intended for keybinds to change the
 /// prompt (ie the mode in vi).
 /// ```
-/// # use liner::Prompt;
+/// # use sl_liner::Prompt;
 /// let prompt = Prompt::from("prompt$ ");
 /// assert_eq!(&prompt.to_string(), "prompt$ ");
 /// ```
@@ -459,7 +459,7 @@ impl<'a> Editor<'a> {
     ) -> io::Result<usize> {
         use std::cmp::max;
 
-        let (w, _) = termion::terminal_size()?;
+        let (w, _) = sl_console::terminal_size()?;
 
         // XXX wide character support
         let max_word_size = completions.iter().fold(1, |m, x| max(m, x.chars().count()));
