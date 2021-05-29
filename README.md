@@ -1,26 +1,26 @@
 # liner
 A Rust library offering readline-like functionality.
 
-[CONTRIBUTING.md](/CONTRIBUTING.md)
+This was forked from https://gitlab.redox-os.org/redox-os/liner.
+It has some changes to history (non-duplicating and context sensitive by default)
+and it supports Windows (10 with an ansi escape capable console).
 
-[![crates.io](https://meritbadge.herokuapp.com/liner)](https://crates.io/crates/liner)
-[![Build Status](https://travis-ci.org/MovingtoMars/liner.svg)](https://travis-ci.org/MovingtoMars/liner)
-[![Docs](https://docs.rs/liner/badge.svg)](https://docs.rs/liner/)
+[CONTRIBUTING.md](/CONTRIBUTING.md)
 
 ## Featues
 - [x] Autosuggestions
 - [x] Emacs and Vi keybindings
 - [x] Multi-line editing
 - [x] History
-- [x] (Incomplete) basic and filename completions
-- [ ] Reverse search
+- [x] Basic and filename completions
+- [x] Reverse search
 - [ ] Remappable keybindings
 
 ## Basic Usage
 In `Cargo.toml`:
 ```toml
 [dependencies]
-redox_liner = "0.5.1"
+sl_liner = "https://github.com/sl-sh-dev/sl-liner"
 ...
 ```
 
