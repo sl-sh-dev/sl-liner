@@ -53,7 +53,17 @@ impl Eq for Buffer {}
 
 impl From<Buffer> for String {
     fn from(buf: Buffer) -> Self {
-        String::from_iter(buf.data)
+        let mut to = String::new();
+        let mut buf_iter = buf.data.iter().peekable();
+        while let Some(ch) = buf_iter.next() {
+            if ch == &'\\' && buf_iter.peek() == Some(&&'\n') {
+                // '\\' followed by newline, ignore both.
+                buf_iter.next();
+                continue;
+            }
+            to.push(*ch);
+        }
+        to
     }
 }
 
@@ -346,6 +356,21 @@ impl Buffer {
     /// Return true if the buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
+    }
+
+    /// Returns the first char of the buffer or None if empty.
+    pub fn first(&self) -> Option<&char> {
+        self.data.first()
+    }
+
+    /// Returns the last char of the buffer or None if empty.
+    pub fn last(&self) -> Option<&char> {
+        self.data.last()
+    }
+
+    /// Push ch onto the endo of the buffer.
+    pub fn push(&mut self, ch: char) {
+        self.data.push(ch);
     }
 }
 

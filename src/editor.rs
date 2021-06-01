@@ -327,10 +327,12 @@ impl<'a> Editor<'a> {
             return Ok(false);
         }
 
-        let char_before_cursor = cur_buf!(self).char_before(self.cursor);
-        if char_before_cursor == Some('\\') {
-            // self.insert_after_cursor('\r')?;
-            self.insert_after_cursor('\n')?;
+        let last_char = cur_buf!(self).last();
+        if last_char == Some(&'\\') {
+            let buf = cur_buf_mut!(self);
+            buf.push('\n');
+            self.cursor = buf.num_chars();
+            self.display()?;
             Ok(false)
         } else {
             self.cursor = cur_buf!(self).num_chars();

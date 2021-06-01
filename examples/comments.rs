@@ -95,7 +95,8 @@ fn main() {
         // We are out of the lambda, and res is the result from read_line which is an Into<String>
         match res {
             Ok(res) => {
-                match res.as_str() {
+                let res_str = res.as_str();
+                match res_str {
                     "emacs" => {
                         con.set_keymap(Box::new(keymap::Emacs::new()));
                         println!("emacs mode");
@@ -109,7 +110,7 @@ fn main() {
                         break;
                     }
                     // If all else fails, do nothing
-                    _ => {}
+                    _ => println!("ENTERED: [{}]", res_str),
                 }
 
                 // If we typed nothing, don't continue down to pushing to history

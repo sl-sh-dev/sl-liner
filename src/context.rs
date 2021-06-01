@@ -1,9 +1,7 @@
-use std::io::{self, stdin, stdout};
+use std::io;
 use std::time;
 
 use sl_console::console::*;
-use sl_console::input::TermRead;
-use sl_console::raw::IntoRawMode;
 
 use super::*;
 use crate::editor::Prompt;
@@ -93,14 +91,32 @@ impl Context {
         self.edit_line(prompt, f, Buffer::new())
     }
 
-    fn read_tty<B: Into<Buffer>>(
+    /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
+    ///
+    /// ```no_run
+    /// use sl_liner::{Context, Completer, Prompt};
+    ///
+    /// struct EmptyCompleter;
+    ///
+    /// impl Completer for EmptyCompleter {
+    ///     fn completions(&mut self, _start: &str) -> Vec<String> {
+    ///         Vec::new()
+    ///     }
+    /// }
+    ///
+    /// let mut context = Context::new();
+    /// context.set_completer(Box::new(EmptyCompleter{}));
+    /// let line =
+    ///     context.edit_line(Prompt::from("[prompt]$ "),
+    ///                       Some(Box::new(|s| String::from(s))),
+    ///                       "some initial buffer");
+    /// ```
+    pub fn edit_line<B: Into<Buffer>>(
         &mut self,
         prompt: Prompt,
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
-        //let stdout = stdout();
-        //let mut stdout = stdout.lock().into_raw_mode()?;
         let mut conout = conout()?;
         let mut conin = conin()?;
         let mut ed = Editor::new_with_init_buffer(
@@ -143,69 +159,5 @@ impl Context {
             }
         }
         Ok(ed.into())
-    }
-
-    fn read_stdin<B: Into<Buffer>>(
-        &mut self,
-        prompt: Prompt,
-        f: Option<ColorClosure>,
-        buffer: B,
-    ) -> io::Result<String> {
-        let stdout = stdout();
-        let mut stdout = stdout.lock().into_raw_mode()?;
-        let mut ed = Editor::new_with_init_buffer(
-            &mut stdout,
-            prompt,
-            f,
-            &mut self.history,
-            &self.word_divider_fn,
-            &mut self.buf,
-            buffer,
-        )?;
-        self.keymap.init(&mut ed);
-        // No tty, so don't bother with the color closure.
-        ed.use_closure(false);
-        for c in stdin().lock().keys() {
-            if self
-                .keymap
-                .handle_key(c.unwrap(), &mut ed, &mut *self.handler)?
-            {
-                break;
-            }
-        }
-        Ok(ed.into())
-    }
-
-    /// Same as `Context.read_line()`, but passes the provided initial buffer to the editor.
-    ///
-    /// ```no_run
-    /// use sl_liner::{Context, Completer, Prompt};
-    ///
-    /// struct EmptyCompleter;
-    ///
-    /// impl Completer for EmptyCompleter {
-    ///     fn completions(&mut self, _start: &str) -> Vec<String> {
-    ///         Vec::new()
-    ///     }
-    /// }
-    ///
-    /// let mut context = Context::new();
-    /// context.set_completer(Box::new(EmptyCompleter{}));
-    /// let line =
-    ///     context.edit_line(Prompt::from("[prompt]$ "),
-    ///                       Some(Box::new(|s| String::from(s))),
-    ///                       "some initial buffer");
-    /// ```
-    pub fn edit_line<B: Into<Buffer>>(
-        &mut self,
-        prompt: Prompt,
-        f: Option<ColorClosure>,
-        buffer: B,
-    ) -> io::Result<String> {
-        if sl_console::is_tty(&stdin()) {
-            self.read_tty(prompt, f, buffer)
-        } else {
-            self.read_stdin(prompt, f, buffer)
-        }
     }
 }

@@ -24,6 +24,7 @@ name = "sl_liner"
 [dependencies]
 bytecount = "0.6.0"
 sl-console = { git = "https://github.com/sl-sh-dev/sl-console.git" }
+#sl-console = { path = "./sl-console" }
 unicode-width = "0.1.6"
 
 [dev-dependencies]
