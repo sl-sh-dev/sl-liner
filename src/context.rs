@@ -119,6 +119,7 @@ impl Context {
     ) -> io::Result<String> {
         let mut conout = conout()?;
         let mut conin = conin()?;
+        let _raw = conout.raw_mode_guard();
         let mut ed = Editor::new_with_init_buffer(
             &mut conout,
             prompt,
