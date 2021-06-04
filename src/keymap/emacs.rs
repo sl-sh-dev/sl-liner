@@ -20,7 +20,8 @@ use crate::KeyMap;
 /// }
 ///
 /// let mut context = Context::new();
-/// let res = context.read_line(Prompt::from("[prompt]$ "), None);
+/// // This will hang github actions on windows...
+/// //let res = context.read_line(Prompt::from("[prompt]$ "), None);
 /// ```
 #[derive(Default, Clone)]
 pub struct Emacs {

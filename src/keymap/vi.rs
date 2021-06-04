@@ -323,7 +323,8 @@ fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<u
 ///
 /// let mut context = Context::new();
 /// context.set_keymap(Box::new(keymap::Vi::new()));
-/// let res = context.read_line(Prompt::from("[prompt]$ "), None);
+/// // This will hang github actions on windows...
+/// //let res = context.read_line(Prompt::from("[prompt]$ "), None);
 /// ```
 #[derive(Clone)]
 pub struct Vi {
