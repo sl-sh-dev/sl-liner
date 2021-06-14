@@ -1,7 +1,7 @@
 use std::io;
 use std::time;
 
-use sl_console::console::*;
+use sl_console::*;
 
 use super::*;
 use crate::editor::Prompt;
@@ -117,7 +117,7 @@ impl Context {
         f: Option<ColorClosure>,
         buffer: B,
     ) -> io::Result<String> {
-        coninit()?;
+        con_init()?;
         let mut conout = conout();
         let mut conin = conin();
         let _raw = conout.raw_mode_guard();
