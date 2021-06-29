@@ -1,4 +1,4 @@
-use sl_console::event::Key;
+use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io;
 
 use crate::buffer::Buffer;
@@ -112,24 +112,30 @@ impl KeyMap for Emacs {
     }
 
     fn handle_key_core<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
-        match key {
-            Key::Alt('.') => {}
+        match (key.code, key.mods) {
+            (KeyCode::Char('.'), Some(KeyMod::Alt)) => {}
             _ => self.last_arg_fetch_index = None,
         }
 
-        match key {
-            Key::Char(c) => ed.insert_after_cursor(c),
-            Key::Alt(c) => self.handle_alt_key(c, ed),
-            Key::Ctrl(c) => self.handle_ctrl_key(c, ed),
-            Key::Left => ed.move_cursor_left(1),
-            Key::Right => ed.move_cursor_right(1),
-            Key::Up => ed.move_up(),
-            Key::Down => ed.move_down(),
-            Key::Home => ed.move_cursor_to_start_of_line(),
-            Key::End => ed.move_cursor_to_end_of_line(),
-            Key::Backspace => ed.delete_before_cursor(),
-            Key::Delete => ed.delete_after_cursor(),
-            Key::Null => Ok(()),
+        match (key.code, key.mods) {
+            (KeyCode::Char(c), key_mod) => match key_mod {
+                None => ed.insert_after_cursor(c),
+                Some(KeyMod::Alt) => self.handle_alt_key(c, ed),
+                Some(KeyMod::Ctrl) => self.handle_ctrl_key(c, ed),
+                _ => Ok(()),
+            },
+            (key_code, None) => match key_code {
+                KeyCode::Left => ed.move_cursor_left(1),
+                KeyCode::Right => ed.move_cursor_right(1),
+                KeyCode::Up => ed.move_up(),
+                KeyCode::Down => ed.move_down(),
+                KeyCode::Home => ed.move_cursor_to_start_of_line(),
+                KeyCode::End => ed.move_cursor_to_end_of_line(),
+                KeyCode::Backspace => ed.delete_before_cursor(),
+                KeyCode::Delete => ed.delete_after_cursor(),
+                KeyCode::Null => Ok(()),
+                _ => Ok(()),
+            },
             _ => Ok(()),
         }
     }
@@ -187,6 +193,30 @@ mod tests {
     use crate::{Completer, Editor, History, KeyMap};
     use sl_console::event::Key;
 
+    fn simulate_key_codes<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) ->
+                                                                                              bool
+    where
+        I: IntoIterator<Item = &'b KeyCode>,
+    {
+        for k in keys {
+            if keymap
+                .handle_key(
+                    Key {
+                        code: *k,
+                        mods: None,
+                    },
+                    ed,
+                    &mut EmptyCompleter,
+                )
+                .unwrap()
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
     fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) -> bool
     where
         I: IntoIterator<Item = &'b Key>,
@@ -227,7 +257,11 @@ mod tests {
         ed.insert_str_after_cursor("done").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        assert!(simulate_keys(&mut map, &mut ed, [Key::Char('\n')].iter()));
+        assert!(simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Char('\n')].iter()
+        ));
 
         assert_eq!(ed.cursor(), 4);
         assert_eq!(String::from(ed), "done");
@@ -252,7 +286,11 @@ mod tests {
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor(), 3);
 
-        simulate_keys(&mut map, &mut ed, [Key::Left, Key::Char('f')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Left, KeyCode::Char('f')].iter(),
+        );
 
         assert_eq!(ed.cursor(), 3);
         assert_eq!(String::from(ed), "left");
@@ -278,12 +316,24 @@ mod tests {
         ed.insert_str_after_cursor("abc def ghi").unwrap();
         assert_eq!(ed.cursor(), 11);
 
-        simulate_keys(&mut map, &mut ed, [Key::Alt('b')].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [Key::new_mod(KeyCode::Char('b'), KeyMod::Alt)].iter(),
+        );
 
         // Move to `g`
         assert_eq!(ed.cursor(), 8);
 
-        simulate_keys(&mut map, &mut ed, [Key::Alt('b'), Key::Alt('f')].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [
+                Key::new_mod(KeyCode::Char('b'), KeyMod::Alt),
+                Key::new_mod(KeyCode::Char('f'), KeyMod::Alt),
+            ]
+            .iter(),
+        );
 
         // Move to the char after `f`
         assert_eq!(ed.cursor(), 7);
@@ -308,7 +358,11 @@ mod tests {
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor(), 5);
 
-        simulate_keys(&mut map, &mut ed, [Key::Left, Key::Left, Key::Right].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Left, KeyCode::Left, KeyCode::Right].iter(),
+        );
 
         assert_eq!(ed.cursor(), 4);
     }
@@ -332,7 +386,11 @@ mod tests {
         let mut map = Emacs::new();
         ed.insert_str_after_cursor("not empty").unwrap();
 
-        let res = map.handle_key(Key::Ctrl('h'), &mut ed, &mut EmptyCompleter);
+        let res = map.handle_key(
+            Key::new_mod(KeyCode::Char('h'), KeyMod::Ctrl),
+            &mut ed,
+            &mut EmptyCompleter,
+        );
         assert_eq!(res.is_ok(), true);
         assert_eq!(ed.current_buffer().to_string(), "not empt".to_string());
     }
