@@ -490,7 +490,7 @@ impl Vi {
 
             // update the last state
             mem::swap(&mut self.last_command, &mut self.current_command);
-            self.last_insert = self.current_insert.clone();
+            self.last_insert = self.current_insert;
             self.last_count = self.count;
 
             // reset our counts
