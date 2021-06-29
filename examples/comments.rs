@@ -59,10 +59,10 @@ impl Completer for CommentCompleter {
             // word to the left
             if filename {
                 let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                replace(&mut self.inner, Some(completer)).unwrap();
+                replace(&mut self.inner, Some(completer));
             } else {
                 // Delete the completer
-                replace(&mut self.inner, None).unwrap();
+                replace(&mut self.inner, None);
             }
         }
     }
