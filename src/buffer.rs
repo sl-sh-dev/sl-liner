@@ -42,6 +42,7 @@ pub struct Buffer {
     data: Vec<char>,
     actions: Vec<Action>,
     undone_actions: Vec<Action>,
+    register: Option<Action>,
 }
 
 impl PartialEq for Buffer {
@@ -94,6 +95,7 @@ impl FromIterator<char> for Buffer {
             data: t.into_iter().collect(),
             actions: Vec::new(),
             undone_actions: Vec::new(),
+            register: None,
         }
     }
 }
@@ -110,6 +112,7 @@ impl Buffer {
             data: Vec::new(),
             actions: Vec::new(),
             undone_actions: Vec::new(),
+            register: None,
         }
     }
 
@@ -124,6 +127,17 @@ impl Buffer {
 
     pub fn end_undo_group(&mut self) {
         self.actions.push(Action::EndGroup);
+    }
+
+    pub fn paste(&mut self) {
+        if let Some(rem) = &self.register.clone() {
+            match rem {
+                Action::Remove { start, ref text } => {
+                    self.insert_raw(*start, &text[..])
+                }
+                _ => {}
+            }
+        }
     }
 
     pub fn undo(&mut self) -> bool {
@@ -226,7 +240,8 @@ impl Buffer {
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
         let s = self.remove_raw(start, end);
         let num_removed = s.len();
-        self.push_action(Action::Remove { start, text: s });
+        self.push_action(Action::Remove { start, text: s.clone() });
+        self.register = Some(Action::Remove { start, text: s});
         num_removed
     }
 
@@ -287,8 +302,8 @@ impl Buffer {
     }
 
     pub fn print<W>(&self, out: &mut W) -> io::Result<()>
-    where
-        W: Write,
+        where
+            W: Write,
     {
         let string: String = self.data.iter().cloned().collect();
         out.write_all(string.as_bytes())
@@ -304,8 +319,8 @@ impl Buffer {
     /// the other stopped.
     /// Used to implement autosuggestions.
     pub fn print_rest<W>(&self, out: &mut W, after: usize) -> io::Result<usize>
-    where
-        W: Write,
+        where
+            W: Write,
     {
         let string: String = self.data.iter().skip(after).cloned().collect();
         out.write_all(string.as_bytes())?;

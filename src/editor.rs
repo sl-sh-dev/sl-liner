@@ -444,6 +444,11 @@ impl<'a> Editor<'a> {
         Ok(did)
     }
 
+    pub fn paste(&mut self) -> io::Result<()>{
+        cur_buf_mut!(self).paste();
+        self.display()
+    }
+
     pub fn revert(&mut self) -> io::Result<bool> {
         let did = cur_buf_mut!(self).revert();
         if did {
