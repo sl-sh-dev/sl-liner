@@ -2,7 +2,7 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
 
-use sl_console::event::Key;
+use sl_console::event::{Key, KeyCode, KeyMod};
 
 use crate::buffer::Buffer;
 use crate::Editor;
@@ -68,30 +68,30 @@ impl ModeStack {
 
 fn is_movement_key(key: Key) -> bool {
     matches!(
-        key,
-        Key::Char('h')
-            | Key::Char('l')
-            | Key::Left
-            | Key::Right
-            | Key::Char('w')
-            | Key::Char('W')
-            | Key::Char('b')
-            | Key::Char('B')
-            | Key::Char('e')
-            | Key::Char('E')
-            | Key::Char('g')
-            | Key::Backspace
-            | Key::Char(' ')
-            | Key::Home
-            | Key::End
-            | Key::Char('^')
-            | Key::Char('$')
-            | Key::Char('t')
-            | Key::Char('f')
-            | Key::Char('T')
-            | Key::Char('F')
-            | Key::Char(';')
-            | Key::Char(',')
+        key.code,
+        KeyCode::Char('h')
+            | KeyCode::Char('l')
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Char('w')
+            | KeyCode::Char('W')
+            | KeyCode::Char('b')
+            | KeyCode::Char('B')
+            | KeyCode::Char('e')
+            | KeyCode::Char('E')
+            | KeyCode::Char('g')
+            | KeyCode::Backspace
+            | KeyCode::Char(' ')
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::Char('^')
+            | KeyCode::Char('$')
+            | KeyCode::Char('t')
+            | KeyCode::Char('f')
+            | KeyCode::Char('T')
+            | KeyCode::Char('F')
+            | KeyCode::Char(';')
+            | KeyCode::Char(',')
     )
 }
 
@@ -354,7 +354,7 @@ impl Default for Vi {
             last_command: Vec::new(),
             current_insert: None,
             // we start vi in insert mode
-            last_insert: Some(Key::Char('i')),
+            last_insert: Some(Key::new(KeyCode::Char('i'))),
             count: 0,
             secondary_count: 0,
             last_count: 0,
@@ -554,7 +554,7 @@ impl Vi {
 
     fn repeat<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
         self.last_count = self.count;
-        let keys = mem::replace(&mut self.last_command, Vec::new());
+        let keys = mem::take(&mut self.last_command);
 
         if let Some(insert_key) = self.last_insert {
             // enter insert mode if necessary
@@ -567,7 +567,7 @@ impl Vi {
 
         if self.last_insert.is_some() {
             // leave insert mode
-            self.handle_key_core(Key::Esc, ed)?;
+            self.handle_key_core(Key::new(KeyCode::Esc), ed)?;
         }
 
         // restore the last command
@@ -577,29 +577,38 @@ impl Vi {
     }
 
     fn handle_key_common<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
-        match key {
-            Key::Ctrl('l') => ed.clear(),
-            Key::Left => ed.move_cursor_left(1),
-            Key::Right => ed.move_cursor_right(1),
-            Key::Up => ed.move_up(),
-            Key::Down => ed.move_down(),
-            Key::Home => ed.move_cursor_to_start_of_line(),
-            Key::End => ed.move_cursor_to_end_of_line(),
-            Key::Backspace => ed.delete_before_cursor(),
-            Key::Delete => ed.delete_after_cursor(),
-            Key::Null => Ok(()),
+        match key.mods {
+            Some(KeyMod::Ctrl) => {
+                if key.code == KeyCode::Char('l') {
+                    ed.clear()
+                } else {
+                    Ok(())
+                }
+            }
+            None => match key.code {
+                KeyCode::Left => ed.move_cursor_left(1),
+                KeyCode::Right => ed.move_cursor_right(1),
+                KeyCode::Up => ed.move_up(),
+                KeyCode::Down => ed.move_down(),
+                KeyCode::Home => ed.move_cursor_to_start_of_line(),
+                KeyCode::End => ed.move_cursor_to_end_of_line(),
+                KeyCode::Backspace => ed.delete_before_cursor(),
+                KeyCode::Delete => ed.delete_after_cursor(),
+                KeyCode::Null => Ok(()),
+                _ => Ok(()),
+            },
             _ => Ok(()),
         }
     }
 
     fn handle_key_insert<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
-        match key {
-            Key::Esc | Key::Ctrl('[') => {
+        match (key.code, key.mods) {
+            (KeyCode::Esc, None) | (KeyCode::Char('['), Some(KeyMod::Ctrl)) => {
                 // perform any repeats
                 if self.count > 0 {
                     self.last_count = self.count;
                     for _ in 1..self.count {
-                        let keys = mem::replace(&mut self.last_command, Vec::new());
+                        let keys = mem::take(&mut self.last_command);
                         for k in keys {
                             self.handle_key_core(k, ed)?;
                         }
@@ -610,7 +619,7 @@ impl Vi {
                 ed.move_cursor_left(1)?;
                 self.pop_mode(ed)
             }
-            Key::Char(c) => {
+            (KeyCode::Char(c), None) => {
                 let in_ms = if let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) {
                     duration.as_millis()
                 } else {
@@ -622,11 +631,15 @@ impl Vi {
                     self.last_command.clear();
                     self.movement_reset = false;
                     // vim behaves as if this was 'i'
-                    self.last_insert = Some(Key::Char('i'));
+                    self.last_insert = Some(Key::new(KeyCode::Char('i')));
                 }
                 let mut esc = false;
                 if let Some((s1, s2, ms)) = self.esc_sequence {
-                    if let Some(Key::Char(last_c)) = self.last_command.last() {
+                    if let Some(Key {
+                        code: KeyCode::Char(last_c),
+                        mods: None,
+                    }) = self.last_command.last()
+                    {
                         if *last_c == s1
                             && c == s2
                             && (in_ms > 0)
@@ -641,33 +654,36 @@ impl Vi {
                     ed.move_cursor_left(1)?;
                     let pos = ed.cursor() + self.move_count_right(ed);
                     ed.delete_until(pos)?;
-                    self.handle_key_insert(Key::Esc, ed)
+                    self.handle_key_insert(Key::new(KeyCode::Esc), ed)
                 } else {
                     self.last_command.push(key);
                     ed.insert_after_cursor(c)
                 }
             }
             // delete and backspace need to be included in the command buffer
-            Key::Backspace | Key::Delete => {
+            (KeyCode::Backspace, None) | (KeyCode::Delete, None) => {
                 if self.movement_reset {
                     ed.current_buffer_mut().end_undo_group();
                     ed.current_buffer_mut().start_undo_group();
                     self.last_command.clear();
                     self.movement_reset = false;
                     // vim behaves as if this was 'i'
-                    self.last_insert = Some(Key::Char('i'));
+                    self.last_insert = Some(Key::new(KeyCode::Char('i')));
                 }
                 self.last_command.push(key);
                 self.handle_key_common(key, ed)
             }
             // if this is a movement while in insert mode, reset the repeat count
-            Key::Left | Key::Right | Key::Home | Key::End => {
+            (KeyCode::Left, None)
+            | (KeyCode::Right, None)
+            | (KeyCode::Home, None)
+            | (KeyCode::End, None) => {
                 self.count = 0;
                 self.movement_reset = true;
                 self.handle_key_common(key, ed)
             }
             // up and down require even more special handling
-            Key::Up => {
+            (KeyCode::Up, None) => {
                 self.count = 0;
                 self.movement_reset = true;
                 ed.current_buffer_mut().end_undo_group();
@@ -675,7 +691,7 @@ impl Vi {
                 ed.current_buffer_mut().start_undo_group();
                 Ok(())
             }
-            Key::Down => {
+            (KeyCode::Down, None) => {
                 self.count = 0;
                 self.movement_reset = true;
                 ed.current_buffer_mut().end_undo_group();
@@ -692,240 +708,248 @@ impl Vi {
         use self::Mode::*;
         use self::MoveType::*;
 
-        match key {
-            Key::Esc => {
-                self.count = 0;
-                Ok(())
-            }
-            Key::Char('i') => {
-                self.last_insert = Some(key);
-                self.set_mode(Insert, ed)
-            }
-            Key::Char('a') => {
-                self.last_insert = Some(key);
-                self.set_mode(Insert, ed)?;
-                ed.move_cursor_right(1)
-            }
-            Key::Char('A') => {
-                self.last_insert = Some(key);
-                self.set_mode(Insert, ed)?;
-                ed.move_cursor_to_end_of_line()
-            }
-            Key::Char('I') => {
-                self.last_insert = Some(key);
-                self.set_mode(Insert, ed)?;
-                ed.move_cursor_to_start_of_line()
-            }
-            Key::Char('s') => {
-                self.last_insert = Some(key);
-                self.set_mode(Insert, ed)?;
-                let pos = ed.cursor() + self.move_count_right(ed);
-                ed.delete_until(pos)?;
-                self.last_count = self.count;
-                self.count = 0;
-                Ok(())
-            }
-            Key::Char('r') => self.set_mode(Mode::Replace, ed),
-            Key::Char('d') | Key::Char('c') => {
-                self.current_command.clear();
-
-                if key == Key::Char('d') {
-                    // handle special 'd' key stuff
-                    self.current_insert = None;
-                    self.current_command.push(key);
-                } else {
-                    // handle special 'c' key stuff
-                    self.current_insert = Some(key);
-                    self.current_command.clear();
-                    self.set_mode(Insert, ed)?;
-                }
-
-                let start_pos = ed.cursor();
-                self.set_mode(Mode::Delete(start_pos), ed)?;
-                self.secondary_count = self.count;
-                self.count = 0;
-                Ok(())
-            }
-            Key::Char('D') => {
-                // update the last command state
-                self.last_insert = None;
-                self.last_command.clear();
-                self.last_command.push(key);
-                self.count = 0;
-                self.last_count = 0;
-
-                ed.delete_all_after_cursor()
-            }
-            Key::Char('C') => {
-                // update the last command state
-                self.last_insert = None;
-                self.last_command.clear();
-                self.last_command.push(key);
-                self.count = 0;
-                self.last_count = 0;
-
-                self.set_mode_preserve_last(Insert, ed)?;
-                ed.delete_all_after_cursor()
-            }
-            Key::Char('.') => {
-                // repeat the last command
-                self.count = match (self.count, self.last_count) {
-                    // if both count and last_count are zero, use 1
-                    (0, 0) => 1,
-                    // if count is zero, use last_count
-                    (0, _) => self.last_count,
-                    // otherwise use count
-                    (_, _) => self.count,
-                };
-                self.repeat(ed)
-            }
-            Key::Char('h') | Key::Left | Key::Backspace => {
-                let count = self.move_count_left(ed);
-                ed.move_cursor_left(count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('l') | Key::Right | Key::Char(' ') => {
-                let count = self.move_count_right(ed);
-                ed.move_cursor_right(count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('k') | Key::Up => {
-                ed.move_up()?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('j') | Key::Down => {
-                ed.move_down()?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('t') => self.set_mode(Mode::MoveToChar(RightUntil), ed),
-            Key::Char('T') => self.set_mode(Mode::MoveToChar(LeftUntil), ed),
-            Key::Char('f') => self.set_mode(Mode::MoveToChar(RightAt), ed),
-            Key::Char('F') => self.set_mode(Mode::MoveToChar(LeftAt), ed),
-            Key::Char(';') => self.handle_key_move_to_char(key, Repeat, ed),
-            Key::Char(',') => self.handle_key_move_to_char(key, ReverseRepeat, ed),
-            Key::Char('w') => {
-                let count = self.move_count();
-                move_word(ed, count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('W') => {
-                let count = self.move_count();
-                move_word_ws(ed, count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('e') => {
-                let count = self.move_count();
-                move_to_end_of_word(ed, count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('E') => {
-                let count = self.move_count();
-                move_to_end_of_word_ws(ed, count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('b') => {
-                let count = self.move_count();
-                move_word_back(ed, count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('B') => {
-                let count = self.move_count();
-                move_word_ws_back(ed, count)?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('g') => self.set_mode(Mode::G, ed),
-            // if count is 0, 0 should move to start of line
-            Key::Char('0') if self.count == 0 => {
-                ed.move_cursor_to_start_of_line()?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char(i @ '0'..='9') => {
-                let i = i.to_digit(10).unwrap();
-                // count = count * 10 + i
-                self.count = self.count.saturating_mul(10).saturating_add(i);
-                Ok(())
-            }
-            Key::Char('^') => {
-                ed.move_cursor_to_start_of_line()?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('$') => {
-                ed.move_cursor_to_end_of_line()?;
-                self.pop_mode_after_movement(Exclusive, ed)
-            }
-            Key::Char('x') | Key::Delete => {
-                // update the last command state
-                self.last_insert = None;
-                self.last_command.clear();
-                self.last_command.push(key);
-                self.last_count = self.count;
-
-                let pos = ed.cursor() + self.move_count_right(ed);
-                ed.delete_until(pos)?;
-                self.count = 0;
-                Ok(())
-            }
-            Key::Char('~') => {
-                // update the last command state
-                self.last_insert = None;
-                self.last_command.clear();
-                self.last_command.push(key);
-                self.last_count = self.count;
-
-                self.set_mode(Tilde, ed)?;
-                for _ in 0..self.move_count_right(ed) {
-                    let c = ed.current_buffer().char_after(ed.cursor()).unwrap();
-                    if c.is_lowercase() {
-                        ed.delete_after_cursor()?;
-                        for c in c.to_uppercase() {
-                            ed.insert_after_cursor(c)?;
+        match key.mods {
+            Some(KeyMod::Ctrl) => match key.code {
+                KeyCode::Char('r') => {
+                    let count = self.move_count();
+                    self.count = 0;
+                    for _ in 0..count {
+                        let did = ed.redo()?;
+                        if !did {
+                            break;
                         }
-                    } else if c.is_uppercase() {
-                        ed.delete_after_cursor()?;
-                        for c in c.to_lowercase() {
-                            ed.insert_after_cursor(c)?;
+                    }
+                    Ok(())
+                }
+                _ => Ok(()),
+            },
+            None => {
+                match key.code {
+                    KeyCode::Esc => {
+                        self.count = 0;
+                        Ok(())
+                    }
+                    KeyCode::Char('i') => {
+                        self.last_insert = Some(key);
+                        self.set_mode(Insert, ed)
+                    }
+                    KeyCode::Char('a') => {
+                        self.last_insert = Some(key);
+                        self.set_mode(Insert, ed)?;
+                        ed.move_cursor_right(1)
+                    }
+                    KeyCode::Char('A') => {
+                        self.last_insert = Some(key);
+                        self.set_mode(Insert, ed)?;
+                        ed.move_cursor_to_end_of_line()
+                    }
+                    KeyCode::Char('I') => {
+                        self.last_insert = Some(key);
+                        self.set_mode(Insert, ed)?;
+                        ed.move_cursor_to_start_of_line()
+                    }
+                    KeyCode::Char('s') => {
+                        self.last_insert = Some(key);
+                        self.set_mode(Insert, ed)?;
+                        let pos = ed.cursor() + self.move_count_right(ed);
+                        ed.delete_until(pos)?;
+                        self.last_count = self.count;
+                        self.count = 0;
+                        Ok(())
+                    }
+                    KeyCode::Char('r') => self.set_mode(Mode::Replace, ed),
+                    KeyCode::Char('d') | KeyCode::Char('c') => {
+                        self.current_command.clear();
+
+                        if key.code == KeyCode::Char('d') {
+                            // handle special 'd' key stuff
+                            self.current_insert = None;
+                            self.current_command.push(key);
+                        } else {
+                            // handle special 'c' key stuff
+                            self.current_insert = Some(key);
+                            self.current_command.clear();
+                            self.set_mode(Insert, ed)?;
                         }
-                    } else {
-                        ed.move_cursor_right(1)?;
+
+                        let start_pos = ed.cursor();
+                        self.set_mode(Mode::Delete(start_pos), ed)?;
+                        self.secondary_count = self.count;
+                        self.count = 0;
+                        Ok(())
                     }
-                }
-                self.pop_mode(ed)?;
-                Ok(())
-            }
-            Key::Char('u') => {
-                let count = self.move_count();
-                self.count = 0;
-                for _ in 0..count {
-                    if !ed.undo()? {
-                        break;
+                    KeyCode::Char('D') => {
+                        // update the last command state
+                        self.last_insert = None;
+                        self.last_command.clear();
+                        self.last_command.push(key);
+                        self.count = 0;
+                        self.last_count = 0;
+
+                        ed.delete_all_after_cursor()
                     }
-                }
-                Ok(())
-            }
-            Key::Ctrl('r') => {
-                let count = self.move_count();
-                self.count = 0;
-                for _ in 0..count {
-                    let did = ed.redo()?;
-                    if !did {
-                        break;
+                    KeyCode::Char('C') => {
+                        // update the last command state
+                        self.last_insert = None;
+                        self.last_command.clear();
+                        self.last_command.push(key);
+                        self.count = 0;
+                        self.last_count = 0;
+
+                        self.set_mode_preserve_last(Insert, ed)?;
+                        ed.delete_all_after_cursor()
                     }
+                    KeyCode::Char('.') => {
+                        // repeat the last command
+                        self.count = match (self.count, self.last_count) {
+                            // if both count and last_count are zero, use 1
+                            (0, 0) => 1,
+                            // if count is zero, use last_count
+                            (0, _) => self.last_count,
+                            // otherwise use count
+                            (_, _) => self.count,
+                        };
+                        self.repeat(ed)
+                    }
+                    KeyCode::Char('h') | KeyCode::Left | KeyCode::Backspace => {
+                        let count = self.move_count_left(ed);
+                        ed.move_cursor_left(count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('l') | KeyCode::Right | KeyCode::Char(' ') => {
+                        let count = self.move_count_right(ed);
+                        ed.move_cursor_right(count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('k') | KeyCode::Up => {
+                        ed.move_up()?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('j') | KeyCode::Down => {
+                        ed.move_down()?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('t') => self.set_mode(Mode::MoveToChar(RightUntil), ed),
+                    KeyCode::Char('T') => self.set_mode(Mode::MoveToChar(LeftUntil), ed),
+                    KeyCode::Char('f') => self.set_mode(Mode::MoveToChar(RightAt), ed),
+                    KeyCode::Char('F') => self.set_mode(Mode::MoveToChar(LeftAt), ed),
+                    KeyCode::Char(';') => self.handle_key_move_to_char(key, Repeat, ed),
+                    KeyCode::Char(',') => self.handle_key_move_to_char(key, ReverseRepeat, ed),
+                    KeyCode::Char('w') => {
+                        let count = self.move_count();
+                        move_word(ed, count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('W') => {
+                        let count = self.move_count();
+                        move_word_ws(ed, count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('e') => {
+                        let count = self.move_count();
+                        move_to_end_of_word(ed, count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('E') => {
+                        let count = self.move_count();
+                        move_to_end_of_word_ws(ed, count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('b') => {
+                        let count = self.move_count();
+                        move_word_back(ed, count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('B') => {
+                        let count = self.move_count();
+                        move_word_ws_back(ed, count)?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('g') => self.set_mode(Mode::G, ed),
+                    // if count is 0, 0 should move to start of line
+                    KeyCode::Char('0') if self.count == 0 => {
+                        ed.move_cursor_to_start_of_line()?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char(i @ '0'..='9') => {
+                        let i = i.to_digit(10).unwrap();
+                        // count = count * 10 + i
+                        self.count = self.count.saturating_mul(10).saturating_add(i);
+                        Ok(())
+                    }
+                    KeyCode::Char('^') => {
+                        ed.move_cursor_to_start_of_line()?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('$') => {
+                        ed.move_cursor_to_end_of_line()?;
+                        self.pop_mode_after_movement(Exclusive, ed)
+                    }
+                    KeyCode::Char('x') | KeyCode::Delete => {
+                        // update the last command state
+                        self.last_insert = None;
+                        self.last_command.clear();
+                        self.last_command.push(key);
+                        self.last_count = self.count;
+
+                        let pos = ed.cursor() + self.move_count_right(ed);
+                        ed.delete_until(pos)?;
+                        self.count = 0;
+                        Ok(())
+                    }
+                    KeyCode::Char('~') => {
+                        // update the last command state
+                        self.last_insert = None;
+                        self.last_command.clear();
+                        self.last_command.push(key);
+                        self.last_count = self.count;
+
+                        self.set_mode(Tilde, ed)?;
+                        for _ in 0..self.move_count_right(ed) {
+                            let c = ed.current_buffer().char_after(ed.cursor()).unwrap();
+                            if c.is_lowercase() {
+                                ed.delete_after_cursor()?;
+                                for c in c.to_uppercase() {
+                                    ed.insert_after_cursor(c)?;
+                                }
+                            } else if c.is_uppercase() {
+                                ed.delete_after_cursor()?;
+                                for c in c.to_lowercase() {
+                                    ed.insert_after_cursor(c)?;
+                                }
+                            } else {
+                                ed.move_cursor_right(1)?;
+                            }
+                        }
+                        self.pop_mode(ed)?;
+                        Ok(())
+                    }
+                    KeyCode::Char('u') => {
+                        let count = self.move_count();
+                        self.count = 0;
+                        for _ in 0..count {
+                            if !ed.undo()? {
+                                break;
+                            }
+                        }
+                        Ok(())
+                    }
+                    _ => self.handle_key_common(key, ed),
                 }
-                Ok(())
             }
-            _ => self.handle_key_common(key, ed),
+            _ => Ok(()),
         }
     }
 
     fn handle_key_replace<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
-        match key {
-            Key::Char(c) => {
+        match key.code {
+            KeyCode::Char(c) => {
                 // make sure there are enough chars to replace
                 if self.move_count_right(ed) == self.move_count() {
                     // update the last command state
                     self.last_insert = None;
                     self.last_command.clear();
-                    self.last_command.push(Key::Char('r'));
+                    self.last_command.push(Key::new(KeyCode::Char('r')));
                     self.last_command.push(key);
                     self.last_count = self.count;
 
@@ -955,7 +979,10 @@ impl Vi {
     fn handle_key_delete_or_change<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
         match (key, self.current_insert) {
             // check if this is a movement key
-            (key, _) if is_movement_key(key) | (key == Key::Char('0') && self.count == 0) => {
+            (key, _)
+                if is_movement_key(key)
+                    | (key.code == KeyCode::Char('0') && key.mods == None && self.count == 0) =>
+            {
                 // set count
                 self.count = match (self.count, self.secondary_count) {
                     (0, 0) => 0,
@@ -974,8 +1001,30 @@ impl Vi {
                 self.handle_key_normal(key, ed)
             }
             // handle numeric keys
-            (Key::Char('0'..='9'), _) => self.handle_key_normal(key, ed),
-            (Key::Char('c'), Some(Key::Char('c'))) | (Key::Char('d'), None) => {
+            (
+                Key {
+                    code: KeyCode::Char('0'..='9'),
+                    mods: None,
+                },
+                _,
+            ) => self.handle_key_normal(key, ed),
+            (
+                Key {
+                    code: KeyCode::Char('c'),
+                    mods: None,
+                },
+                Some(Key {
+                    code: KeyCode::Char('c'),
+                    mods: None,
+                }),
+            )
+            | (
+                Key {
+                    code: KeyCode::Char('d'),
+                    mods: None,
+                },
+                None,
+            ) => {
                 // updating the last command buffer doesn't really make sense in this context.
                 // Repeating 'dd' will simply erase and already erased line. Any other commands
                 // will then become the new last command and the user will need to press 'dd' again
@@ -1009,24 +1058,31 @@ impl Vi {
         let count = self.move_count();
         self.count = 0;
 
-        let (key, movement) = match (key, movement, self.last_char_movement) {
+        let (key_code, movement) = match (key, movement, self.last_char_movement) {
             // repeat the last movement
-            (_, Repeat, Some((c, last_movement))) => (Key::Char(c), last_movement),
+            (_, Repeat, Some((c, last_movement))) => (KeyCode::Char(c), last_movement),
             // repeat the last movement in the opposite direction
-            (_, ReverseRepeat, Some((c, LeftUntil))) => (Key::Char(c), RightUntil),
-            (_, ReverseRepeat, Some((c, RightUntil))) => (Key::Char(c), LeftUntil),
-            (_, ReverseRepeat, Some((c, LeftAt))) => (Key::Char(c), RightAt),
-            (_, ReverseRepeat, Some((c, RightAt))) => (Key::Char(c), LeftAt),
+            (_, ReverseRepeat, Some((c, LeftUntil))) => (KeyCode::Char(c), RightUntil),
+            (_, ReverseRepeat, Some((c, RightUntil))) => (KeyCode::Char(c), LeftUntil),
+            (_, ReverseRepeat, Some((c, LeftAt))) => (KeyCode::Char(c), RightAt),
+            (_, ReverseRepeat, Some((c, RightAt))) => (KeyCode::Char(c), LeftAt),
             // repeat with no last_char_movement, invalid
             (_, Repeat, None) | (_, ReverseRepeat, None) => {
                 return self.normal_mode_abort(ed);
             }
             // pass valid keys through as is
-            (Key::Char(c), _, _) => {
+            (
+                Key {
+                    code: KeyCode::Char(c),
+                    mods: None,
+                },
+                _,
+                _,
+            ) => {
                 // store last command info
                 self.last_char_movement = Some((c, movement));
                 self.current_command.push(key);
-                (key, movement)
+                (key.code, movement)
             }
             // all other combinations are invalid, abort
             _ => {
@@ -1034,8 +1090,8 @@ impl Vi {
             }
         };
 
-        match key {
-            Key::Char(c) => {
+        match key_code {
+            KeyCode::Char(c) => {
                 let move_type;
                 match movement {
                     RightUntil => {
@@ -1084,12 +1140,12 @@ impl Vi {
         let count = self.move_count();
         self.current_command.push(key);
 
-        let res = match key {
-            Key::Char('e') => {
+        let res = match key.code {
+            KeyCode::Char('e') => {
                 move_to_end_of_word_back(ed, count)?;
                 self.pop_mode_after_movement(Inclusive, ed)
             }
-            Key::Char('E') => {
+            KeyCode::Char('E') => {
                 move_to_end_of_word_ws_back(ed, count)?;
                 self.pop_mode_after_movement(Inclusive, ed)
             }
@@ -1111,7 +1167,7 @@ impl KeyMap for Vi {
         self.last_command.clear();
         self.current_insert = None;
         // we start vi in insert mode
-        self.last_insert = Some(Key::Char('i'));
+        self.last_insert = Some(Key::new(KeyCode::Char('i')));
         self.count = 0;
         self.secondary_count = 0;
         self.last_count = 0;
@@ -1141,8 +1197,33 @@ mod tests {
     use crate::context::get_buffer_words;
     use crate::editor::Prompt;
     use crate::{Buffer, Completer, Editor, History, KeyMap};
-    use sl_console::event::Key;
-    use sl_console::event::Key::*;
+
+    fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
+        keymap: &mut M,
+        ed: &mut Editor<'a>,
+        keys: I,
+    ) -> bool
+    where
+        I: IntoIterator<Item = &'b KeyCode>,
+    {
+        for k in keys {
+            if keymap
+                .handle_key(
+                    Key {
+                        code: *k,
+                        mods: None,
+                    },
+                    ed,
+                    &mut EmptyCompleter,
+                )
+                .unwrap()
+            {
+                return true;
+            }
+        }
+
+        false
+    }
 
     fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) -> bool
     where
@@ -1185,7 +1266,11 @@ mod tests {
         ed.insert_str_after_cursor("done").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        assert!(simulate_keys(&mut map, &mut ed, [Char('\n'),].iter()));
+        assert!(simulate_keys(
+            &mut map,
+            &mut ed,
+            [Key::new(KeyCode::Char('\n')),].iter()
+        ));
 
         assert_eq!(ed.cursor(), 4);
         assert_eq!(String::from(ed), "done");
@@ -1211,7 +1296,11 @@ mod tests {
         ed.insert_str_after_cursor("let").unwrap();
         assert_eq!(ed.cursor(), 3);
 
-        simulate_keys(&mut map, &mut ed, [Left, Char('f')].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [Key::new(KeyCode::Left), Key::new(KeyCode::Char('f'))].iter(),
+        );
 
         assert_eq!(ed.cursor(), 3);
         assert_eq!(String::from(ed), "left");
@@ -1237,7 +1326,16 @@ mod tests {
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor(), 5);
 
-        simulate_keys(&mut map, &mut ed, [Left, Left, Right].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [
+                Key::new(KeyCode::Left),
+                Key::new(KeyCode::Left),
+                Key::new(KeyCode::Right),
+            ]
+            .iter(),
+        );
 
         assert_eq!(ed.cursor(), 4);
     }
@@ -1263,16 +1361,20 @@ mod tests {
         ed.insert_str_after_cursor(test_str).unwrap();
         assert_eq!(ed.cursor(), test_str.len());
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('^')].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [Key::new(KeyCode::Esc), Key::new(KeyCode::Char('^'))].iter(),
+        );
         assert_eq!(ed.cursor(), 0);
 
-        simulate_keys(&mut map, &mut ed, [Char('^')].iter());
+        simulate_keys(&mut map, &mut ed, [Key::new(KeyCode::Char('^'))].iter());
         assert_eq!(ed.cursor(), 0);
 
-        simulate_keys(&mut map, &mut ed, [Char('$')].iter());
+        simulate_keys(&mut map, &mut ed, [Key::new(KeyCode::Char('$'))].iter());
         assert_eq!(ed.cursor(), test_str.len() - 1);
 
-        simulate_keys(&mut map, &mut ed, [Char('$')].iter());
+        simulate_keys(&mut map, &mut ed, [Key::new(KeyCode::Char('$'))].iter());
         assert_eq!(ed.cursor(), test_str.len() - 1);
     }
 
@@ -1298,12 +1400,12 @@ mod tests {
             &mut map,
             &mut ed,
             [
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
+                Key::new(KeyCode::Char('i')),
+                Key::new(KeyCode::Char('n')),
+                Key::new(KeyCode::Char('s')),
+                Key::new(KeyCode::Char('e')),
+                Key::new(KeyCode::Char('r')),
+                Key::new(KeyCode::Char('t')),
             ]
             .iter(),
         );
@@ -1332,20 +1434,20 @@ mod tests {
         ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        simulate_keys(&mut map, &mut ed, [Left].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Left].iter());
         assert_eq!(ed.cursor(), 3);
-        simulate_keys(&mut map, &mut ed, [Right].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Right].iter());
         assert_eq!(ed.cursor(), 4);
 
         // switching from insert mode moves the cursor left
-        simulate_keys(&mut map, &mut ed, [Esc, Left].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Esc, KeyCode::Left].iter());
         assert_eq!(ed.cursor(), 2);
-        simulate_keys(&mut map, &mut ed, [Right].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Right].iter());
         assert_eq!(ed.cursor(), 3);
 
-        simulate_keys(&mut map, &mut ed, [Char('h')].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Char('h')].iter());
         assert_eq!(ed.cursor(), 2);
-        simulate_keys(&mut map, &mut ed, [Char('l')].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Char('l')].iter());
         assert_eq!(ed.cursor(), 3);
     }
 
@@ -1370,14 +1472,18 @@ mod tests {
         ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        simulate_keys(&mut map, &mut ed, [Esc].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Esc].iter());
         assert_eq!(ed.cursor(), 3);
 
-        simulate_keys(&mut map, &mut ed, [Right, Right].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Right, KeyCode::Right].iter());
         assert_eq!(ed.cursor(), 3);
 
         // in insert mode, we can move past the last char, but no further
-        simulate_keys(&mut map, &mut ed, [Char('i'), Right, Right].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Char('i'), KeyCode::Right, KeyCode::Right].iter(),
+        );
         assert_eq!(ed.cursor(), 4);
     }
 
@@ -1402,22 +1508,22 @@ mod tests {
         ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        simulate_keys(&mut map, &mut ed, [Esc].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Esc].iter());
         assert_eq!(ed.cursor(), 3);
 
         simulate_keys(
             &mut map,
             &mut ed,
             [
-                Char('i'),
-                Esc,
-                Char('i'),
+                Key::new(KeyCode::Char('i')),
+                Key::new(KeyCode::Esc),
+                Key::new(KeyCode::Char('i')),
                 //Ctrl+[ is the same as escape
-                Ctrl('['),
-                Char('i'),
-                Esc,
-                Char('i'),
-                Ctrl('['),
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('i')),
+                Key::new(KeyCode::Esc),
+                Key::new(KeyCode::Char('i')),
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
             ]
             .iter(),
         );
@@ -1446,11 +1552,19 @@ mod tests {
         ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        simulate_keys(&mut map, &mut ed, [Up].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Up].iter());
         assert_eq!(ed.cursor(), 12);
 
         // in normal mode, make sure we don't end up past the last char
-        simulate_keys(&mut map, &mut ed, [Ctrl('['), Up].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Up),
+            ]
+            .iter(),
+        );
         assert_eq!(ed.cursor(), 11);
     }
 
@@ -1478,11 +1592,19 @@ mod tests {
         ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        simulate_keys(&mut map, &mut ed, [Up].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Up].iter());
         assert_eq!(ed.cursor(), 8);
 
         // in normal mode, make sure we don't end up past the last char
-        simulate_keys(&mut map, &mut ed, [Ctrl('['), Char('k')].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('k')),
+            ]
+            .iter(),
+        );
         assert_eq!(ed.cursor(), 10);
     }
 
@@ -1510,10 +1632,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("pat").unwrap();
         assert_eq!(ed.cursor(), 3);
-        simulate_keys(&mut map, &mut ed, [Ctrl('r'), Right].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [
+                Key::new_mod(KeyCode::Char('r'), KeyMod::Ctrl),
+                Key::new(KeyCode::Right),
+            ]
+            .iter(),
+        );
         assert_eq!(ed.cursor(), 12);
 
-        //simulate_keys(&mut map,     &mut ed, [Ctrl('['), Char('u'), Char('i')].iter());
+        //simulate_keys(&mut map,     &mut ed, [Ctrl('['), KeyCode::Char('u'), KeyCode::Char('i')].iter());
         ed.delete_all_before_cursor().unwrap();
         assert_eq!(ed.cursor(), 0);
         //ed.insert_str_after_cursor("pat").unwrap();
@@ -1522,24 +1652,40 @@ mod tests {
             &mut map,
             &mut ed,
             [
-                Ctrl('r'),
-                Char('p'),
-                Char('a'),
-                Char('t'),
-                Ctrl('['),
-                Char('k'),
-                Ctrl('f'),
+                Key::new_mod(KeyCode::Char('r'), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('p')),
+                Key::new(KeyCode::Char('a')),
+                Key::new(KeyCode::Char('t')),
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('k')),
+                Key::new_mod(KeyCode::Char('f'), KeyMod::Ctrl),
             ]
             .iter(),
         );
         assert_eq!(ed.cursor(), 14);
 
-        simulate_keys(&mut map, &mut ed, [Ctrl('['), Char('u'), Char('i')].iter());
+        simulate_keys(
+            &mut map,
+            &mut ed,
+            [
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('u')),
+                Key::new(KeyCode::Char('i')),
+            ]
+            .iter(),
+        );
         assert_eq!(ed.cursor(), 0);
         simulate_keys(
             &mut map,
             &mut ed,
-            [Ctrl('s'), Char('p'), Char('a'), Char('t'), Ctrl('f')].iter(),
+            [
+                Key::new_mod(KeyCode::Char('s'), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('p')),
+                Key::new(KeyCode::Char('a')),
+                Key::new(KeyCode::Char('t')),
+                Key::new_mod(KeyCode::Char('f'), KeyMod::Ctrl),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 15);
 
@@ -1550,7 +1696,13 @@ mod tests {
         simulate_keys(
             &mut map,
             &mut ed,
-            [Ctrl('s'), Ctrl('['), Char('j'), Right].iter(),
+            [
+                Key::new_mod(KeyCode::Char('s'), KeyMod::Ctrl),
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('j')),
+                Key::new(KeyCode::Right),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 11);
     }
@@ -1577,10 +1729,16 @@ mod tests {
         ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Delete, Char('x')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Delete,
+                KeyCode::Char('x'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "ta");
@@ -1609,11 +1767,11 @@ mod tests {
             &mut map,
             &mut ed,
             [
-                //ctrl+[ is the same as Esc
-                Ctrl('['),
-                Char('0'),
-                Char('s'),
-                Char('s'),
+                //ctrl+[ is the same as KeyCode::Esc
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('0')),
+                Key::new(KeyCode::Char('s')),
+                Key::new(KeyCode::Char('s')),
             ]
             .iter(),
         );
@@ -1640,10 +1798,18 @@ mod tests {
         ed.insert_str_after_cursor("data").unwrap();
         assert_eq!(ed.cursor(), 4);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('2'), Char('s'), Char('b'), Char('e')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('s'),
+                KeyCode::Char('b'),
+                KeyCode::Char('e'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "beta");
     }
@@ -1671,17 +1837,17 @@ mod tests {
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('2'),
-                Char('s'),
-                Char('b'),
-                Char('e'),
-                //The same as Esc
-                Ctrl('['),
-                Char('4'),
-                Char('l'),
-                Char('.'),
+                Key::new(KeyCode::Esc),
+                Key::new(KeyCode::Char('0')),
+                Key::new(KeyCode::Char('2')),
+                Key::new(KeyCode::Char('s')),
+                Key::new(KeyCode::Char('b')),
+                Key::new(KeyCode::Char('e')),
+                //The same as KeyCode::Esc
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('4')),
+                Key::new(KeyCode::Char('l')),
+                Key::new(KeyCode::Char('.')),
             ]
             .iter(),
         );
@@ -1707,17 +1873,17 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(&mut map, &mut ed, [Esc].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Esc].iter());
         assert_eq!(map.count, 0);
 
-        simulate_keys(&mut map, &mut ed, [Char('1')].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Char('1')].iter());
         assert_eq!(map.count, 1);
 
-        simulate_keys(&mut map, &mut ed, [Char('1')].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Char('1')].iter());
         assert_eq!(map.count, 11);
 
         // switching to insert mode and back to edit mode should reset the count
-        simulate_keys(&mut map, &mut ed, [Char('i'), Esc].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Char('i'), KeyCode::Esc].iter());
         assert_eq!(map.count, 0);
 
         assert_eq!(String::from(ed), "");
@@ -1743,76 +1909,76 @@ mod tests {
         map.init(&mut ed);
 
         // make sure large counts don't overflow our u32
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
-                Char('9'),
+                KeyCode::Esc,
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
+                KeyCode::Char('9'),
             ]
             .iter(),
         );
@@ -1839,71 +2005,71 @@ mod tests {
         map.init(&mut ed);
 
         // make sure large counts don't overflow our u32
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('1'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
-                Char('0'),
+                KeyCode::Esc,
+                KeyCode::Char('1'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
+                KeyCode::Char('0'),
             ]
             .iter(),
         );
@@ -1929,7 +2095,17 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('1'), Char('0'), Esc].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('1'),
+                KeyCode::Char('0'),
+                KeyCode::Esc,
+            ]
+            .iter(),
+        );
         assert_eq!(map.count, 0);
         assert_eq!(String::from(ed), "");
     }
@@ -1958,15 +2134,15 @@ mod tests {
             &mut map,
             &mut ed,
             [
-                //same as Esc
-                Ctrl('['),
-                Char('3'),
-                Char('i'),
-                Char('t'),
-                Char('h'),
-                Char('i'),
-                Char('s'),
-                Esc,
+                //same as KeyCode::Esc
+                Key::new_mod(KeyCode::Char('['), KeyMod::Ctrl),
+                Key::new(KeyCode::Char('3')),
+                Key::new(KeyCode::Char('i')),
+                Key::new(KeyCode::Char('t')),
+                Key::new(KeyCode::Char('h')),
+                Key::new(KeyCode::Char('i')),
+                Key::new(KeyCode::Char('s')),
+                Key::new(KeyCode::Esc),
             ]
             .iter(),
         );
@@ -1992,10 +2168,17 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Char('i'), Char('f'), Esc, Char('.'), Char('.')].iter(),
+            [
+                KeyCode::Char('i'),
+                KeyCode::Char('f'),
+                KeyCode::Esc,
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "iiifff");
     }
@@ -2019,10 +2202,17 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Char('i'), Char('f'), Esc, Char('3'), Char('.')].iter(),
+            [
+                KeyCode::Char('i'),
+                KeyCode::Char('f'),
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('.'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "iifififf");
     }
@@ -2046,10 +2236,18 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Char('i'), Char('f'), Esc, Char('3'), Char('.'), Char('.')].iter(),
+            [
+                KeyCode::Char('i'),
+                KeyCode::Char('f'),
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "iififiifififff");
     }
@@ -2074,17 +2272,17 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('a'),
-                Char('i'),
-                Char('f'),
-                Esc,
-                Char('.'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('a'),
+                KeyCode::Char('i'),
+                KeyCode::Char('f'),
+                KeyCode::Esc,
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -2111,17 +2309,17 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('a'),
-                Char('i'),
-                Char('f'),
-                Esc,
-                Char('3'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('a'),
+                KeyCode::Char('i'),
+                KeyCode::Char('f'),
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -2148,22 +2346,22 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('a'),
-                Char('d'),
-                Char('t'),
-                Char(' '),
-                Left,
-                Left,
-                Char('a'),
-                Esc,
-                Right,
-                Right,
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('a'),
+                KeyCode::Char('d'),
+                KeyCode::Char('t'),
+                KeyCode::Char(' '),
+                KeyCode::Left,
+                KeyCode::Left,
+                KeyCode::Char('a'),
+                KeyCode::Esc,
+                KeyCode::Right,
+                KeyCode::Right,
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -2216,19 +2414,19 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('3'),
-                Char('i'),
-                Char('t'),
-                Char('h'),
-                Char('i'),
-                Char('s'),
-                Left,
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('i'),
+                KeyCode::Char('t'),
+                KeyCode::Char('h'),
+                KeyCode::Char('i'),
+                KeyCode::Char('s'),
+                KeyCode::Left,
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -2256,7 +2454,11 @@ mod tests {
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor(), 5);
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('3'), Left].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('3'), KeyCode::Left].iter(),
+        );
 
         assert_eq!(ed.cursor(), 1);
     }
@@ -2282,10 +2484,18 @@ mod tests {
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor(), 5);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('3'), Left, Char('i'), Char(' '), Esc].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Left,
+                KeyCode::Char('i'),
+                KeyCode::Char(' '),
+                KeyCode::Esc,
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "r ight");
     }
@@ -2312,10 +2522,16 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('3'), Char('r'), Char('x')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('r'),
+                KeyCode::Char('x'),
+            ]
+            .iter(),
         );
         // the cursor should not have moved and no change should have occured
         assert_eq!(ed.cursor(), 6);
@@ -2343,7 +2559,11 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('r'), Char('x')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('r'), KeyCode::Char('x')].iter(),
+        );
         assert_eq!(ed.cursor(), 6);
         assert_eq!(String::from(ed), "replacx");
     }
@@ -2369,10 +2589,17 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('3'), Char('r'), Char(' ')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('r'),
+                KeyCode::Char(' '),
+            ]
+            .iter(),
         );
         // cursor should be on the last replaced char
         assert_eq!(ed.cursor(), 2);
@@ -2401,10 +2628,16 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('3'), Char('r'), Char('x')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('r'),
+                KeyCode::Char('x'),
+            ]
+            .iter(),
         );
         // the cursor should not have moved and no change should have occured
         assert_eq!(ed.cursor(), 6);
@@ -2433,10 +2666,16 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('r'), Char('x'), Char('0')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('r'),
+                KeyCode::Char('x'),
+                KeyCode::Char('0'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "replacx");
@@ -2464,18 +2703,18 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('r'),
-                Char('x'),
-                Char('.'),
-                Char('.'),
-                Char('7'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('r'),
+                KeyCode::Char('x'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
+                KeyCode::Char('7'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -2504,20 +2743,20 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('2'),
-                Char('r'),
-                Char('x'),
-                Char('.'),
-                Char('.'),
-                Char('.'),
-                Char('.'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('r'),
+                KeyCode::Char('x'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -2545,17 +2784,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("test").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('3'),
-                Char('r'),
-                Char('x'),
-                Char('.'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('r'),
+                KeyCode::Char('x'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -2583,20 +2822,20 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("this is a test").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('3'),
-                Char('r'),
-                Char('x'),
-                Char('$'),
-                Char('.'),
-                Char('4'),
-                Char('h'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('r'),
+                KeyCode::Char('x'),
+                KeyCode::Char('$'),
+                KeyCode::Char('.'),
+                KeyCode::Char('4'),
+                KeyCode::Char('h'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -2629,7 +2868,7 @@ mod tests {
 
         map.count = 0;
 
-        simulate_keys(&mut map, &mut ed, [Esc, Left].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Esc, KeyCode::Left].iter());
         assert_eq!(map.move_count_right(&ed), 1);
     }
 
@@ -2659,7 +2898,7 @@ mod tests {
 
         map.count = 0;
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('0')].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Esc, KeyCode::Char('0')].iter());
         assert_eq!(map.move_count_left(&ed), 0);
     }
 
@@ -2684,10 +2923,17 @@ mod tests {
         ed.insert_str_after_cursor("replace").unwrap();
         assert_eq!(ed.cursor(), 7);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('2'), Char('x'), Char('.')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('x'),
+                KeyCode::Char('.'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "ace");
     }
@@ -2712,7 +2958,11 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('d'), Char('d')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('d'), KeyCode::Char('d')].iter(),
+        );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
@@ -2738,18 +2988,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('d'),
-                Char('d'),
-                Char('i'),
-                Char('n'),
-                Char('e'),
-                Char('w'),
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('d'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('e'),
+                KeyCode::Char('w'),
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -2778,17 +3028,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("don't delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('d'),
-                Esc,
-                Char('d'),
-                Char('c'),
-                Char('c'),
-                Char('d'),
+                KeyCode::Esc,
+                KeyCode::Char('d'),
+                KeyCode::Esc,
+                KeyCode::Char('d'),
+                KeyCode::Char('c'),
+                KeyCode::Char('c'),
+                KeyCode::Char('d'),
             ]
             .iter(),
         );
@@ -2816,7 +3066,11 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('d'), Char('h')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('d'), KeyCode::Char('h')].iter(),
+        );
         assert_eq!(ed.cursor(), 4);
         assert_eq!(String::from(ed), "delee");
     }
@@ -2841,10 +3095,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('3'), Char('d'), Char('h')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('d'),
+                KeyCode::Char('h'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 2);
         assert_eq!(String::from(ed), "dee");
@@ -2871,10 +3131,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('d'), Char('l')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('l'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "elete");
@@ -2901,10 +3167,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('3'), Char('d'), Char('l')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('d'),
+                KeyCode::Char('l'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "ete");
@@ -2931,10 +3204,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('d'), Char('l'), Char('.')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('l'),
+                KeyCode::Char('.'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "lete");
@@ -2961,10 +3241,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('d'), Char('$')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('$'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
@@ -2990,7 +3276,11 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('0'), Char('D')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('0'), KeyCode::Char('D')].iter(),
+        );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
@@ -3016,10 +3306,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('$'), Char('d'), Char('0')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('$'),
+                KeyCode::Char('d'),
+                KeyCode::Char('0'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "e");
@@ -3046,10 +3342,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('2'), Char('d'), Char('2'), Char('l')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('d'),
+                KeyCode::Char('2'),
+                KeyCode::Char('l'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "te");
@@ -3076,17 +3380,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete delete").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('2'),
-                Char('d'),
-                Char('2'),
-                Char('l'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('d'),
+                KeyCode::Char('2'),
+                KeyCode::Char('l'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -3694,10 +3998,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("delete some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('d'), Char('w')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('w'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "some words");
@@ -3724,17 +4034,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('c'),
-                Char('c'),
-                Char('d'),
-                Char('o'),
-                Char('n'),
-                Char('e'),
+                KeyCode::Esc,
+                KeyCode::Char('c'),
+                KeyCode::Char('c'),
+                KeyCode::Char('d'),
+                KeyCode::Char('o'),
+                KeyCode::Char('n'),
+                KeyCode::Char('e'),
             ]
             .iter(),
         );
@@ -3762,10 +4072,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('c'), Char('h'), Char('e'), Esc].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('c'),
+                KeyCode::Char('h'),
+                KeyCode::Char('e'),
+                KeyCode::Esc,
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 4);
         assert_eq!(String::from(ed), "chanee");
@@ -3791,10 +4108,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('3'), Char('c'), Char('h'), Char('e')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('c'),
+                KeyCode::Char('h'),
+                KeyCode::Char('e'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 3);
         assert_eq!(String::from(ed), "chee");
@@ -3820,10 +4144,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('c'), Char('l'), Char('s')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('c'),
+                KeyCode::Char('l'),
+                KeyCode::Char('s'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "shange");
@@ -3850,20 +4181,20 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('3'),
-                Char('c'),
-                Char('l'),
-                Char('s'),
-                Char('t'),
-                Char('r'),
-                Char('a'),
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('c'),
+                KeyCode::Char('l'),
+                KeyCode::Char('s'),
+                KeyCode::Char('t'),
+                KeyCode::Char('r'),
+                KeyCode::Char('a'),
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -3892,20 +4223,20 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('c'),
-                Char('l'),
-                Char('s'),
-                Esc,
-                Char('l'),
-                Char('.'),
-                Char('l'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('c'),
+                KeyCode::Char('l'),
+                KeyCode::Char('s'),
+                KeyCode::Esc,
+                KeyCode::Char('l'),
+                KeyCode::Char('.'),
+                KeyCode::Char('l'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -3934,17 +4265,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('c'),
-                Char('$'),
-                Char('o'),
-                Char('k'),
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('c'),
+                KeyCode::Char('$'),
+                KeyCode::Char('o'),
+                KeyCode::Char('k'),
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -3972,10 +4303,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('C'), Char('o'), Char('k')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('C'),
+                KeyCode::Char('o'),
+                KeyCode::Char('k'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 2);
         assert_eq!(String::from(ed), "ok");
@@ -4002,19 +4340,19 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('2'),
-                Char('l'),
-                Char('C'),
-                Char(' '),
-                Char('o'),
-                Char('k'),
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('l'),
+                KeyCode::Char('C'),
+                KeyCode::Char(' '),
+                KeyCode::Char('o'),
+                KeyCode::Char('k'),
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -4042,20 +4380,20 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('$'),
-                Char('c'),
-                Char('0'),
-                Char('s'),
-                Char('t'),
-                Char('r'),
-                Char('a'),
-                Char('n'),
-                Char('g'),
+                KeyCode::Esc,
+                KeyCode::Char('$'),
+                KeyCode::Char('c'),
+                KeyCode::Char('0'),
+                KeyCode::Char('s'),
+                KeyCode::Char('t'),
+                KeyCode::Char('r'),
+                KeyCode::Char('a'),
+                KeyCode::Char('n'),
+                KeyCode::Char('g'),
             ]
             .iter(),
         );
@@ -4084,22 +4422,22 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('2'),
-                Char('c'),
-                Char('2'),
-                Char('l'),
-                Char('s'),
-                Char('t'),
-                Char('r'),
-                Char('a'),
-                Char('n'),
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('c'),
+                KeyCode::Char('2'),
+                KeyCode::Char('l'),
+                KeyCode::Char('s'),
+                KeyCode::Char('t'),
+                KeyCode::Char('r'),
+                KeyCode::Char('a'),
+                KeyCode::Char('n'),
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -4128,19 +4466,19 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change change").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('2'),
-                Char('c'),
-                Char('2'),
-                Char('l'),
-                Char('o'),
-                Esc,
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('c'),
+                KeyCode::Char('2'),
+                KeyCode::Char('l'),
+                KeyCode::Char('o'),
+                KeyCode::Esc,
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -4169,20 +4507,20 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('c'),
-                Char('w'),
-                Char('t'),
-                Char('w'),
-                Char('e'),
-                Char('a'),
-                Char('k'),
-                Char(' '),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('c'),
+                KeyCode::Char('w'),
+                KeyCode::Char('t'),
+                KeyCode::Char('w'),
+                KeyCode::Char('e'),
+                KeyCode::Char('a'),
+                KeyCode::Char('k'),
+                KeyCode::Char(' '),
             ]
             .iter(),
         );
@@ -4210,25 +4548,25 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("these are some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('d'),
-                Char('3'),
-                Char('w'),
-                Char('i'),
-                Char('w'),
-                Char('o'),
-                Char('r'),
-                Char('d'),
-                Char('s'),
-                Char(' '),
-                Esc,
-                Char('l'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('3'),
+                KeyCode::Char('w'),
+                KeyCode::Char('i'),
+                KeyCode::Char('w'),
+                KeyCode::Char('o'),
+                KeyCode::Char('r'),
+                KeyCode::Char('d'),
+                KeyCode::Char('s'),
+                KeyCode::Char(' '),
+                KeyCode::Esc,
+                KeyCode::Char('l'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -4256,10 +4594,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('t'), Char('z')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('t'),
+                KeyCode::Char('z'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
     }
@@ -4284,10 +4628,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('t'), Char('d')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('t'),
+                KeyCode::Char('d'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 3);
     }
@@ -4313,10 +4663,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg d").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('2'), Char('t'), Char('d')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('t'),
+                KeyCode::Char('d'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 8);
     }
@@ -4341,10 +4698,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('t'), Char('d'), Char('l')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('t'),
+                KeyCode::Char('d'),
+                KeyCode::Char('l'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 4);
     }
@@ -4370,10 +4734,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('d'), Char('t'), Char('d')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('t'),
+                KeyCode::Char('d'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "defg");
@@ -4400,18 +4771,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('c'),
-                Char('t'),
-                Char('d'),
-                Char('z'),
-                Char(' '),
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('c'),
+                KeyCode::Char('t'),
+                KeyCode::Char('d'),
+                KeyCode::Char('z'),
+                KeyCode::Char(' '),
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -4439,10 +4810,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('f'), Char('d')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('f'),
+                KeyCode::Char('d'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 4);
     }
@@ -4467,10 +4844,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('$'), Char('T'), Char('d')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('$'),
+                KeyCode::Char('T'),
+                KeyCode::Char('d'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 5);
     }
@@ -4495,10 +4878,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('$'), Char('F'), Char('d')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('$'),
+                KeyCode::Char('F'),
+                KeyCode::Char('d'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 4);
     }
@@ -4523,10 +4912,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc abc").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('f'), Char('c'), Char(';')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('f'),
+                KeyCode::Char('c'),
+                KeyCode::Char(';'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 6);
     }
@@ -4551,10 +4947,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc abc").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('f'), Char('c'), Char('$'), Char(',')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('f'),
+                KeyCode::Char('c'),
+                KeyCode::Char('$'),
+                KeyCode::Char(','),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 2);
     }
@@ -4579,10 +4983,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc abc").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('f'), Char('c'), Char('d'), Char(';')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('f'),
+                KeyCode::Char('c'),
+                KeyCode::Char('d'),
+                KeyCode::Char(';'),
+            ]
+            .iter(),
         );
         assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "ab");
@@ -4609,18 +5021,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc abc abc abc").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('f'),
-                Char('c'),
-                Char('d'),
-                Char(';'),
-                Char('.'),
-                Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('f'),
+                KeyCode::Char('c'),
+                KeyCode::Char('d'),
+                KeyCode::Char(';'),
+                KeyCode::Char('.'),
+                KeyCode::Char('.'),
             ]
             .iter(),
         );
@@ -4816,10 +5228,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abcdefg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('x'), Char('x'), Char('x'), Char('3'), Char('u')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('x'),
+                KeyCode::Char('x'),
+                KeyCode::Char('x'),
+                KeyCode::Char('3'),
+                KeyCode::Char('u'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "abcdefg");
     }
@@ -4844,17 +5264,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abcdefg").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('x'),
-                Char('x'),
-                Char('x'),
-                Char('u'),
-                Char('u'),
-                Char('u'),
+                KeyCode::Esc,
+                KeyCode::Char('x'),
+                KeyCode::Char('x'),
+                KeyCode::Char('x'),
+                KeyCode::Char('u'),
+                KeyCode::Char('u'),
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -4885,21 +5305,21 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("change some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('c'),
-                Char('g'),
-                Char('E'),
-                Char('e'),
-                Char('t'),
-                Char('h'),
-                Char('i'),
-                Char('n'),
-                Char('g'),
-                Esc,
+                KeyCode::Esc,
+                KeyCode::Char('c'),
+                KeyCode::Char('g'),
+                KeyCode::Char('E'),
+                KeyCode::Char('e'),
+                KeyCode::Char('t'),
+                KeyCode::Char('h'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('g'),
+                KeyCode::Esc,
             ]
             .iter(),
         );
@@ -4926,18 +5346,18 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
-                Esc,
-                Char('u'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -4964,20 +5384,20 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('i'),
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
-                Esc,
-                Char('u'),
+                KeyCode::Esc,
+                KeyCode::Char('i'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5004,34 +5424,34 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('i'),
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
-                Up,
-                Char('h'),
-                Char('i'),
-                Char('s'),
-                Char('t'),
-                Char('o'),
-                Char('r'),
-                Char('y'),
-                Down,
-                Char(' '),
-                Char('t'),
-                Char('e'),
-                Char('x'),
-                Char('t'),
-                Esc,
-                Char('u'),
+                KeyCode::Esc,
+                KeyCode::Char('i'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
+                KeyCode::Up,
+                KeyCode::Char('h'),
+                KeyCode::Char('i'),
+                KeyCode::Char('s'),
+                KeyCode::Char('t'),
+                KeyCode::Char('o'),
+                KeyCode::Char('r'),
+                KeyCode::Char('y'),
+                KeyCode::Down,
+                KeyCode::Char(' '),
+                KeyCode::Char('t'),
+                KeyCode::Char('e'),
+                KeyCode::Char('x'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5058,22 +5478,22 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('i'),
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
-                Up,
-                Esc,
-                Down,
-                Char('u'),
+                KeyCode::Esc,
+                KeyCode::Char('i'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
+                KeyCode::Up,
+                KeyCode::Esc,
+                KeyCode::Down,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5100,28 +5520,28 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('i'),
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('i'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
                 // movement reset will get triggered here
-                Left,
-                Right,
-                Char(' '),
-                Char('t'),
-                Char('e'),
-                Char('x'),
-                Char('t'),
-                Esc,
-                Char('u'),
+                KeyCode::Left,
+                KeyCode::Right,
+                KeyCode::Char(' '),
+                KeyCode::Char('t'),
+                KeyCode::Char('e'),
+                KeyCode::Char('x'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5148,10 +5568,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("rm some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('3'), Char('x'), Char('u')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('x'),
+                KeyCode::Char('u'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "rm some words");
     }
@@ -5176,27 +5603,27 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
-                Esc,
-                Char('3'),
-                Char('i'),
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
-                Esc,
-                Char('u'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('i'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5223,21 +5650,21 @@ mod tests {
         let mut map = Vi::new();
         map.init(&mut ed);
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Char('i'),
-                Char('n'),
-                Char('s'),
-                Char('e'),
-                Char('r'),
-                Char('t'),
-                Esc,
-                Char('3'),
-                Char('.'),
-                Esc,
-                Char('u'),
+                KeyCode::Char('i'),
+                KeyCode::Char('n'),
+                KeyCode::Char('s'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+                KeyCode::Char('3'),
+                KeyCode::Char('.'),
+                KeyCode::Esc,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5265,18 +5692,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("replace some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('0'),
-                Char('8'),
-                Char('s'),
-                Char('o'),
-                Char('k'),
-                Esc,
-                Char('u'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('8'),
+                KeyCode::Char('s'),
+                KeyCode::Char('o'),
+                KeyCode::Char('k'),
+                KeyCode::Esc,
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5304,26 +5731,26 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("replace some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
             [
-                Esc,
-                Char('A'),
-                Char(' '),
-                Char('h'),
-                Char('e'),
-                Char('r'),
-                Char('e'),
-                Esc,
-                Char('0'),
-                Char('8'),
-                Char('s'),
-                Char('o'),
-                Char('k'),
-                Esc,
-                Char('2'),
-                Char('u'),
+                KeyCode::Esc,
+                KeyCode::Char('A'),
+                KeyCode::Char(' '),
+                KeyCode::Char('h'),
+                KeyCode::Char('e'),
+                KeyCode::Char('r'),
+                KeyCode::Char('e'),
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('8'),
+                KeyCode::Char('s'),
+                KeyCode::Char('o'),
+                KeyCode::Char('k'),
+                KeyCode::Esc,
+                KeyCode::Char('2'),
+                KeyCode::Char('u'),
             ]
             .iter(),
         );
@@ -5351,10 +5778,18 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("replace some words").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('8'), Char('r'), Char(' '), Char('u')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('8'),
+                KeyCode::Char('r'),
+                KeyCode::Char(' '),
+                KeyCode::Char('u'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "replace some words");
     }
@@ -5379,7 +5814,7 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("tilde").unwrap();
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('~')].iter());
+        simulate_key_codes(&mut map, &mut ed, [KeyCode::Esc, KeyCode::Char('~')].iter());
         assert_eq!(String::from(ed), "tildE");
     }
 
@@ -5403,7 +5838,11 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("tilde").unwrap();
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('~'), Char('~')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('~'), KeyCode::Char('~')].iter(),
+        );
         assert_eq!(String::from(ed), "tilde");
     }
 
@@ -5427,10 +5866,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("tilde").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('~'), Char('~')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('~'),
+                KeyCode::Char('~'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "TIlde");
     }
@@ -5455,7 +5900,11 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("tilde").unwrap();
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('~'), Char('.')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('~'), KeyCode::Char('.')].iter(),
+        );
         assert_eq!(String::from(ed), "tilde");
     }
 
@@ -5479,10 +5928,17 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("tilde").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('1'), Char('0'), Char('~')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('1'),
+                KeyCode::Char('0'),
+                KeyCode::Char('~'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "TILDE");
     }
@@ -5507,10 +5963,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("TILDE").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('2'), Char('~')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('~'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "tiLDE");
     }
@@ -5535,10 +5997,16 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("ti_lde").unwrap();
 
-        simulate_keys(
+        simulate_key_codes(
             &mut map,
             &mut ed,
-            [Esc, Char('0'), Char('6'), Char('~')].iter(),
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('6'),
+                KeyCode::Char('~'),
+            ]
+            .iter(),
         );
         assert_eq!(String::from(ed), "TI_LDE");
     }
@@ -5563,7 +6031,11 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("not empty").unwrap();
 
-        let res = map.handle_key(Ctrl('h'), &mut ed, &mut EmptyCompleter);
+        let res = map.handle_key(
+            Key::new_mod(KeyCode::Char('h'), KeyMod::Ctrl),
+            &mut ed,
+            &mut EmptyCompleter,
+        );
         assert_eq!(res.is_ok(), true);
         assert_eq!(ed.current_buffer().to_string(), "not empt".to_string());
     }
@@ -5588,7 +6060,11 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abc defg").unwrap();
 
-        simulate_keys(&mut map, &mut ed, [Esc, Char('$'), Char(';')].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Esc, KeyCode::Char('$'), KeyCode::Char(';')].iter(),
+        );
         assert_eq!(ed.cursor(), 7);
     }
 }

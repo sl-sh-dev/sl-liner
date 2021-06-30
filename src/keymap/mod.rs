@@ -1,7 +1,6 @@
 use crate::complete::Completer;
-use crate::event::*;
-use crate::Editor;
-use sl_console::event::Key;
+use crate::{Editor, Event, EventKind};
+use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io::{self, ErrorKind};
 
 pub trait KeyMap {
@@ -22,35 +21,37 @@ pub trait KeyMap {
 
         let is_empty = editor.current_buffer().is_empty();
 
-        if key == Key::Ctrl('h') {
+        if key.code == KeyCode::Char('h') && key.mods == Some(KeyMod::Ctrl) {
             // XXX: Might need to change this when remappable keybindings are added.
-            key = Key::Backspace;
+            key = Key::new(KeyCode::Backspace);
         }
 
-        match key {
-            Key::Ctrl('c') => {
+        match (key.code, key.mods) {
+            (KeyCode::Char('c'), Some(KeyMod::Ctrl)) => {
                 editor.handle_newline()?;
                 return Err(io::Error::new(ErrorKind::Interrupted, "ctrl-c"));
             }
             // if the current buffer is empty, treat ctrl-d as eof
-            Key::Ctrl('d') if is_empty => {
+            (KeyCode::Char('d'), Some(KeyMod::Ctrl)) if is_empty => {
                 editor.handle_newline()?;
                 return Err(io::Error::new(ErrorKind::UnexpectedEof, "ctrl-d"));
             }
-            Key::Char('\t') => editor.complete(handler)?,
-            Key::Char('\n') => {
+            (KeyCode::Char('\t'), None) => editor.complete(handler)?,
+            (KeyCode::Char('\n'), None) => {
                 done = editor.handle_newline()?;
             }
-            Key::Ctrl('f') if editor.is_currently_showing_autosuggestion() => {
+            (KeyCode::Char('f'), Some(KeyMod::Ctrl))
+                if editor.is_currently_showing_autosuggestion() =>
+            {
                 editor.accept_autosuggestion()?;
             }
-            Key::Ctrl('r') => {
+            (KeyCode::Char('r'), Some(KeyMod::Ctrl)) => {
                 editor.search(false)?;
             }
-            Key::Ctrl('s') => {
+            (KeyCode::Char('s'), Some(KeyMod::Ctrl)) => {
                 editor.search(true)?;
             }
-            Key::Right
+            (KeyCode::Right, None)
                 if editor.is_currently_showing_autosuggestion()
                     && editor.cursor_is_at_end_of_line() =>
             {
@@ -82,7 +83,7 @@ mod tests {
     use crate::context::get_buffer_words;
     use crate::editor::Prompt;
     use crate::History;
-    use sl_console::event::Key::*;
+    use sl_console::event::Key;
     use std::io::ErrorKind;
 
     #[derive(Default)]
@@ -120,7 +121,11 @@ mod tests {
         .unwrap();
         let mut map = TestKeyMap;
 
-        let res = map.handle_key(Ctrl('d'), &mut ed, &mut EmptyCompleter);
+        let res = map.handle_key(
+            Key::new_mod(KeyCode::Char('d'), KeyMod::Ctrl),
+            &mut ed,
+            &mut EmptyCompleter,
+        );
         assert_eq!(res.is_err(), true);
         assert_eq!(res.err().unwrap().kind(), ErrorKind::UnexpectedEof);
     }
@@ -144,7 +149,11 @@ mod tests {
         let mut map = TestKeyMap;
         ed.insert_str_after_cursor("not empty").unwrap();
 
-        let res = map.handle_key(Ctrl('d'), &mut ed, &mut EmptyCompleter);
+        let res = map.handle_key(
+            Key::new_mod(KeyCode::Char('d'), KeyMod::Ctrl),
+            &mut ed,
+            &mut EmptyCompleter,
+        );
         assert_eq!(res.is_ok(), true);
     }
 
@@ -166,7 +175,11 @@ mod tests {
         .unwrap();
         let mut map = TestKeyMap;
 
-        let res = map.handle_key(Ctrl('c'), &mut ed, &mut EmptyCompleter);
+        let res = map.handle_key(
+            Key::new_mod(KeyCode::Char('c'), KeyMod::Ctrl),
+            &mut ed,
+            &mut EmptyCompleter,
+        );
         assert_eq!(res.is_err(), true);
         assert_eq!(res.err().unwrap().kind(), ErrorKind::Interrupted);
     }
