@@ -13,23 +13,31 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn do_on(&self, buf: &mut Buffer) {
+    pub fn do_on(&self, buf: &mut Buffer) -> usize {
         match *self {
             Action::Insert { start, ref text } => buf.insert_raw(start, &text[..]),
             Action::Remove { start, ref text } => {
-                buf.remove_raw(start, start + text.len());
+                buf.remove_raw(start, start + text.len()).len()
             }
-            Action::StartGroup | Action::EndGroup => {}
+            Action::StartGroup | Action::EndGroup => 0
         }
     }
 
-    pub fn undo(&self, buf: &mut Buffer) {
+    pub fn undo(&self, buf: &mut Buffer) -> usize {
         match *self {
             Action::Insert { start, ref text } => {
-                buf.remove_raw(start, start + text.len());
+                buf.remove_raw(start, start + text.len()).len()
             }
             Action::Remove { start, ref text } => buf.insert_raw(start, &text[..]),
-            Action::StartGroup | Action::EndGroup => {}
+            Action::StartGroup | Action::EndGroup => 0
+        }
+    }
+
+    pub fn get_start_and_text(&self) -> Option<(usize, Vec<char>)> {
+        match *self {
+            Action::Insert { start, ref text } => Some((start, text.clone())),
+            Action::Remove { start, ref text } => Some((start, text.clone())),
+            Action::StartGroup | Action::EndGroup => None
         }
     }
 }
@@ -129,25 +137,37 @@ impl Buffer {
         self.actions.push(Action::EndGroup);
     }
 
-    pub fn paste(&mut self) {
-        if let Some(rem) = &self.register.clone() {
-            match rem {
-                Action::Remove { start, ref text } => {
-                    self.insert_raw(*start, &text[..])
-                }
-                _ => {}
+    fn get_register(&self) -> Option<(usize, Vec<char>)> {
+        match &self.register {
+            Some(rem) => {
+                rem.get_start_and_text()
             }
+            _ => None
         }
     }
 
-    pub fn undo(&mut self) -> bool {
+    pub fn paste(&mut self) -> Option<usize> {
+        if let Some((start, text)) = self.get_register() {
+            let mut idx= start;
+            if self.data.len() >= start + 1 {
+                idx = start + 1;
+            }
+            let count = self.insert_raw(idx, &text[..]);
+            self.push_action(Action::Insert { start, text });
+            Some(count)
+        } else {
+            None
+        }
+    }
+
+    pub fn undo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let did = !self.actions.is_empty();
+        let mut count = None;
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.actions.pop() {
-            act.undo(self);
+            count = Some(act.undo(self));
             self.undone_actions.push(act.clone());
             match act {
                 EndGroup => {
@@ -164,17 +184,17 @@ impl Buffer {
                 break;
             }
         }
-        did
+        count
     }
 
-    pub fn redo(&mut self) -> bool {
+    pub fn redo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let did = !self.undone_actions.is_empty();
+        let mut count = None;
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.undone_actions.pop() {
-            act.do_on(self);
+            count = Some(act.do_on(self));
             self.actions.push(act.clone());
             match act {
                 StartGroup => {
@@ -191,7 +211,7 @@ impl Buffer {
                 break;
             }
         }
-        did
+        count
     }
 
     pub fn revert(&mut self) -> bool {
@@ -199,7 +219,7 @@ impl Buffer {
             return false;
         }
 
-        while self.undo() {}
+        while self.undo().is_some() {}
         true
     }
 
@@ -332,10 +352,13 @@ impl Buffer {
         self.data.drain(start..end).collect()
     }
 
-    fn insert_raw(&mut self, start: usize, text: &[char]) {
+    fn insert_raw(&mut self, start: usize, text: &[char]) -> usize {
+        let mut count: usize = 0;
         for (i, &c) in text.iter().enumerate() {
-            self.data.insert(start + i, c)
+            self.data.insert(start + i, c);
+            count += 1;
         }
+        count
     }
 
     /// Check if the other buffer starts with the same content as this one.
@@ -477,7 +500,7 @@ mod tests {
         buf.remove(0, 1);
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
+        assert!(buf.undo().is_some());
         assert_eq!(String::from(buf), "abcdefg");
     }
 
@@ -490,8 +513,8 @@ mod tests {
         buf.remove(0, 1);
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
-        assert_eq!(buf.redo(), true);
+        assert!(buf.undo().is_some());
+        assert!(buf.redo().is_some());
         assert_eq!(String::from(buf), "defg");
     }
 
@@ -506,7 +529,7 @@ mod tests {
         buf.end_undo_group();
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
+        assert!(buf.undo().is_some());
         assert_eq!(String::from(buf), "abcdefg");
     }
 
@@ -521,8 +544,8 @@ mod tests {
         buf.end_undo_group();
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
-        assert_eq!(buf.redo(), true);
+        assert!(buf.undo().is_some());
+        assert!(buf.redo().is_some());
         assert_eq!(String::from(buf), "defg");
     }
 
