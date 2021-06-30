@@ -444,9 +444,14 @@ impl<'a> Editor<'a> {
         Ok(did.is_some())
     }
 
-    pub fn paste(&mut self) -> io::Result<()>{
-        if let Some(pasted) = cur_buf_mut!(self).paste() {
-            self.move_cursor_right(pasted)?;
+    pub fn paste(&mut self, right: bool) -> io::Result<()>{
+        if let Some(pasted) = cur_buf_mut!(self).paste(right) {
+            if right {
+                self.move_cursor_right(pasted)?;
+            }
+            else {
+                self.move_cursor_right(pasted - 1)?;
+            }
         }
         self.display()
     }

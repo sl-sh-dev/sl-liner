@@ -935,7 +935,10 @@ impl Vi {
                         Ok(())
                     }
                     KeyCode::Char('p') => {
-                        ed.paste()
+                        ed.paste(true)
+                    }
+                    KeyCode::Char('P') => {
+                        ed.paste(false)
                     }
                     _ => self.handle_key_common(key, ed),
                 }

@@ -146,11 +146,14 @@ impl Buffer {
         }
     }
 
-    pub fn paste(&mut self) -> Option<usize> {
+    pub fn paste(&mut self, right: bool) -> Option<usize> {
         if let Some((start, text)) = self.get_register() {
             let mut idx= start;
             if self.data.len() >= start + 1 {
-                idx = start + 1;
+                if right {
+                    // insert to right of cursor
+                    idx = start + 1;
+                }
             }
             let count = self.insert_raw(idx, &text[..]);
             self.push_action(Action::Insert { start, text });
