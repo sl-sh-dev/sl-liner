@@ -193,8 +193,11 @@ mod tests {
     use crate::{Completer, Editor, History, KeyMap};
     use sl_console::event::Key;
 
-    fn simulate_key_codes<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) ->
-                                                                                              bool
+    fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
+        keymap: &mut M,
+        ed: &mut Editor<'a>,
+        keys: I,
+    ) -> bool
     where
         I: IntoIterator<Item = &'b KeyCode>,
     {

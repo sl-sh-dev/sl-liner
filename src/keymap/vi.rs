@@ -554,7 +554,7 @@ impl Vi {
 
     fn repeat<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
         self.last_count = self.count;
-        let keys = mem::replace(&mut self.last_command, Vec::new());
+        let keys = mem::take(&mut self.last_command);
 
         if let Some(insert_key) = self.last_insert {
             // enter insert mode if necessary
@@ -582,7 +582,7 @@ impl Vi {
                 if key.code == KeyCode::Char('l') {
                     ed.clear()
                 } else {
-                    return Ok(());
+                    Ok(())
                 }
             }
             None => match key.code {
@@ -608,7 +608,7 @@ impl Vi {
                 if self.count > 0 {
                     self.last_count = self.count;
                     for _ in 1..self.count {
-                        let keys = mem::replace(&mut self.last_command, Vec::new());
+                        let keys = mem::take(&mut self.last_command);
                         for k in keys {
                             self.handle_key_core(k, ed)?;
                         }
@@ -1198,8 +1198,11 @@ mod tests {
     use crate::editor::Prompt;
     use crate::{Buffer, Completer, Editor, History, KeyMap};
 
-    fn simulate_key_codes<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) ->
-                                                                                              bool
+    fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
+        keymap: &mut M,
+        ed: &mut Editor<'a>,
+        keys: I,
+    ) -> bool
     where
         I: IntoIterator<Item = &'b KeyCode>,
     {
@@ -1476,7 +1479,11 @@ mod tests {
         assert_eq!(ed.cursor(), 3);
 
         // in insert mode, we can move past the last char, but no further
-        simulate_key_codes(&mut map, &mut ed, [KeyCode::Char('i'), KeyCode::Right, KeyCode::Right].iter());
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [KeyCode::Char('i'), KeyCode::Right, KeyCode::Right].iter(),
+        );
         assert_eq!(ed.cursor(), 4);
     }
 

@@ -57,13 +57,16 @@ impl Completer for CommentCompleter {
             // under the same condition, then
             // This condition is only false under the predicate that we are in a space with no
             // word to the left
+            let val: Option<FilenameCompleter>;
             if filename {
                 let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                replace(&mut self.inner, Some(completer));
+                val = replace(&mut self.inner, Some(completer));
             } else {
                 // Delete the completer
-                replace(&mut self.inner, None);
+                val = replace(&mut self.inner, None);
             }
+            // must consume return value of replace if exists
+            if let Some(_) = val {}
         }
     }
 }

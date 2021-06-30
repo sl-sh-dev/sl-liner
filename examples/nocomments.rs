@@ -43,12 +43,14 @@ impl Completer for NoCommentCompleter {
                 CursorPosition::OnWordRightEdge(i) => i >= 1,
             };
 
+            let val: Option<FilenameCompleter>;
             if filename {
                 let completer = FilenameCompleter::new(Some(current_dir().unwrap()));
-                replace(&mut self.inner, Some(completer));
+                val = replace(&mut self.inner, Some(completer));
             } else {
-                replace(&mut self.inner, None);
+                val = replace(&mut self.inner, None);
             }
+            if let Some(_) = val {}
         }
     }
 }

@@ -149,8 +149,11 @@ mod tests {
         let mut map = TestKeyMap;
         ed.insert_str_after_cursor("not empty").unwrap();
 
-        let res = map.handle_key(Key::new_mod(KeyCode::Char('d'),KeyMod::Ctrl), &mut ed, &mut
-            EmptyCompleter);
+        let res = map.handle_key(
+            Key::new_mod(KeyCode::Char('d'), KeyMod::Ctrl),
+            &mut ed,
+            &mut EmptyCompleter,
+        );
         assert_eq!(res.is_ok(), true);
     }
 
@@ -172,8 +175,11 @@ mod tests {
         .unwrap();
         let mut map = TestKeyMap;
 
-        let res = map.handle_key(Key::new_mod(KeyCode::Char('c'), KeyMod::Ctrl), &mut ed, &mut
-            EmptyCompleter);
+        let res = map.handle_key(
+            Key::new_mod(KeyCode::Char('c'), KeyMod::Ctrl),
+            &mut ed,
+            &mut EmptyCompleter,
+        );
         assert_eq!(res.is_err(), true);
         assert_eq!(res.err().unwrap().kind(), ErrorKind::Interrupted);
     }
