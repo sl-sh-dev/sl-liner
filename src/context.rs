@@ -118,9 +118,8 @@ impl Context {
         buffer: B,
     ) -> io::Result<String> {
         con_init()?;
-        let mut conout = conout();
+        let mut conout = conout().lock().into_raw_mode()?;
         let mut conin = conin();
-        let _raw = conout.raw_mode_guard();
         let mut ed = Editor::new_with_init_buffer(
             &mut conout,
             prompt,
@@ -133,31 +132,33 @@ impl Context {
         self.keymap.init(&mut ed);
         ed.use_closure(false);
         let mut do_color = false;
-        conin.set_blocking(false);
+        let timeout = time::Duration::from_millis(200);
         loop {
-            let c = conin.get_key();
+            let c = if do_color {
+                conin.get_event_timeout(timeout)
+            } else {
+                conin.get_event()
+            };
             match c {
-                Ok(key) => {
+                Some(Ok(sl_console::event::Event::Key(key))) => {
                     do_color = true;
                     if self.keymap.handle_key(key, &mut ed, &mut *self.handler)? {
                         break;
                     }
                 }
-                Err(err) if err.kind() == io::ErrorKind::WouldBlock => {
+                Some(Ok(_)) => {}
+                Some(Err(err)) if err.kind() == io::ErrorKind::WouldBlock => {
                     if do_color {
-                        if !conin.poll_timeout(time::Duration::from_millis(200)) {
-                            ed.use_closure(true);
-                            ed.display()?;
-                            ed.use_closure(false);
-                            do_color = false;
-                        }
-                    } else {
-                        conin.poll();
+                        ed.use_closure(true);
+                        ed.display()?;
+                        ed.use_closure(false);
+                        do_color = false;
                     }
                 }
-                Err(err) => {
+                Some(Err(err)) => {
                     return Err(err);
                 }
+                None => {}
             }
         }
         Ok(ed.into())
