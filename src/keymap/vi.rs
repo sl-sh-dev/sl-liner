@@ -717,6 +717,7 @@ impl Vi {
                     for _ in 0..count {
                         if let Some(cursor_pos) = ed.redo() {
                             ed.move_cursor_to(cursor_pos)?;
+                        } else {
                             break;
                         }
                     }
