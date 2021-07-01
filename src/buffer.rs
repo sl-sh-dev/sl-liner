@@ -16,20 +16,16 @@ impl Action {
     pub fn do_on(&self, buf: &mut Buffer) -> usize {
         match *self {
             Action::Insert { start, ref text } => buf.insert_raw(start, &text[..]),
-            Action::Remove { start, ref text } => {
-                buf.remove_raw(start, start + text.len()).len()
-            }
-            Action::StartGroup | Action::EndGroup => 0
+            Action::Remove { start, ref text } => buf.remove_raw(start, start + text.len()).len(),
+            Action::StartGroup | Action::EndGroup => 0,
         }
     }
 
     pub fn undo(&self, buf: &mut Buffer) -> usize {
         match *self {
-            Action::Insert { start, ref text } => {
-                buf.remove_raw(start, start + text.len()).len()
-            }
+            Action::Insert { start, ref text } => buf.remove_raw(start, start + text.len()).len(),
             Action::Remove { start, ref text } => buf.insert_raw(start, &text[..]),
-            Action::StartGroup | Action::EndGroup => 0
+            Action::StartGroup | Action::EndGroup => 0,
         }
     }
 
@@ -37,7 +33,7 @@ impl Action {
         match *self {
             Action::Insert { start, ref text } => Some((start, text.clone())),
             Action::Remove { start, ref text } => Some((start, text.clone())),
-            Action::StartGroup | Action::EndGroup => None
+            Action::StartGroup | Action::EndGroup => None,
         }
     }
 }
@@ -137,29 +133,10 @@ impl Buffer {
         self.actions.push(Action::EndGroup);
     }
 
-    fn get_register(&self) -> Option<(usize, Vec<char>)> {
+    pub fn get_register(&self) -> Option<(usize, Vec<char>)> {
         match &self.register {
-            Some(rem) => {
-                rem.get_start_and_text()
-            }
-            _ => None
-        }
-    }
-
-    pub fn paste(&mut self, right: bool) -> Option<usize> {
-        if let Some((start, text)) = self.get_register() {
-            let mut idx= start;
-            if self.data.len() >= start + 1 {
-                if right {
-                    // insert to right of cursor
-                    idx = start + 1;
-                }
-            }
-            let count = self.insert_raw(idx, &text[..]);
-            self.push_action(Action::Insert { start, text });
-            Some(count)
-        } else {
-            None
+            Some(rem) => rem.get_start_and_text(),
+            _ => None,
         }
     }
 
@@ -263,8 +240,11 @@ impl Buffer {
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
         let s = self.remove_raw(start, end);
         let num_removed = s.len();
-        self.push_action(Action::Remove { start, text: s.clone() });
-        self.register = Some(Action::Remove { start, text: s});
+        self.push_action(Action::Remove {
+            start,
+            text: s.clone(),
+        });
+        self.register = Some(Action::Remove { start, text: s });
         num_removed
     }
 
@@ -325,8 +305,8 @@ impl Buffer {
     }
 
     pub fn print<W>(&self, out: &mut W) -> io::Result<()>
-        where
-            W: Write,
+    where
+        W: Write,
     {
         let string: String = self.data.iter().cloned().collect();
         out.write_all(string.as_bytes())
@@ -342,8 +322,8 @@ impl Buffer {
     /// the other stopped.
     /// Used to implement autosuggestions.
     pub fn print_rest<W>(&self, out: &mut W, after: usize) -> io::Result<usize>
-        where
-            W: Write,
+    where
+        W: Write,
     {
         let string: String = self.data.iter().skip(after).cloned().collect();
         out.write_all(string.as_bytes())?;

@@ -934,12 +934,8 @@ impl Vi {
                         }
                         Ok(())
                     }
-                    KeyCode::Char('p') => {
-                        ed.paste(true)
-                    }
-                    KeyCode::Char('P') => {
-                        ed.paste(false)
-                    }
+                    KeyCode::Char('p') => ed.paste(true),
+                    KeyCode::Char('P') => ed.paste(false),
                     _ => self.handle_key_common(key, ed),
                 }
             }
@@ -1749,6 +1745,184 @@ mod tests {
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "ta");
     }
+
+    #[test]
+    fn vi_delete_paste() {
+        let mut history = History::new();
+        history.push("history").unwrap();
+        history.push("history").unwrap();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Delete,
+                KeyCode::Char('x'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "taaaa");
+    }
+
+    #[test]
+    fn vi_delete_paste_backward() {
+        let mut history = History::new();
+        history.push("history").unwrap();
+        history.push("history").unwrap();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Delete,
+                KeyCode::Char('x'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+                KeyCode::Char('0'),
+                KeyCode::Char('x'),
+                KeyCode::Char('P'),
+                KeyCode::Char('P'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 0);
+        assert_eq!(String::from(ed), "tttaaaa");
+    }
+
+    #[test]
+    fn vi_delete_paste_words() {
+        let mut history = History::new();
+        history.push("history").unwrap();
+        history.push("history").unwrap();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("some data in the buffer")
+            .unwrap();
+        assert_eq!(ed.cursor(), 23);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('1'),
+                KeyCode::Char('9'),
+                KeyCode::Char('h'),
+                KeyCode::Char('2'),
+                KeyCode::Char('d'),
+                KeyCode::Char('f'),
+                KeyCode::Char(' '),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 24);
+        assert_eq!(String::from(ed), "somie data e data e data n the buffer");
+    }
+
+    #[test]
+    fn vi_delete_paste_words_reverse() {
+        {
+            let mut history = History::new();
+            history.push("history").unwrap();
+            history.push("history").unwrap();
+            let mut out = Vec::new();
+            let words = Box::new(get_buffer_words);
+            let mut buf = String::with_capacity(512);
+            let mut ed = Editor::new(
+                &mut out,
+                Prompt::from("prompt"),
+                None,
+                &mut history,
+                &words,
+                &mut buf,
+            )
+            .unwrap();
+            let mut map = Vi::new();
+            map.init(&mut ed);
+            ed.insert_str_after_cursor("some data in the buffer")
+                .unwrap();
+            assert_eq!(ed.cursor(), 23);
+
+            simulate_key_codes(
+                &mut map,
+                &mut ed,
+                [
+                    KeyCode::Esc,
+                    KeyCode::Char('1'),
+                    KeyCode::Char('9'),
+                    KeyCode::Char('h'),
+                    KeyCode::Char('2'),
+                    KeyCode::Char('d'),
+                    KeyCode::Char('f'),
+                    KeyCode::Char(' '),
+                    KeyCode::Char('P'),
+                    KeyCode::Char('P'),
+                    KeyCode::Char('P'),
+                ]
+                .iter(),
+            );
+            assert_eq!(ed.cursor(), 21);
+            assert_eq!(String::from(ed), "some datae datae data   in the buffer");
+        }
+    }
+
     #[test]
     fn vi_substitute_command() {
         let mut out = Vec::new();
