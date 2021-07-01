@@ -13,19 +13,31 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn do_on(&self, buf: &mut Buffer) -> usize {
+    pub fn do_on(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
-            Action::Insert { start, ref text } => buf.insert_raw(start, &text[..]),
-            Action::Remove { start, ref text } => buf.remove_raw(start, start + text.len()).len(),
-            Action::StartGroup | Action::EndGroup => 0,
+            Action::Insert { start, ref text } => {
+                buf.insert_raw(start, &text[..]);
+                Some(start)
+            }
+            Action::Remove { start, ref text } => {
+                buf.remove_raw(start, start + text.len()).len();
+                Some(start)
+            }
+            Action::StartGroup | Action::EndGroup => None,
         }
     }
 
-    pub fn undo(&self, buf: &mut Buffer) -> usize {
+    pub fn undo(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
-            Action::Insert { start, ref text } => buf.remove_raw(start, start + text.len()).len(),
-            Action::Remove { start, ref text } => buf.insert_raw(start, &text[..]),
-            Action::StartGroup | Action::EndGroup => 0,
+            Action::Insert { start, ref text } => {
+                buf.remove_raw(start, start + text.len()).len();
+                Some(start)
+            }
+            Action::Remove { start, ref text } => {
+                buf.insert_raw(start, &text[..]);
+                Some(start)
+            }
+            Action::StartGroup | Action::EndGroup => None,
         }
     }
 
@@ -143,12 +155,19 @@ impl Buffer {
     pub fn undo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let mut count = None;
+        let mut old_cursor_pos;
+        if self.actions.is_empty() {
+            old_cursor_pos = None;
+        } else {
+            old_cursor_pos = Some(0);
+        }
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.actions.pop() {
-            count = Some(act.undo(self));
             self.undone_actions.push(act.clone());
+            if let Some(pos) = act.undo(self) {
+                old_cursor_pos = Some(pos)
+            }
             match act {
                 EndGroup => {
                     group_nest += 1;
@@ -164,17 +183,24 @@ impl Buffer {
                 break;
             }
         }
-        count
+        old_cursor_pos
     }
 
     pub fn redo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let mut count = None;
+        let mut old_cursor_pos;
+        if self.actions.is_empty() {
+            old_cursor_pos = None;
+        } else {
+            old_cursor_pos = Some(0);
+        }
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.undone_actions.pop() {
-            count = Some(act.do_on(self));
+            if let Some(pos) = act.do_on(self) {
+                old_cursor_pos = Some(pos)
+            }
             self.actions.push(act.clone());
             match act {
                 StartGroup => {
@@ -191,7 +217,7 @@ impl Buffer {
                 break;
             }
         }
-        count
+        old_cursor_pos
     }
 
     pub fn revert(&mut self) -> bool {
@@ -335,13 +361,10 @@ impl Buffer {
         self.data.drain(start..end).collect()
     }
 
-    fn insert_raw(&mut self, start: usize, text: &[char]) -> usize {
-        let mut count: usize = 0;
+    fn insert_raw(&mut self, start: usize, text: &[char]) {
         for (i, &c) in text.iter().enumerate() {
             self.data.insert(start + i, c);
-            count += 1;
         }
-        count
     }
 
     /// Check if the other buffer starts with the same content as this one.

@@ -424,24 +424,12 @@ impl<'a> Editor<'a> {
     ///
     /// Returns `Ok(true)` if an action was undone.
     /// Returns `Ok(false)` if there was no action to undo.
-    pub fn undo(&mut self) -> io::Result<bool> {
-        let did = cur_buf_mut!(self).undo();
-        if did.is_some() {
-            self.move_cursor_to_end_of_line()?;
-        } else {
-            self.display()?;
-        }
-        Ok(did.is_some())
+    pub fn undo(&mut self) -> Option<usize> {
+        cur_buf_mut!(self).undo()
     }
 
-    pub fn redo(&mut self) -> io::Result<bool> {
-        let did = cur_buf_mut!(self).redo();
-        if did.is_some() {
-            self.move_cursor_to_end_of_line()?;
-        } else {
-            self.display()?;
-        }
-        Ok(did.is_some())
+    pub fn redo(&mut self) -> Option<usize> {
+        cur_buf_mut!(self).redo()
     }
 
     pub fn paste(&mut self, right: bool) -> io::Result<()> {

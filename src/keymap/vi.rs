@@ -710,12 +710,13 @@ impl Vi {
 
         match key.mods {
             Some(KeyMod::Ctrl) => match key.code {
+                // TODO make configurable
                 KeyCode::Char('r') => {
                     let count = self.move_count();
                     self.count = 0;
                     for _ in 0..count {
-                        let did = ed.redo()?;
-                        if !did {
+                        if let Some(cursor_pos) = ed.redo() {
+                            ed.move_cursor_to(cursor_pos)?;
                             break;
                         }
                     }
@@ -928,7 +929,9 @@ impl Vi {
                         let count = self.move_count();
                         self.count = 0;
                         for _ in 0..count {
-                            if !ed.undo()? {
+                            if let Some(cursor_pos) = ed.undo() {
+                                ed.move_cursor_to(cursor_pos)?;
+                            } else {
                                 break;
                             }
                         }
