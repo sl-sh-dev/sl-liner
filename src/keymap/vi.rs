@@ -703,6 +703,20 @@ impl Vi {
         }
     }
 
+    fn handle_redo<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
+        // TODO make configurable
+        let count = self.move_count();
+        self.count = 0;
+        for _ in 0..count {
+            if let Some(cursor_pos) = ed.redo() {
+                ed.move_cursor_to(cursor_pos)?;
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     fn handle_key_normal<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
         use self::CharMovement::*;
         use self::Mode::*;
@@ -710,19 +724,7 @@ impl Vi {
 
         match key.mods {
             Some(KeyMod::Ctrl) => match key.code {
-                // TODO make configurable
-                KeyCode::Char('r') => {
-                    let count = self.move_count();
-                    self.count = 0;
-                    for _ in 0..count {
-                        if let Some(cursor_pos) = ed.redo() {
-                            ed.move_cursor_to(cursor_pos)?;
-                        } else {
-                            break;
-                        }
-                    }
-                    Ok(())
-                }
+                KeyCode::Char('r') => self.handle_redo(ed),
                 _ => Ok(()),
             },
             None => {
@@ -1649,11 +1651,8 @@ mod tests {
         );
         assert_eq!(ed.cursor(), 12);
 
-        //simulate_keys(&mut map,     &mut ed, [Ctrl('['), KeyCode::Char('u'), KeyCode::Char('i')].iter());
         ed.delete_all_before_cursor().unwrap();
         assert_eq!(ed.cursor(), 0);
-        //ed.insert_str_after_cursor("pat").unwrap();
-        //assert_eq!(ed.cursor(), 3);
         simulate_keys(
             &mut map,
             &mut ed,
@@ -5425,6 +5424,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 6);
         assert_eq!(String::from(ed), "abcdefg");
     }
 
@@ -5448,23 +5448,24 @@ mod tests {
         map.init(&mut ed);
         ed.insert_str_after_cursor("abcdefg").unwrap();
 
-        simulate_key_codes(
+        simulate_keys(
             &mut map,
             &mut ed,
             [
-                KeyCode::Esc,
-                KeyCode::Char('x'),
-                KeyCode::Char('x'),
-                KeyCode::Char('x'),
-                KeyCode::Char('u'),
-                KeyCode::Char('u'),
-                KeyCode::Char('u'),
+                Key::new(KeyCode::Esc),
+                Key::new(KeyCode::Char('x')),
+                Key::new(KeyCode::Char('x')),
+                Key::new(KeyCode::Char('x')),
+                Key::new(KeyCode::Char('u')),
+                Key::new(KeyCode::Char('u')),
+                Key::new(KeyCode::Char('u')),
             ]
             .iter(),
         );
         // Ctrl-r taken by incremental search so do this manually.
-        ed.redo().unwrap();
-        ed.redo().unwrap();
+        map.handle_redo(&mut ed).unwrap();
+        map.handle_redo(&mut ed).unwrap();
+        assert_eq!(ed.cursor(), 4);
         assert_eq!(String::from(ed), "abcde");
     }
 
@@ -5545,6 +5546,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
 
@@ -5585,6 +5587,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
 
@@ -5639,6 +5642,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 5);
         assert_eq!(String::from(ed), "insert");
     }
 
@@ -5681,6 +5685,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
 
@@ -5729,6 +5734,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 5);
         assert_eq!(String::from(ed), "insert");
     }
 
@@ -5764,6 +5770,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "rm some words");
     }
 
@@ -5811,6 +5818,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 5);
         assert_eq!(String::from(ed), "insert");
     }
 
@@ -5852,6 +5860,7 @@ mod tests {
             ]
             .iter(),
         );
+        assert_eq!(ed.cursor(), 5);
         assert_eq!(String::from(ed), "insert");
     }
 

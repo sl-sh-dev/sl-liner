@@ -20,8 +20,13 @@ impl Action {
                 Some(start)
             }
             Action::Remove { start, ref text } => {
-                buf.remove_raw(start, start + text.len()).len();
-                Some(start)
+                let text_len = text.len();
+                buf.remove_raw(start, start + text_len).len();
+                if text_len > start {
+                    Some(0)
+                } else {
+                    Some(start - text.len())
+                }
             }
             Action::StartGroup | Action::EndGroup => None,
         }
@@ -155,12 +160,7 @@ impl Buffer {
     pub fn undo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let mut old_cursor_pos;
-        if self.actions.is_empty() {
-            old_cursor_pos = None;
-        } else {
-            old_cursor_pos = Some(0);
-        }
+        let mut old_cursor_pos = None;
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.actions.pop() {
@@ -189,12 +189,7 @@ impl Buffer {
     pub fn redo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let mut old_cursor_pos;
-        if self.actions.is_empty() {
-            old_cursor_pos = None;
-        } else {
-            old_cursor_pos = Some(0);
-        }
+        let mut old_cursor_pos = None;
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.undone_actions.pop() {
@@ -363,7 +358,7 @@ impl Buffer {
 
     fn insert_raw(&mut self, start: usize, text: &[char]) {
         for (i, &c) in text.iter().enumerate() {
-            self.data.insert(start + i, c);
+            self.data.insert(start + i, c)
         }
     }
 
