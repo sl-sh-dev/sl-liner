@@ -47,8 +47,11 @@ impl Emacs {
             'k' => ed.delete_all_after_cursor(),
             'w' => ed.delete_word_before_cursor(true),
             'x' => {
-                ed.undo()?;
-                Ok(())
+                if ed.undo().is_some() {
+                    ed.move_cursor_to_end_of_line()
+                } else {
+                    ed.display()
+                }
             }
             _ => Ok(()),
         }

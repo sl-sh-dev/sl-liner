@@ -13,23 +13,44 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn do_on(&self, buf: &mut Buffer) {
+    pub fn do_on(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
-            Action::Insert { start, ref text } => buf.insert_raw(start, &text[..]),
-            Action::Remove { start, ref text } => {
-                buf.remove_raw(start, start + text.len());
+            Action::Insert { start, ref text } => {
+                buf.insert_raw(start, &text[..]);
+                Some(start)
             }
-            Action::StartGroup | Action::EndGroup => {}
+            Action::Remove { start, ref text } => {
+                let text_len = text.len();
+                buf.remove_raw(start, start + text_len).len();
+                if text_len > start {
+                    Some(0)
+                } else {
+                    Some(start - text.len())
+                }
+            }
+            Action::StartGroup | Action::EndGroup => None,
         }
     }
 
-    pub fn undo(&self, buf: &mut Buffer) {
+    pub fn undo(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
             Action::Insert { start, ref text } => {
-                buf.remove_raw(start, start + text.len());
+                buf.remove_raw(start, start + text.len()).len();
+                Some(start)
             }
-            Action::Remove { start, ref text } => buf.insert_raw(start, &text[..]),
-            Action::StartGroup | Action::EndGroup => {}
+            Action::Remove { start, ref text } => {
+                buf.insert_raw(start, &text[..]);
+                Some(start)
+            }
+            Action::StartGroup | Action::EndGroup => None,
+        }
+    }
+
+    pub fn get_start_and_text(&self) -> Option<(usize, Vec<char>)> {
+        match *self {
+            Action::Insert { start, ref text } => Some((start, text.clone())),
+            Action::Remove { start, ref text } => Some((start, text.clone())),
+            Action::StartGroup | Action::EndGroup => None,
         }
     }
 }
@@ -42,6 +63,7 @@ pub struct Buffer {
     data: Vec<char>,
     actions: Vec<Action>,
     undone_actions: Vec<Action>,
+    register: Option<Action>,
 }
 
 impl PartialEq for Buffer {
@@ -94,6 +116,7 @@ impl FromIterator<char> for Buffer {
             data: t.into_iter().collect(),
             actions: Vec::new(),
             undone_actions: Vec::new(),
+            register: None,
         }
     }
 }
@@ -110,6 +133,7 @@ impl Buffer {
             data: Vec::new(),
             actions: Vec::new(),
             undone_actions: Vec::new(),
+            register: None,
         }
     }
 
@@ -126,15 +150,24 @@ impl Buffer {
         self.actions.push(Action::EndGroup);
     }
 
-    pub fn undo(&mut self) -> bool {
+    pub fn get_register(&self) -> Option<(usize, Vec<char>)> {
+        match &self.register {
+            Some(rem) => rem.get_start_and_text(),
+            _ => None,
+        }
+    }
+
+    pub fn undo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let did = !self.actions.is_empty();
+        let mut old_cursor_pos = None;
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.actions.pop() {
-            act.undo(self);
             self.undone_actions.push(act.clone());
+            if let Some(pos) = act.undo(self) {
+                old_cursor_pos = Some(pos)
+            }
             match act {
                 EndGroup => {
                     group_nest += 1;
@@ -150,17 +183,19 @@ impl Buffer {
                 break;
             }
         }
-        did
+        old_cursor_pos
     }
 
-    pub fn redo(&mut self) -> bool {
+    pub fn redo(&mut self) -> Option<usize> {
         use Action::*;
 
-        let did = !self.undone_actions.is_empty();
+        let mut old_cursor_pos = None;
         let mut group_nest = 0;
         let mut group_count = 0;
         while let Some(act) = self.undone_actions.pop() {
-            act.do_on(self);
+            if let Some(pos) = act.do_on(self) {
+                old_cursor_pos = Some(pos)
+            }
             self.actions.push(act.clone());
             match act {
                 StartGroup => {
@@ -177,7 +212,7 @@ impl Buffer {
                 break;
             }
         }
-        did
+        old_cursor_pos
     }
 
     pub fn revert(&mut self) -> bool {
@@ -185,7 +220,7 @@ impl Buffer {
             return false;
         }
 
-        while self.undo() {}
+        while self.undo().is_some() {}
         true
     }
 
@@ -226,7 +261,11 @@ impl Buffer {
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
         let s = self.remove_raw(start, end);
         let num_removed = s.len();
-        self.push_action(Action::Remove { start, text: s });
+        self.push_action(Action::Remove {
+            start,
+            text: s.clone(),
+        });
+        self.register = Some(Action::Remove { start, text: s });
         num_removed
     }
 
@@ -462,7 +501,7 @@ mod tests {
         buf.remove(0, 1);
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
+        assert!(buf.undo().is_some());
         assert_eq!(String::from(buf), "abcdefg");
     }
 
@@ -475,8 +514,8 @@ mod tests {
         buf.remove(0, 1);
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
-        assert_eq!(buf.redo(), true);
+        assert!(buf.undo().is_some());
+        assert!(buf.redo().is_some());
         assert_eq!(String::from(buf), "defg");
     }
 
@@ -491,7 +530,7 @@ mod tests {
         buf.end_undo_group();
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
+        assert!(buf.undo().is_some());
         assert_eq!(String::from(buf), "abcdefg");
     }
 
@@ -506,8 +545,8 @@ mod tests {
         buf.end_undo_group();
         buf.remove(0, 1);
         buf.end_undo_group();
-        assert_eq!(buf.undo(), true);
-        assert_eq!(buf.redo(), true);
+        assert!(buf.undo().is_some());
+        assert!(buf.redo().is_some());
         assert_eq!(String::from(buf), "defg");
     }
 
