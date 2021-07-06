@@ -1801,8 +1801,6 @@ mod tests {
     #[test]
     fn vi_normal_delete() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1838,8 +1836,44 @@ mod tests {
     #[test]
     fn vi_delete_paste() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+            .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Delete,
+                KeyCode::Char('x'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+            ]
+                .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "taaaa");
+    }
+
+    #[test]
+    fn vi_yank() {
+        let mut history = History::new();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1863,23 +1897,19 @@ mod tests {
             [
                 KeyCode::Esc,
                 KeyCode::Char('0'),
-                KeyCode::Delete,
-                KeyCode::Char('x'),
-                KeyCode::Char('p'),
-                KeyCode::Char('p'),
+                KeyCode::Char('y'),
+                KeyCode::Char('e'),
                 KeyCode::Char('p'),
             ]
             .iter(),
         );
-        assert_eq!(ed.cursor(), 3);
-        assert_eq!(String::from(ed), "taaaa");
+        assert_eq!(ed.cursor(), 4);
+        assert_eq!(String::from(ed), "ddataata");
     }
 
     #[test]
     fn vi_delete_paste_backward() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1923,8 +1953,6 @@ mod tests {
     #[test]
     fn vi_delete_paste_words() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1969,8 +1997,6 @@ mod tests {
     fn vi_delete_paste_words_reverse() {
         {
             let mut history = History::new();
-            history.push("history").unwrap();
-            history.push("history").unwrap();
             let mut out = Vec::new();
             let words = Box::new(get_buffer_words);
             let mut buf = String::with_capacity(512);

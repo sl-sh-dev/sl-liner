@@ -353,7 +353,12 @@ impl Buffer {
     }
 
     pub fn yank(&mut self, start: usize, end: usize) {
-        let slice = &self.data[start..end];
+        let slice;
+        if end >= self.data.len() {
+            slice = &self.data[start..self.data.len()];
+        } else {
+            slice = &self.data[start..end];
+        }
         self.register = Some((start, slice.to_vec()));
     }
 
