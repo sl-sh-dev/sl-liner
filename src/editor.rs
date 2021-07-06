@@ -797,11 +797,32 @@ impl<'a> Editor<'a> {
         self.display()
     }
 
+    /// Yanks every character after the cursor until the end of the line.
+    pub fn yank_all_after_cursor(&mut self) -> io::Result<()> {
+        {
+            let buf = cur_buf_mut!(self);
+            buf.yank(self.cursor, buf.num_chars());
+        }
+        self.display()
+    }
+
     /// Deletes every character after the cursor until the end of the line.
     pub fn delete_all_after_cursor(&mut self) -> io::Result<()> {
         {
             let buf = cur_buf_mut!(self);
             buf.truncate(self.cursor);
+        }
+        self.display()
+    }
+
+    /// Yanks every character from the cursor until the given position.
+    pub fn yank_until(&mut self, position: usize) -> io::Result<()> {
+        {
+            let buf = cur_buf_mut!(self);
+            buf.yank(
+                cmp::min(self.cursor, position),
+                cmp::max(self.cursor, position),
+            );
         }
         self.display()
     }
@@ -815,6 +836,18 @@ impl<'a> Editor<'a> {
                 cmp::max(self.cursor, position),
             );
             self.cursor = cmp::min(self.cursor, position);
+        }
+        self.display()
+    }
+
+    /// Yanks every character from the cursor until the given position, inclusive.
+    pub fn yank_until_inclusive(&mut self, position: usize) -> io::Result<()> {
+        {
+            let buf = cur_buf_mut!(self);
+            buf.yank(
+                cmp::min(self.cursor, position),
+                cmp::max(self.cursor + 1, position + 1),
+            );
         }
         self.display()
     }

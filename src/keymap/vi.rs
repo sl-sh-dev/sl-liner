@@ -31,6 +31,7 @@ enum Mode {
     Normal,
     Replace,
     Delete(usize),
+    Yank(usize),
     MoveToChar(CharMovement),
     G,
     Tilde,
@@ -481,21 +482,41 @@ impl Vi {
         ed.no_eol = self.mode() == Mode::Normal;
         self.movement_reset = self.mode() != Mode::Insert;
 
-        if let Delete(start_pos) = last_mode {
-            // perform the delete operation
-            match move_type {
-                Exclusive => ed.delete_until(start_pos)?,
-                Inclusive => ed.delete_until_inclusive(start_pos)?,
+        match last_mode {
+            Delete(start_pos) => {
+                // perform the delete operation
+                match move_type {
+                    Exclusive => ed.delete_until(start_pos)?,
+                    Inclusive => ed.delete_until_inclusive(start_pos)?,
+                }
+
+                // update the last state
+                mem::swap(&mut self.last_command, &mut self.current_command);
+                self.last_insert = self.current_insert;
+                self.last_count = self.count;
+
+                // reset our counts
+                self.count = 0;
+                self.secondary_count = 0;
             }
+            Yank(start_pos) => {
+                // perform the delete operation
+                match move_type {
+                    Exclusive => ed.yank_until(start_pos)?,
+                    Inclusive => ed.yank_until_inclusive(start_pos)?,
+                }
 
-            // update the last state
-            mem::swap(&mut self.last_command, &mut self.current_command);
-            self.last_insert = self.current_insert;
-            self.last_count = self.count;
+                // update the last state
+                mem::swap(&mut self.last_command, &mut self.current_command);
+                self.last_insert = self.current_insert;
+                self.last_count = self.count;
 
-            // reset our counts
-            self.count = 0;
-            self.secondary_count = 0;
+                // reset our counts
+                self.count = 0;
+                self.secondary_count = 0;
+                ed.move_cursor_to(start_pos)?;
+            }
+            _ => {}
         }
 
         // in normal mode, count goes back to 0 after movement
@@ -762,14 +783,14 @@ impl Vi {
                         Ok(())
                     }
                     KeyCode::Char('r') => self.set_mode(Mode::Replace, ed),
-                    KeyCode::Char('d') | KeyCode::Char('c') => {
+                    KeyCode::Char('d') | KeyCode::Char('c') | KeyCode::Char('y') => {
                         self.current_command.clear();
 
-                        if key.code == KeyCode::Char('d') {
-                            // handle special 'd' key stuff
+                        if (key.code == KeyCode::Char('d')) | (key.code == KeyCode::Char('y')) {
+                            // handle special 'd'  & 'y' key stuff
                             self.current_insert = None;
                             self.current_command.push(key);
-                        } else {
+                        } else if key.code == KeyCode::Char('c') {
                             // handle special 'c' key stuff
                             self.current_insert = Some(key);
                             self.current_command.clear();
@@ -777,7 +798,11 @@ impl Vi {
                         }
 
                         let start_pos = ed.cursor();
-                        self.set_mode(Mode::Delete(start_pos), ed)?;
+                        if key.code == KeyCode::Char('y') {
+                            self.set_mode(Mode::Yank(start_pos), ed)?;
+                        } else {
+                            self.set_mode(Mode::Delete(start_pos), ed)?;
+                        }
                         self.secondary_count = self.count;
                         self.count = 0;
                         Ok(())
@@ -982,6 +1007,66 @@ impl Vi {
         // back to normal mode
         self.count = 0;
         Ok(())
+    }
+
+    fn handle_key_yank<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+        match (key, self.current_insert) {
+            // check if this is a movement key
+            (key, _)
+                if is_movement_key(key)
+                    | (key.code == KeyCode::Char('0') && key.mods == None && self.count == 0) =>
+            {
+                // set count
+                self.count = match (self.count, self.secondary_count) {
+                    (0, 0) => 0,
+                    (_, 0) => self.count,
+                    (0, _) => self.secondary_count,
+                    _ => {
+                        // secondary_count * count
+                        self.secondary_count.saturating_mul(self.count)
+                    }
+                };
+
+                // update the last command state
+                self.current_command.push(key);
+
+                // execute movement
+                self.handle_key_normal(key, ed)
+            }
+            // handle numeric keys
+            (
+                Key {
+                    code: KeyCode::Char('0'..='9'),
+                    mods: None,
+                },
+                _,
+            ) => self.handle_key_normal(key, ed),
+            (
+                Key {
+                    code: KeyCode::Char('y'),
+                    mods: None,
+                },
+                None,
+            ) => {
+                // updating the last command buffer doesn't really make sense in this context.
+                // Repeating 'dd' will simply erase and already erased line. Any other commands
+                // will then become the new last command and the user will need to press 'dd' again
+                // to clear the line. The same largely applies to the 'cc' command. We update the
+                // last command here anyway ¯\_(ツ)_/¯
+                self.current_command.push(key);
+
+                // delete the whole line
+                self.count = 0;
+                self.secondary_count = 0;
+                ed.move_cursor_to_start_of_line()?;
+                ed.yank_all_after_cursor()?;
+
+                // return to the previous mode
+                self.pop_mode(ed)
+            }
+            // not a delete or change command, back to normal mode
+            _ => self.normal_mode_abort(ed),
+        }
     }
 
     fn handle_key_delete_or_change<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
@@ -1192,6 +1277,7 @@ impl KeyMap for Vi {
             Mode::Insert => self.handle_key_insert(key, ed),
             Mode::Replace => self.handle_key_replace(key, ed),
             Mode::Delete(_) => self.handle_key_delete_or_change(key, ed),
+            Mode::Yank(_) => self.handle_key_yank(key, ed),
             Mode::MoveToChar(movement) => self.handle_key_move_to_char(key, movement, ed),
             Mode::G => self.handle_key_g(key, ed),
             Mode::Tilde => unreachable!(),

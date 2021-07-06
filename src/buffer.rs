@@ -63,7 +63,7 @@ pub struct Buffer {
     data: Vec<char>,
     actions: Vec<Action>,
     undone_actions: Vec<Action>,
-    register: Option<Action>,
+    register: Option<(usize, Vec<char>)>,
 }
 
 impl PartialEq for Buffer {
@@ -152,7 +152,7 @@ impl Buffer {
 
     pub fn get_register(&self) -> Option<(usize, Vec<char>)> {
         match &self.register {
-            Some(rem) => rem.get_start_and_text(),
+            Some((start, text)) => Some((*start, text.to_owned())),
             _ => None,
         }
     }
@@ -265,7 +265,7 @@ impl Buffer {
             start,
             text: s.clone(),
         });
-        self.register = Some(Action::Remove { start, text: s });
+        self.register = Some((start, s));
         num_removed
     }
 
@@ -350,6 +350,11 @@ impl Buffer {
         out.write_all(string.as_bytes())?;
 
         Ok(string.len())
+    }
+
+    pub fn yank(&mut self, start: usize, end: usize) {
+        let slice = &self.data[start..end];
+        self.register = Some((start, slice.to_vec()));
     }
 
     fn remove_raw(&mut self, start: usize, end: usize) -> Vec<char> {
