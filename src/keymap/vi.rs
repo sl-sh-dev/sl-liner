@@ -877,12 +877,12 @@ impl Vi {
                     KeyCode::Char('e') => {
                         let count = self.move_count();
                         move_to_end_of_word(ed, count)?;
-                        self.pop_mode_after_movement(Exclusive, ed)
+                        self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('E') => {
                         let count = self.move_count();
                         move_to_end_of_word_ws(ed, count)?;
-                        self.pop_mode_after_movement(Exclusive, ed)
+                        self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('b') => {
                         let count = self.move_count();
