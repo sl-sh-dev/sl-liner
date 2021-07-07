@@ -1153,18 +1153,41 @@ impl Vi {
         match key_code {
             KeyCode::Char(c) => {
                 let move_type;
+                let mut return_to_pos = None;
                 match movement {
                     RightUntil => {
                         move_type = Inclusive;
                         match find_char(ed.current_buffer(), ed.cursor() + 1, c, count) {
-                            Some(i) => ed.move_cursor_to(i - 1),
+                            Some(i) => {
+                                let prev_mode = self.mode_stack.pop();
+                                return_to_pos = match self.mode() {
+                                    Mode::Yank(_) => {
+                                        ed.yank_until(ed.cursor())?;
+                                        Some(ed.cursor())
+                                    }
+                                    _ => None,
+                                };
+                                self.set_mode_preserve_last(prev_mode, ed)?;
+                                ed.move_cursor_to(i - 1)
+                            }
                             None => Ok(()),
                         }
                     }
                     RightAt => {
                         move_type = Inclusive;
                         match find_char(ed.current_buffer(), ed.cursor() + 1, c, count) {
-                            Some(i) => ed.move_cursor_to(i),
+                            Some(i) => {
+                                let prev_mode = self.mode_stack.pop();
+                                return_to_pos = match self.mode() {
+                                    Mode::Yank(_) => {
+                                        ed.yank_until(ed.cursor())?;
+                                        Some(ed.cursor())
+                                    }
+                                    _ => None,
+                                };
+                                self.set_mode_preserve_last(prev_mode, ed)?;
+                                ed.move_cursor_to(i)
+                            }
                             None => Ok(()),
                         }
                     }
@@ -1185,8 +1208,12 @@ impl Vi {
                     Repeat | ReverseRepeat => unreachable!(),
                 }?;
 
-                // go back to the previous mode
-                self.pop_mode_after_movement(move_type, ed)
+                let result = self.pop_mode_after_movement(move_type, ed);
+                if let Some(pos) = return_to_pos {
+                    // in vim, movement to the right in yank mode does not cause the cursor to move
+                    ed.move_cursor_to(pos)?;
+                }
+                result
             }
 
             // can't get here due to our match above
@@ -1979,6 +2006,152 @@ mod tests {
         );
         assert_eq!(ed.cursor(), 2);
         assert_eq!(String::from(ed), "datta");
+    }
+
+    #[test]
+    fn vi_yank_upper_f() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('y'),
+                KeyCode::Char('F'),
+                KeyCode::Char('d'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "ddatata");
+    }
+
+    #[test]
+    fn vi_yank_f() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('f'),
+                KeyCode::Char('t'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "ddatata");
+    }
+
+    #[test]
+    fn vi_yank_t() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('t'),
+                KeyCode::Char('t'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 2);
+        assert_eq!(String::from(ed), "ddaata");
+    }
+
+    #[test]
+    fn vi_yank_upper_t() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('y'),
+                KeyCode::Char('T'),
+                KeyCode::Char('d'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "daatta");
     }
 
     #[test]
