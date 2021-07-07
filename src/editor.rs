@@ -736,9 +736,9 @@ impl<'a> Editor<'a> {
     /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
     /// character inserted.
     pub fn insert_chars_around_cursor(&mut self, cs: &[char], right: bool) -> io::Result<()> {
+        let mut idx = self.cursor;
         {
             let buf = cur_buf_mut!(self);
-            let mut idx = self.cursor;
             if buf.num_chars() > idx && right {
                 // insert to right of cursor
                 idx += 1;
@@ -748,10 +748,13 @@ impl<'a> Editor<'a> {
 
         if right {
             self.cursor += cs.len();
+            self.display()
         } else if !cs.is_empty() {
             self.cursor += cs.len() - 1;
+            self.display()
+        } else {
+            Ok(())
         }
-        self.display()
     }
 
     /// Inserts characters directly after the cursor, moving the cursor to the right.
