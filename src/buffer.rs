@@ -254,12 +254,13 @@ impl Buffer {
         num_removed
     }
 
-    /// Insert contents of register to the right or to the left of start in the current buffer.
+    /// Insert contents of register to the right or to the left of start in the current buffer
+    /// and return length of text inserted.
     pub fn insert_register_around_cursor(&mut self, mut start: usize, right: bool) -> usize {
-        let mut advance = 0;
+        let mut inserted = 0;
         if let Some(text) = self.register.as_ref() {
-            let len = text.len();
-            if len > 0 {
+            inserted = text.len();
+            if inserted > 0 {
                 if self.num_chars() > start && right {
                     // insert to right of cursor
                     start += 1;
@@ -270,15 +271,9 @@ impl Buffer {
                     text: text.clone(),
                 };
                 self.insert_action(act);
-
-                if right {
-                    advance = len
-                } else {
-                    advance = len - 1
-                }
             }
         }
-        advance
+        inserted
     }
 
     pub fn insert(&mut self, start: usize, text: &[char]) {
