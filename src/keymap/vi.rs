@@ -2218,7 +2218,7 @@ mod tests {
             &words,
             &mut buf,
         )
-            .unwrap();
+        .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
         ed.insert_str_after_cursor("some data in the buffer")
@@ -2243,7 +2243,7 @@ mod tests {
                 KeyCode::Esc,
                 KeyCode::Char('p'),
             ]
-                .iter(),
+            .iter(),
         );
         assert_eq!(ed.cursor(), 12);
         assert_eq!(String::from(ed), "sompppe data in the buffer");
