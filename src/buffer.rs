@@ -55,7 +55,7 @@ pub struct Buffer {
     data: Vec<char>,
     actions: Vec<Action>,
     undone_actions: Vec<Action>,
-    register: Option<(usize, Vec<char>)>,
+    register: Option<Vec<char>>,
 }
 
 impl PartialEq for Buffer {
@@ -140,13 +140,6 @@ impl Buffer {
 
     pub fn end_undo_group(&mut self) {
         self.actions.push(Action::EndGroup);
-    }
-
-    pub fn get_register(&self) -> Option<(usize, Vec<char>)> {
-        match &self.register {
-            Some((start, text)) => Some((*start, text.to_owned())),
-            _ => None,
-        }
     }
 
     pub fn undo(&mut self) -> Option<usize> {
@@ -257,8 +250,35 @@ impl Buffer {
             start,
             text: s.clone(),
         });
-        self.register = Some((start, s));
+        self.register = Some(s);
         num_removed
+    }
+
+    /// Insert contents of register to the right or to the left of start in the current buffer.
+    pub fn insert_register_around_cursor(&mut self, mut start: usize, right: bool) -> usize {
+        let mut advance = 0;
+        if let Some(text) = self.register.as_ref() {
+            let len = text.len();
+            if len > 0 {
+                if self.num_chars() > start && right {
+                    // insert to right of cursor
+                    start += 1;
+                }
+
+                let act = Action::Insert {
+                    start,
+                    text: text.clone(),
+                };
+                self.insert_action(act);
+
+                if right {
+                    advance = len
+                } else {
+                    advance = len - 1
+                }
+            }
+        }
+        advance
     }
 
     pub fn insert(&mut self, start: usize, text: &[char]) {
@@ -266,6 +286,10 @@ impl Buffer {
             start,
             text: text.into(),
         };
+        self.insert_action(act);
+    }
+
+    pub fn insert_action(&mut self, act: Action) {
         act.do_on(self);
         self.push_action(act);
     }
@@ -351,7 +375,7 @@ impl Buffer {
         } else {
             slice = &self.data[start..end];
         }
-        self.register = Some((start, slice.to_vec()));
+        self.register = Some(slice.to_vec());
     }
 
     fn remove_raw(&mut self, start: usize, end: usize) -> Vec<char> {

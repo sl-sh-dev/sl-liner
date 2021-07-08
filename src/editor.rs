@@ -432,11 +432,13 @@ impl<'a> Editor<'a> {
         cur_buf_mut!(self).redo()
     }
 
+    /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
+    /// character inserted.
     pub fn paste(&mut self, right: bool) -> io::Result<()> {
-        if let Some((_, text)) = cur_buf_mut!(self).get_register() {
-            return self.insert_chars_around_cursor(&text, right);
-        }
-        Ok(())
+        let buf = cur_buf_mut!(self);
+        let delta = buf.insert_register_around_cursor(self.cursor, right);
+        self.cursor += delta;
+        self.display()
     }
 
     pub fn revert(&mut self) -> io::Result<bool> {
@@ -731,30 +733,6 @@ impl<'a> Editor<'a> {
     /// Inserts a character directly after the cursor, moving the cursor to the right.
     pub fn insert_after_cursor(&mut self, c: char) -> io::Result<()> {
         self.insert_chars_after_cursor(&[c])
-    }
-
-    /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
-    /// character inserted.
-    pub fn insert_chars_around_cursor(&mut self, cs: &[char], right: bool) -> io::Result<()> {
-        let mut idx = self.cursor;
-        {
-            let buf = cur_buf_mut!(self);
-            if buf.num_chars() > idx && right {
-                // insert to right of cursor
-                idx += 1;
-            }
-            buf.insert(idx, cs);
-        }
-
-        if right {
-            self.cursor += cs.len();
-            self.display()
-        } else if !cs.is_empty() {
-            self.cursor += cs.len() - 1;
-            self.display()
-        } else {
-            Ok(())
-        }
     }
 
     /// Inserts characters directly after the cursor, moving the cursor to the right.
