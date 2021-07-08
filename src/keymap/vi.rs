@@ -31,6 +31,7 @@ enum Mode {
     Normal,
     Replace,
     Delete(usize),
+    Yank(usize),
     MoveToChar(CharMovement),
     G,
     Tilde,
@@ -64,6 +65,23 @@ impl ModeStack {
     fn pop(&mut self) -> Mode {
         self.0.pop().unwrap_or(Mode::Normal)
     }
+}
+
+fn is_movement_key_to_right(key: Key) -> bool {
+    matches!(
+        key.code,
+        KeyCode::Char('l')
+            | KeyCode::Right
+            | KeyCode::Char('w')
+            | KeyCode::Char('W')
+            | KeyCode::Char('e')
+            | KeyCode::Char('E')
+            | KeyCode::Char(' ')
+            | KeyCode::End
+            | KeyCode::Char('$')
+            | KeyCode::Char('t')
+            | KeyCode::Char('f')
+    )
 }
 
 fn is_movement_key(key: Key) -> bool {
@@ -473,7 +491,7 @@ impl Vi {
             // after popping, if mode is delete or change, pop that too. This is used for movements
             // with sub commands like 't' (MoveToChar) and 'g' (G).
             match self.mode() {
-                Delete(_) => self.mode_stack.pop(),
+                Delete(_) | Yank(_) => self.mode_stack.pop(),
                 _ => original_mode,
             }
         };
@@ -481,11 +499,18 @@ impl Vi {
         ed.no_eol = self.mode() == Mode::Normal;
         self.movement_reset = self.mode() != Mode::Insert;
 
-        if let Delete(start_pos) = last_mode {
+        if let Delete(_) | Yank(_) = last_mode {
             // perform the delete operation
-            match move_type {
-                Exclusive => ed.delete_until(start_pos)?,
-                Inclusive => ed.delete_until_inclusive(start_pos)?,
+            match last_mode {
+                Mode::Delete(start_pos) => match move_type {
+                    Exclusive => ed.delete_until(start_pos)?,
+                    Inclusive => ed.delete_until_inclusive(start_pos)?,
+                },
+                Mode::Yank(start_pos) => match move_type {
+                    Exclusive => ed.yank_until(start_pos)?,
+                    Inclusive => ed.yank_until_inclusive(start_pos)?,
+                },
+                _ => unreachable!(),
             }
 
             // update the last state
@@ -762,14 +787,14 @@ impl Vi {
                         Ok(())
                     }
                     KeyCode::Char('r') => self.set_mode(Mode::Replace, ed),
-                    KeyCode::Char('d') | KeyCode::Char('c') => {
+                    KeyCode::Char('d') | KeyCode::Char('c') | KeyCode::Char('y') => {
                         self.current_command.clear();
 
-                        if key.code == KeyCode::Char('d') {
-                            // handle special 'd' key stuff
+                        if (key.code == KeyCode::Char('d')) | (key.code == KeyCode::Char('y')) {
+                            // handle special 'd'  & 'y' key stuff
                             self.current_insert = None;
                             self.current_command.push(key);
-                        } else {
+                        } else if key.code == KeyCode::Char('c') {
                             // handle special 'c' key stuff
                             self.current_insert = Some(key);
                             self.current_command.clear();
@@ -777,7 +802,11 @@ impl Vi {
                         }
 
                         let start_pos = ed.cursor();
-                        self.set_mode(Mode::Delete(start_pos), ed)?;
+                        if key.code == KeyCode::Char('y') {
+                            self.set_mode(Mode::Yank(start_pos), ed)?;
+                        } else {
+                            self.set_mode(Mode::Delete(start_pos), ed)?;
+                        }
                         self.secondary_count = self.count;
                         self.count = 0;
                         Ok(())
@@ -852,12 +881,12 @@ impl Vi {
                     KeyCode::Char('e') => {
                         let count = self.move_count();
                         move_to_end_of_word(ed, count)?;
-                        self.pop_mode_after_movement(Exclusive, ed)
+                        self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('E') => {
                         let count = self.move_count();
                         move_to_end_of_word_ws(ed, count)?;
-                        self.pop_mode_after_movement(Exclusive, ed)
+                        self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('b') => {
                         let count = self.move_count();
@@ -984,7 +1013,11 @@ impl Vi {
         Ok(())
     }
 
-    fn handle_key_delete_or_change<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_delete_change_yank<'a>(
+        &mut self,
+        key: Key,
+        ed: &mut Editor<'a>,
+    ) -> io::Result<()> {
         match (key, self.current_insert) {
             // check if this is a movement key
             (key, _)
@@ -1005,8 +1038,16 @@ impl Vi {
                 // update the last command state
                 self.current_command.push(key);
 
-                // execute movement
-                self.handle_key_normal(key, ed)
+                match (self.mode(), is_movement_key_to_right(key)) {
+                    // in vim, movement to the right in yank mode does not cause the cursor to move
+                    (Mode::Yank(_), true) => {
+                        let before = ed.cursor();
+                        self.handle_key_normal(key, ed)?;
+                        ed.move_cursor_to(before)
+                    }
+                    // execute movement
+                    (_, _) => self.handle_key_normal(key, ed),
+                }
             }
             // handle numeric keys
             (
@@ -1032,6 +1073,13 @@ impl Vi {
                     mods: None,
                 },
                 None,
+            )
+            | (
+                Key {
+                    code: KeyCode::Char('y'),
+                    mods: None,
+                },
+                None,
             ) => {
                 // updating the last command buffer doesn't really make sense in this context.
                 // Repeating 'dd' will simply erase and already erased line. Any other commands
@@ -1040,11 +1088,15 @@ impl Vi {
                 // last command here anyway ¯\_(ツ)_/¯
                 self.current_command.push(key);
 
-                // delete the whole line
+                // delete or yank the whole line
                 self.count = 0;
                 self.secondary_count = 0;
                 ed.move_cursor_to_start_of_line()?;
-                ed.delete_all_after_cursor()?;
+                if key.code == KeyCode::Char('y') {
+                    ed.yank_all_after_cursor()?;
+                } else {
+                    ed.delete_all_after_cursor()?;
+                }
 
                 // return to the previous mode
                 self.pop_mode(ed)
@@ -1101,18 +1153,41 @@ impl Vi {
         match key_code {
             KeyCode::Char(c) => {
                 let move_type;
+                let mut return_to_pos = None;
                 match movement {
                     RightUntil => {
                         move_type = Inclusive;
                         match find_char(ed.current_buffer(), ed.cursor() + 1, c, count) {
-                            Some(i) => ed.move_cursor_to(i - 1),
+                            Some(i) => {
+                                let prev_mode = self.mode_stack.pop();
+                                return_to_pos = match self.mode() {
+                                    Mode::Yank(_) => {
+                                        ed.yank_until(ed.cursor())?;
+                                        Some(ed.cursor())
+                                    }
+                                    _ => None,
+                                };
+                                self.set_mode_preserve_last(prev_mode, ed)?;
+                                ed.move_cursor_to(i - 1)
+                            }
                             None => Ok(()),
                         }
                     }
                     RightAt => {
                         move_type = Inclusive;
                         match find_char(ed.current_buffer(), ed.cursor() + 1, c, count) {
-                            Some(i) => ed.move_cursor_to(i),
+                            Some(i) => {
+                                let prev_mode = self.mode_stack.pop();
+                                return_to_pos = match self.mode() {
+                                    Mode::Yank(_) => {
+                                        ed.yank_until(ed.cursor())?;
+                                        Some(ed.cursor())
+                                    }
+                                    _ => None,
+                                };
+                                self.set_mode_preserve_last(prev_mode, ed)?;
+                                ed.move_cursor_to(i)
+                            }
                             None => Ok(()),
                         }
                     }
@@ -1133,8 +1208,12 @@ impl Vi {
                     Repeat | ReverseRepeat => unreachable!(),
                 }?;
 
-                // go back to the previous mode
-                self.pop_mode_after_movement(move_type, ed)
+                let result = self.pop_mode_after_movement(move_type, ed);
+                if let Some(pos) = return_to_pos {
+                    // in vim, movement to the right in yank mode does not cause the cursor to move
+                    ed.move_cursor_to(pos)?;
+                }
+                result
             }
 
             // can't get here due to our match above
@@ -1191,7 +1270,7 @@ impl KeyMap for Vi {
             Mode::Normal => self.handle_key_normal(key, ed),
             Mode::Insert => self.handle_key_insert(key, ed),
             Mode::Replace => self.handle_key_replace(key, ed),
-            Mode::Delete(_) => self.handle_key_delete_or_change(key, ed),
+            Mode::Delete(_) | Mode::Yank(_) => self.handle_key_delete_change_yank(key, ed),
             Mode::MoveToChar(movement) => self.handle_key_move_to_char(key, movement, ed),
             Mode::G => self.handle_key_g(key, ed),
             Mode::Tilde => unreachable!(),
@@ -1715,8 +1794,6 @@ mod tests {
     #[test]
     fn vi_normal_delete() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1752,8 +1829,6 @@ mod tests {
     #[test]
     fn vi_delete_paste() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1790,10 +1865,334 @@ mod tests {
     }
 
     #[test]
+    fn vi_yank_right() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Right,
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 0);
+        assert_eq!(String::from(ed), "ddata");
+    }
+
+    #[test]
+    fn vi_yank_2h() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('y'),
+                KeyCode::Char('2'),
+                KeyCode::Char('h'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 2);
+        assert_eq!(String::from(ed), "datata");
+    }
+
+    #[test]
+    fn vi_2d_l() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('d'),
+                KeyCode::Char('l'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 1);
+        assert_eq!(String::from(ed), "data");
+    }
+
+    #[test]
+    fn vi_yank_h() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('y'),
+                KeyCode::Char('h'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 2);
+        assert_eq!(String::from(ed), "datta");
+    }
+
+    #[test]
+    fn vi_yank_upper_f() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('y'),
+                KeyCode::Char('F'),
+                KeyCode::Char('d'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "ddatata");
+    }
+
+    #[test]
+    fn vi_yank_f() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('f'),
+                KeyCode::Char('t'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "ddatata");
+    }
+
+    #[test]
+    fn vi_yank_t() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('t'),
+                KeyCode::Char('t'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 2);
+        assert_eq!(String::from(ed), "ddaata");
+    }
+
+    #[test]
+    fn vi_yank_upper_t() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('y'),
+                KeyCode::Char('T'),
+                KeyCode::Char('d'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "daatta");
+    }
+
+    #[test]
+    fn vi_yank_e() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('e'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 4);
+        assert_eq!(String::from(ed), "ddataata");
+    }
+
+    #[test]
     fn vi_delete_paste_backward() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1837,8 +2236,6 @@ mod tests {
     #[test]
     fn vi_delete_paste_words() {
         let mut history = History::new();
-        history.push("history").unwrap();
-        history.push("history").unwrap();
         let mut out = Vec::new();
         let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
@@ -1883,8 +2280,6 @@ mod tests {
     fn vi_delete_paste_words_reverse() {
         {
             let mut history = History::new();
-            history.push("history").unwrap();
-            history.push("history").unwrap();
             let mut out = Vec::new();
             let words = Box::new(get_buffer_words);
             let mut buf = String::with_capacity(512);

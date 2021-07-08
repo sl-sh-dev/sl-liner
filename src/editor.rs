@@ -736,9 +736,9 @@ impl<'a> Editor<'a> {
     /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
     /// character inserted.
     pub fn insert_chars_around_cursor(&mut self, cs: &[char], right: bool) -> io::Result<()> {
+        let mut idx = self.cursor;
         {
             let buf = cur_buf_mut!(self);
-            let mut idx = self.cursor;
             if buf.num_chars() > idx && right {
                 // insert to right of cursor
                 idx += 1;
@@ -748,10 +748,13 @@ impl<'a> Editor<'a> {
 
         if right {
             self.cursor += cs.len();
+            self.display()
         } else if !cs.is_empty() {
             self.cursor += cs.len() - 1;
+            self.display()
+        } else {
+            Ok(())
         }
-        self.display()
     }
 
     /// Inserts characters directly after the cursor, moving the cursor to the right.
@@ -797,11 +800,32 @@ impl<'a> Editor<'a> {
         self.display()
     }
 
+    /// Yanks every character after the cursor until the end of the line.
+    pub fn yank_all_after_cursor(&mut self) -> io::Result<()> {
+        {
+            let buf = cur_buf_mut!(self);
+            buf.yank(self.cursor, buf.num_chars());
+        }
+        self.display()
+    }
+
     /// Deletes every character after the cursor until the end of the line.
     pub fn delete_all_after_cursor(&mut self) -> io::Result<()> {
         {
             let buf = cur_buf_mut!(self);
             buf.truncate(self.cursor);
+        }
+        self.display()
+    }
+
+    /// Yanks every character from the cursor until the given position.
+    pub fn yank_until(&mut self, position: usize) -> io::Result<()> {
+        {
+            let buf = cur_buf_mut!(self);
+            buf.yank(
+                cmp::min(self.cursor, position),
+                cmp::max(self.cursor, position),
+            );
         }
         self.display()
     }
@@ -815,6 +839,18 @@ impl<'a> Editor<'a> {
                 cmp::max(self.cursor, position),
             );
             self.cursor = cmp::min(self.cursor, position);
+        }
+        self.display()
+    }
+
+    /// Yanks every character from the cursor until the given position, inclusive.
+    pub fn yank_until_inclusive(&mut self, position: usize) -> io::Result<()> {
+        {
+            let buf = cur_buf_mut!(self);
+            buf.yank(
+                cmp::min(self.cursor, position),
+                cmp::max(self.cursor + 1, position + 1),
+            );
         }
         self.display()
     }
