@@ -45,14 +45,6 @@ impl Action {
             Action::StartGroup | Action::EndGroup => None,
         }
     }
-
-    pub fn get_start_and_text(&self) -> Option<(usize, Vec<char>)> {
-        match *self {
-            Action::Insert { start, ref text } => Some((start, text.clone())),
-            Action::Remove { start, ref text } => Some((start, text.clone())),
-            Action::StartGroup | Action::EndGroup => None,
-        }
-    }
 }
 
 /// A buffer for text in the line editor.
