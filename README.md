@@ -1,4 +1,4 @@
-# liner
+# sl-liner ![Rust](https://github.com/sl-sh-dev/sl-liner/workflows/Rust/badge.svg?branch=master)
 A Rust library offering readline-like functionality.
 
 This was forked from https://gitlab.redox-os.org/redox-os/liner.
