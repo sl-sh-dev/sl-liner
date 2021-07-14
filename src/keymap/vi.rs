@@ -543,9 +543,10 @@ impl Vi {
         }
 
         if last_mode == Tilde {
-            ed.display().unwrap();
+            ed.display()
+        } else {
+            self.set_editor_mode(&mut ed)
         }
-        self.set_editor_mode(&mut ed)
     }
 
     /// Return to normal mode.
@@ -905,9 +906,10 @@ impl Vi {
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char(i @ '0'..='9') => {
-                        let i = i.to_digit(10).unwrap();
-                        // count = count * 10 + i
-                        self.count = self.count.saturating_mul(10).saturating_add(i);
+                        if let Some(i) = i.to_digit(10) {
+                            // count = count * 10 + i
+                            self.count = self.count.saturating_mul(10).saturating_add(i);
+                        }
                         Ok(())
                     }
                     KeyCode::Char('^') => {
@@ -939,19 +941,22 @@ impl Vi {
 
                         self.set_mode(Tilde, ed)?;
                         for _ in 0..self.move_count_right(ed) {
-                            let c = ed.current_buffer().char_after(ed.cursor()).unwrap();
-                            if c.is_lowercase() {
-                                ed.delete_after_cursor()?;
-                                for c in c.to_uppercase() {
-                                    ed.insert_after_cursor(c)?;
+                            match ed.current_buffer().char_after(ed.cursor()) {
+                                Some(c) if c.is_lowercase() => {
+                                    ed.delete_after_cursor()?;
+                                    for c in c.to_uppercase() {
+                                        ed.insert_after_cursor(c)?;
+                                    }
                                 }
-                            } else if c.is_uppercase() {
-                                ed.delete_after_cursor()?;
-                                for c in c.to_lowercase() {
-                                    ed.insert_after_cursor(c)?;
+                                Some(c) if c.is_uppercase() => {
+                                    ed.delete_after_cursor()?;
+                                    for c in c.to_lowercase() {
+                                        ed.insert_after_cursor(c)?;
+                                    }
                                 }
-                            } else {
-                                ed.move_cursor_right(1)?;
+                                _ => {
+                                    ed.move_cursor_right(1)?;
+                                }
                             }
                         }
                         self.pop_mode(ed)?;

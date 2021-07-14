@@ -102,7 +102,7 @@ impl Completer for FilenameCompleter {
         };
 
         let p;
-        let start_name;
+        let mut start_name = "".into();
         let completing_dir;
         match full_path.parent() {
             // XXX non-unix separaor
@@ -112,13 +112,15 @@ impl Completer for FilenameCompleter {
                     && !full_path.ends_with("..") =>
             {
                 p = parent;
-                start_name = if self.case_sensitive {
-                    full_path.file_name().unwrap().to_string_lossy()
-                } else {
-                    let sn = full_path.file_name().unwrap().to_string_lossy();
-                    sn.to_lowercase();
-                    sn
-                };
+                if let Some(file_name) = full_path.file_name() {
+                    let sn = file_name.to_string_lossy();
+                    start_name = {
+                        if !self.case_sensitive {
+                            sn.to_lowercase();
+                        };
+                        sn
+                    }
+                }
                 completing_dir = false;
             }
             _ => {
