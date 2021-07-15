@@ -19,27 +19,26 @@ pub fn find_longest_common_prefix<T: Clone + Eq>(among: &[Vec<T>]) -> Option<Vec
         }
     }
 
-    let shortest_word = among.iter().min_by_key(|x| x.len()).unwrap();
+    if let Some(shortest_word) = among.iter().min_by_key(|x| x.len()).or(None) {
+        let mut end = shortest_word.len();
+        while end > 0 {
+            let prefix = &shortest_word[..end];
 
-    let mut end = shortest_word.len();
-    while end > 0 {
-        let prefix = &shortest_word[..end];
-
-        let mut failed = false;
-        for s in among {
-            if !s.starts_with(prefix) {
-                failed = true;
-                break;
+            let mut failed = false;
+            for s in among {
+                if !s.starts_with(prefix) {
+                    failed = true;
+                    break;
+                }
             }
-        }
 
-        if !failed {
-            return Some(prefix.into());
-        }
+            if !failed {
+                return Some(prefix.into());
+            }
 
-        end -= 1;
+            end -= 1;
+        }
     }
-
     None
 }
 

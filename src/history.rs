@@ -337,8 +337,7 @@ impl History {
             None
         };
 
-        if self.file_name.is_some() {
-            let file_name = self.file_name.clone().unwrap();
+        if let Some(file_name) = &self.file_name {
             if let Ok(inner_file) = std::fs::OpenOptions::new().append(true).open(&file_name) {
                 // Leave file size alone, if it is not right trigger a reload later.
                 let mut file = BufWriter::new(inner_file);

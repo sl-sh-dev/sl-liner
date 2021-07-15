@@ -102,7 +102,7 @@ impl Completer for FilenameCompleter {
         };
 
         let p;
-        let start_name;
+        let mut start_name = None;
         let completing_dir;
         match full_path.parent() {
             // XXX non-unix separaor
@@ -112,18 +112,20 @@ impl Completer for FilenameCompleter {
                     && !full_path.ends_with("..") =>
             {
                 p = parent;
-                start_name = if self.case_sensitive {
-                    full_path.file_name().unwrap().to_string_lossy()
-                } else {
-                    let sn = full_path.file_name().unwrap().to_string_lossy();
-                    sn.to_lowercase();
-                    sn
-                };
+                if let Some(file_name) = full_path.file_name() {
+                    let sn = file_name.to_string_lossy();
+                    start_name = {
+                        if !self.case_sensitive {
+                            sn.to_lowercase();
+                        };
+                        Some(sn)
+                    }
+                }
                 completing_dir = false;
             }
             _ => {
                 p = full_path.as_path();
-                start_name = "".into();
+                start_name = Some("".into());
                 completing_dir =
                     start.is_empty() || start.ends_with('/') || full_path.ends_with("..");
             }
@@ -147,29 +149,31 @@ impl Completer for FilenameCompleter {
                 file_name.to_string_lossy().to_lowercase()
             };
 
-            if start_name.is_empty() || file_name.starts_with(&*start_name) {
-                let mut a = start_path.clone();
-                if !a.is_absolute() {
-                    a = PathBuf::new();
-                } else if !completing_dir && !a.pop() {
-                    return vec![];
-                }
+            if let Some(start_name) = &start_name {
+                if file_name.starts_with(&**start_name) {
+                    let mut a = start_path.clone();
+                    if !a.is_absolute() {
+                        a = PathBuf::new();
+                    } else if !completing_dir && !a.pop() {
+                        return vec![];
+                    }
 
-                a.push(dir.file_name());
-                let mut s = a.to_string_lossy();
-                if dir.path().is_dir() {
-                    let mut string = s.into_owned();
-                    string.push('/');
-                    s = string.into();
-                }
+                    a.push(dir.file_name());
+                    let mut s = a.to_string_lossy();
+                    if dir.path().is_dir() {
+                        let mut string = s.into_owned();
+                        string.push('/');
+                        s = string.into();
+                    }
 
-                let mut b = PathBuf::from(&start_owned);
-                if !completing_dir {
-                    b.pop();
-                }
-                b.push(s.as_ref());
+                    let mut b = PathBuf::from(&start_owned);
+                    if !completing_dir {
+                        b.pop();
+                    }
+                    b.push(s.as_ref());
 
-                matches.push(b.to_string_lossy().replace(" ", r"\ "));
+                    matches.push(b.to_string_lossy().replace(" ", r"\ "));
+                }
             }
         }
 
