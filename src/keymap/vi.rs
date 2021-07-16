@@ -32,6 +32,7 @@ enum Mode {
     Replace,
     Delete(usize),
     Yank(usize),
+    TextObject(KeyCode),
     MoveToChar(CharMovement),
     G,
     Tilde,
@@ -65,6 +66,14 @@ impl ModeStack {
     fn pop(&mut self) -> Mode {
         self.0.pop().unwrap_or(Mode::Normal)
     }
+}
+
+fn is_text_object_start(key: Key) -> bool {
+    matches!(key.code, KeyCode::Char('i') | KeyCode::Char('a'))
+}
+
+fn is_text_object_end(key: Key) -> bool {
+    matches!(key.code, KeyCode::Char('w'))
 }
 
 fn is_movement_key_to_right(key: Key) -> bool {
@@ -1039,6 +1048,12 @@ impl Vi {
     ) -> io::Result<()> {
         match (key, self.current_insert) {
             // check if this is a movement key
+            (key, _) if is_text_object_start(key) && key.mods == None => {
+                self.current_command.push(key);
+                self.current_insert = None;
+                self.set_mode(Mode::TextObject(key.code), ed)?;
+                Ok(())
+            }
             (key, _)
                 if is_movement_key(key)
                     | (key.code == KeyCode::Char('0') && key.mods == None && self.count == 0) =>
@@ -1263,6 +1278,48 @@ impl Vi {
         self.count = 0;
         res
     }
+
+    fn handle_key_text_object<'a>(
+        &mut self,
+        key: Key,
+        prev: KeyCode,
+        ed: &mut Editor<'a>,
+    ) -> io::Result<()> {
+        self.pop_mode(ed)?;
+        let reset_mode_start_pos = |s: &mut Vi, e: &mut Editor| match s.mode_stack.pop() {
+            Mode::Delete(_) => {
+                s.mode_stack.push(Mode::Delete(e.cursor()));
+                Ok(())
+            }
+            Mode::Yank(_) => {
+                s.mode_stack.push(Mode::Yank(e.cursor()));
+                Ok(())
+            }
+            // Delete and Yank are the only supported modes. THey are the only command objects
+            // that currently work with text objects.
+            _ => s.normal_mode_abort(e),
+        };
+        match key {
+            key if is_text_object_end(key) && key.mods == None => match prev {
+                KeyCode::Char('a') => {
+                    let count = self.move_count();
+                    move_word_ws_back(ed, 1)?;
+                    reset_mode_start_pos(self, ed)?;
+                    move_word(ed, count)?;
+                    self.pop_mode_after_movement(MoveType::Exclusive, ed)
+                }
+                KeyCode::Char('i') => {
+                    let count = self.move_count();
+                    move_word_back(ed, 1)?;
+                    reset_mode_start_pos(self, ed)?;
+                    move_to_end_of_word_ws(ed, count)?;
+                    self.pop_mode_after_movement(MoveType::Inclusive, ed)
+                }
+                _ => self.normal_mode_abort(ed),
+            },
+            _ => self.normal_mode_abort(ed),
+        }
+    }
 }
 
 impl KeyMap for Vi {
@@ -1292,6 +1349,7 @@ impl KeyMap for Vi {
             Mode::Delete(_) | Mode::Yank(_) => self.handle_key_delete_change_yank(key, ed),
             Mode::MoveToChar(movement) => self.handle_key_move_to_char(key, movement, ed),
             Mode::G => self.handle_key_g(key, ed),
+            Mode::TextObject(prev) => self.handle_key_text_object(key, prev, ed),
             Mode::Tilde => unreachable!(),
         }
     }
