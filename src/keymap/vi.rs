@@ -24,6 +24,36 @@ enum MoveType {
     Exclusive,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextObjectState {
+    AWord,
+    InnerWord,
+}
+
+impl TextObjectState {
+    fn from_key_code(k: KeyCode) -> Option<TextObjectState> {
+        match k {
+            KeyCode::Char('a') => Some(TextObjectState::AWord),
+            KeyCode::Char('i') => Some(TextObjectState::InnerWord),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TextObjectMovement {
+    Word,
+}
+
+impl TextObjectMovement {
+    fn from_key_code(k: KeyCode) -> Option<TextObjectMovement> {
+        match k {
+            KeyCode::Char('w') => Some(TextObjectMovement::Word),
+            _ => None,
+        }
+    }
+}
+
 /// The editing mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -32,7 +62,7 @@ enum Mode {
     Replace,
     Delete(usize),
     Yank(usize),
-    TextObject(KeyCode),
+    TextObject(TextObjectState),
     MoveToChar(CharMovement),
     G,
     Tilde,
@@ -66,14 +96,6 @@ impl ModeStack {
     fn pop(&mut self) -> Mode {
         self.0.pop().unwrap_or(Mode::Normal)
     }
-}
-
-fn is_text_object_start(key: Key) -> bool {
-    matches!(key.code, KeyCode::Char('i') | KeyCode::Char('a'))
-}
-
-fn is_text_object_end(key: Key) -> bool {
-    matches!(key.code, KeyCode::Char('w'))
 }
 
 fn is_movement_key_to_right(key: Key) -> bool {
@@ -1094,15 +1116,19 @@ impl Vi {
         key: Key,
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
-        match (key, self.current_insert) {
+        match (
+            key,
+            TextObjectState::from_key_code(key.code),
+            self.current_insert,
+        ) {
             // check if this is a movement key
-            (key, _) if is_text_object_start(key) && key.mods == None => {
+            (key, Some(text_object), _) if key.mods == None => {
                 self.current_command.push(key);
                 self.current_insert = None;
-                self.set_mode(Mode::TextObject(key.code), ed)?;
+                self.set_mode(Mode::TextObject(text_object), ed)?;
                 Ok(())
             }
-            (key, _)
+            (key, _, _)
                 if is_movement_key(key)
                     | (key.code == KeyCode::Char('0') && key.mods == None && self.count == 0) =>
             {
@@ -1129,12 +1155,14 @@ impl Vi {
                     mods: None,
                 },
                 _,
+                _,
             ) => self.handle_key_normal(key, ed),
             (
                 Key {
                     code: KeyCode::Char('c'),
                     mods: None,
                 },
+                _,
                 Some(Key {
                     code: KeyCode::Char('c'),
                     mods: None,
@@ -1145,6 +1173,7 @@ impl Vi {
                     code: KeyCode::Char('d'),
                     mods: None,
                 },
+                _,
                 None,
             )
             | (
@@ -1152,6 +1181,7 @@ impl Vi {
                     code: KeyCode::Char('y'),
                     mods: None,
                 },
+                _,
                 None,
             ) => {
                 // updating the last command buffer doesn't really make sense in this context.
@@ -1318,7 +1348,7 @@ impl Vi {
         res
     }
 
-    fn pre_move_text_object<'a>(&mut self, ed: &mut Editor<'a>) -> Option<Mode> {
+    fn reset_curor_pos_for_command_mode<'a>(&mut self, ed: &mut Editor<'a>) -> Option<Mode> {
         match self.mode_stack.pop() {
             Mode::Delete(_) => {
                 self.mode_stack.push(Mode::Delete(ed.cursor()));
@@ -1336,57 +1366,76 @@ impl Vi {
     fn handle_key_text_object<'a>(
         &mut self,
         key: Key,
-        prev: KeyCode,
+        text_object: TextObjectState,
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         self.pop_mode(ed)?;
 
-        let post_movement = |mode, e: &mut Editor| -> io::Result<()> {
-            if let Some(Mode::Yank(before)) = mode {
-                e.move_cursor_to(before)
-            } else {
-                Ok(())
-            }
-        };
-
         self.set_count();
 
-        match key {
-            key if is_text_object_end(key) && key.mods == None => match prev {
-                KeyCode::Char('a') => {
-                    let count = self.move_count();
-                    if !ed.cursor_at_beginning_of_word_or_line() {
-                        move_word_ws_back(ed, 1)?;
-                    }
-
-                    let mode = self.pre_move_text_object(ed);
-                    move_word(ed, count)?;
-                    self.pop_mode_after_movement(MoveType::Exclusive, ed)?;
-                    post_movement(mode, ed)
-                }
-                KeyCode::Char('i') => {
-                    let count = self.move_count();
-                    if !ed.cursor_at_beginning_of_word_or_line() {
-                        move_word_back(ed, 1)?;
-                    }
-
-                    let mode = self.pre_move_text_object(ed);
-                    if self.count > 1 {
-                        move_word_ws_is_word(ed, count)?;
-                    } else {
-                        move_to_end_of_word(ed, count)?;
-                    }
-                    self.pop_mode_after_movement(MoveType::Inclusive, ed)?;
-                    post_movement(mode, ed)
-                }
-                _ => self.normal_mode_abort(ed),
+        match (TextObjectMovement::from_key_code(key.code), key.mods) {
+            (Some(movement), None) => match movement {
+                TextObjectMovement::Word => self.handle_text_object_movement_word(text_object, ed),
             },
-            _ => self.normal_mode_abort(ed),
+            (_, _) => self.normal_mode_abort(ed),
+        }
+    }
+
+    fn handle_text_object_movement_word<'a>(
+        &mut self,
+        text_object: TextObjectState,
+        ed: &mut Editor<'a>,
+    ) -> io::Result<()> {
+        let count = self.move_count();
+        if !ed.cursor_at_beginning_of_word_or_line() {
+            match text_object {
+                TextObjectState::AWord => move_word_ws_back(ed, 1)?,
+                TextObjectState::InnerWord => move_word_back(ed, 1)?,
+            }
+        }
+        let mode = self.reset_curor_pos_for_command_mode(ed);
+        match mode {
+            Some(mode) => {
+                let move_type = match text_object {
+                    TextObjectState::AWord => {
+                        move_word(ed, count)?;
+                        MoveType::Exclusive
+                    }
+                    TextObjectState::InnerWord => {
+                        if self.count > 1 {
+                            move_word_ws_is_word(ed, count)?;
+                        } else {
+                            move_to_end_of_word(ed, count)?;
+                        }
+                        MoveType::Inclusive
+                    }
+                };
+                self.pop_mode_after_movement(move_type, ed)?;
+                if let Mode::Yank(before) = mode {
+                    ed.move_cursor_to(before)
+                } else {
+                    Ok(())
+                }
+            }
+            None => self.normal_mode_abort(ed),
         }
     }
 }
 
 impl KeyMap for Vi {
+    fn handle_key_core<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+        match self.mode() {
+            Mode::Normal => self.handle_key_normal(key, ed),
+            Mode::Insert => self.handle_key_insert(key, ed),
+            Mode::Replace => self.handle_key_replace(key, ed),
+            Mode::Delete(_) | Mode::Yank(_) => self.handle_key_delete_change_yank(key, ed),
+            Mode::MoveToChar(movement) => self.handle_key_move_to_char(key, movement, ed),
+            Mode::G => self.handle_key_g(key, ed),
+            Mode::TextObject(prev) => self.handle_key_text_object(key, prev, ed),
+            Mode::Tilde => unreachable!(),
+        }
+    }
+
     fn init<'a>(&mut self, mut ed: &mut Editor<'a>) {
         self.mode_stack.clear();
         self.mode_stack.push(Mode::Insert);
@@ -1403,19 +1452,6 @@ impl KeyMap for Vi {
         // since we start in insert mode, we need to start an undo group
         ed.current_buffer_mut().start_undo_group();
         let _ = self.set_editor_mode(&mut ed);
-    }
-
-    fn handle_key_core<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
-        match self.mode() {
-            Mode::Normal => self.handle_key_normal(key, ed),
-            Mode::Insert => self.handle_key_insert(key, ed),
-            Mode::Replace => self.handle_key_replace(key, ed),
-            Mode::Delete(_) | Mode::Yank(_) => self.handle_key_delete_change_yank(key, ed),
-            Mode::MoveToChar(movement) => self.handle_key_move_to_char(key, movement, ed),
-            Mode::G => self.handle_key_g(key, ed),
-            Mode::TextObject(prev) => self.handle_key_text_object(key, prev, ed),
-            Mode::Tilde => unreachable!(),
-        }
     }
 }
 
