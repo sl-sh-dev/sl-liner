@@ -244,6 +244,11 @@ impl Buffer {
 
     /// Returns the number of characters removed.
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
+        let end = if end >= self.data.len() {
+            self.data.len()
+        } else {
+            end
+        };
         let s = self.remove_raw(start, end);
         let num_removed = s.len();
         self.push_action(Action::Remove {
