@@ -1,3 +1,6 @@
+/// TODO
+/// 1. Text objects need support for count objects, for some reason
+/// the count is always 1 by the time it gets to handle_key_text_object
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{cmp, mem};
@@ -984,7 +987,9 @@ impl Vi {
                         Ok(())
                     }
                     KeyCode::Char('p') => {
-                        let delta = ed.paste(true);
+                        let count = self.move_count();
+                        self.count = 0;
+                        let delta = ed.paste(true, count);
                         if delta > 0 {
                             ed.move_cursor_to(ed.cursor() + delta)
                         } else {
@@ -992,7 +997,9 @@ impl Vi {
                         }
                     }
                     KeyCode::Char('P') => {
-                        let delta = ed.paste(false);
+                        let count = self.move_count();
+                        self.count = 0;
+                        let delta = ed.paste(false, count);
                         if delta > 0 {
                             ed.move_cursor_to(ed.cursor() + delta - 1)
                         } else {
@@ -2039,7 +2046,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn vi_delete_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
@@ -2074,6 +2080,82 @@ mod tests {
         );
         assert_eq!(ed.cursor(), 5);
         assert_eq!(String::from(ed), "data data");
+    }
+
+    #[test]
+    fn vi_delete_with_multi_paste() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data data data").unwrap();
+        assert_eq!(ed.cursor(), 14);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('2'),
+                KeyCode::Char('b'),
+                KeyCode::Char('d'),
+                KeyCode::Char('w'),
+                KeyCode::Char('2'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 15);
+        assert_eq!(String::from(ed), "data ddata data ata");
+    }
+
+    #[test]
+    fn vi_delete_with_multi_paste_backwards() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data data data").unwrap();
+        assert_eq!(ed.cursor(), 14);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('2'),
+                KeyCode::Char('b'),
+                KeyCode::Char('d'),
+                KeyCode::Char('w'),
+                KeyCode::Char('4'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 24);
+        assert_eq!(String::from(ed), "data data data data data data");
     }
 
     #[test]

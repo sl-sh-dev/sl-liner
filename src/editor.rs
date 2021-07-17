@@ -434,9 +434,9 @@ impl<'a> Editor<'a> {
 
     /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
     /// character inserted.
-    pub fn paste(&mut self, right: bool) -> usize {
+    pub fn paste(&mut self, right: bool, count: usize) -> usize {
         let buf = cur_buf_mut!(self);
-        buf.insert_register_around_cursor(self.cursor, right)
+        buf.insert_register_around_cursor(self.cursor, count, right)
     }
 
     pub fn revert(&mut self) -> io::Result<bool> {
