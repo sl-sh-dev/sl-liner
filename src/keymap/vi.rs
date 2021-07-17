@@ -1279,7 +1279,7 @@ impl Vi {
         res
     }
 
-    fn pre_move_text_object<'a>(&mut self, ed: &mut Editor<'a>) -> Option<(Mode, usize)> {
+    fn pre_move_text_object<'a>(&mut self, ed: &mut Editor<'a>) -> Option<Mode> {
         match self.mode_stack.pop() {
             Mode::Delete(_) => {
                 self.mode_stack.push(Mode::Delete(ed.cursor()));
@@ -1291,9 +1291,7 @@ impl Vi {
             // that currently work with text objects.
             _ => return None,
         }
-        let mode = self.mode();
-        let before = ed.cursor();
-        Some((mode, before))
+        Some(self.mode())
     }
 
     fn handle_key_text_object<'a>(
@@ -1302,17 +1300,11 @@ impl Vi {
         prev: KeyCode,
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
-
         self.pop_mode(ed)?;
 
-        let post_movement = |pre_move_state, e: &mut Editor|
-         -> io::Result<()> {
-            if let Some((mode, before)) = pre_move_state {
-                if let Mode::Yank(_) = mode {
-                    e.move_cursor_to(before)
-                } else {
-                    Ok(())
-                }
+        let post_movement = |mode, e: &mut Editor| -> io::Result<()> {
+            if let Some(Mode::Yank(before)) = mode {
+                e.move_cursor_to(before)
             } else {
                 Ok(())
             }
@@ -1322,26 +1314,25 @@ impl Vi {
             key if is_text_object_end(key) && key.mods == None => match prev {
                 KeyCode::Char('a') => {
                     let count = self.move_count();
-                    if !ed.cursor_is_at_beginning_of_word() {
+                    if !ed.cursor_at_beginning_of_word_or_line() {
                         move_word_ws_back(ed, 1)?;
                     }
 
-                    let pre_move_state = self.pre_move_text_object(ed);
+                    let mode = self.pre_move_text_object(ed);
                     move_word(ed, count)?;
                     self.pop_mode_after_movement(MoveType::Exclusive, ed)?;
-                    post_movement(pre_move_state, ed)
-
+                    post_movement(mode, ed)
                 }
                 KeyCode::Char('i') => {
                     let count = self.move_count();
-                    if !ed.cursor_is_at_beginning_of_word() {
+                    if !ed.cursor_at_beginning_of_word_or_line() {
                         move_word_back(ed, 1)?;
                     }
 
-                    let pre_move_state = self.pre_move_text_object(ed);
+                    let mode = self.pre_move_text_object(ed);
                     move_to_end_of_word_ws(ed, count)?;
                     self.pop_mode_after_movement(MoveType::Inclusive, ed)?;
-                    post_movement(pre_move_state, ed)
+                    post_movement(mode, ed)
                 }
                 _ => self.normal_mode_abort(ed),
             },
@@ -1929,6 +1920,198 @@ mod tests {
         );
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "ta");
+    }
+
+    #[test]
+    fn vi_change_with_text_objects() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data data data").unwrap();
+        assert_eq!(ed.cursor(), 14);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('c'),
+                KeyCode::Char('i'),
+                KeyCode::Char('w'),
+                KeyCode::Char('h'),
+                KeyCode::Char('i'),
+                KeyCode::Esc,
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 1);
+        assert_eq!(String::from(ed), "hi data data");
+    }
+
+    #[test]
+    fn vi_change_paste_with_text_objects() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data data data").unwrap();
+        assert_eq!(ed.cursor(), 14);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('c'),
+                KeyCode::Char('i'),
+                KeyCode::Char('w'),
+                KeyCode::Char('h'),
+                KeyCode::Char('i'),
+                KeyCode::Esc,
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 5);
+        assert_eq!(String::from(ed), "hidata data data");
+    }
+
+    #[test]
+    fn vi_delete_paste_with_text_objects() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data data data").unwrap();
+        assert_eq!(ed.cursor(), 14);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('w'),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 4);
+        assert_eq!(String::from(ed), " datadata data");
+    }
+
+    #[test]
+    #[test]
+    fn vi_delete_with_text_objects() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data data data").unwrap();
+        assert_eq!(ed.cursor(), 14);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('2'),
+                KeyCode::Char('b'),
+                KeyCode::Char('d'),
+                KeyCode::Char('a'),
+                KeyCode::Char('w'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 5);
+        assert_eq!(String::from(ed), "data data");
+    }
+
+    #[test]
+    fn vi_yank_paste_with_text_objects() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("data data data").unwrap();
+        assert_eq!(ed.cursor(), 14);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('w'),
+                KeyCode::Char('y'),
+                KeyCode::Char('a'),
+                KeyCode::Char('w'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 9);
+        assert_eq!(String::from(ed), "data data data data");
     }
 
     #[test]
