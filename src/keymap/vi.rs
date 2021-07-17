@@ -1286,34 +1286,61 @@ impl Vi {
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         self.pop_mode(ed)?;
-        let reset_mode_start_pos = |s: &mut Vi, e: &mut Editor| match s.mode_stack.pop() {
-            Mode::Delete(_) => {
-                s.mode_stack.push(Mode::Delete(e.cursor()));
+        let handle_movement = |s: &mut Vi,
+                               e: &mut Editor,
+                               movement: Box<dyn Fn(&mut Vi, &mut Editor) -> io::Result<()>>|
+                               -> io::Result<()> {
+            match s.mode_stack.pop() {
+                Mode::Delete(_) => {
+                    s.mode_stack.push(Mode::Delete(e.cursor()));
+                }
+                Mode::Yank(_) => {
+                    s.mode_stack.push(Mode::Yank(e.cursor()));
+                }
+                // Delete and Yank are the only supported modes. THey are the only command objects
+                // that currently work with text objects.
+                _ => return s.normal_mode_abort(e),
+            }
+
+            let mode = s.mode();
+            let before = e.cursor();
+
+            movement(s, e)?;
+
+            if let Mode::Yank(_) = mode {
+                e.move_cursor_to(before)
+            } else {
                 Ok(())
             }
-            Mode::Yank(_) => {
-                s.mode_stack.push(Mode::Yank(e.cursor()));
-                Ok(())
-            }
-            // Delete and Yank are the only supported modes. THey are the only command objects
-            // that currently work with text objects.
-            _ => s.normal_mode_abort(e),
         };
+
         match key {
             key if is_text_object_end(key) && key.mods == None => match prev {
                 KeyCode::Char('a') => {
                     let count = self.move_count();
                     move_word_ws_back(ed, 1)?;
-                    reset_mode_start_pos(self, ed)?;
-                    move_word(ed, count)?;
-                    self.pop_mode_after_movement(MoveType::Exclusive, ed)
+
+                    handle_movement(
+                        self,
+                        ed,
+                        Box::new(|s, e| {
+                            move_word(e, count)?;
+                            s.pop_mode_after_movement(MoveType::Exclusive, e)
+                        }),
+                    )
                 }
                 KeyCode::Char('i') => {
                     let count = self.move_count();
                     move_word_back(ed, 1)?;
-                    reset_mode_start_pos(self, ed)?;
-                    move_to_end_of_word_ws(ed, count)?;
-                    self.pop_mode_after_movement(MoveType::Inclusive, ed)
+
+                    handle_movement(
+                        self,
+                        ed,
+                        Box::new(|s, e| {
+                            move_to_end_of_word_ws(e, count)?;
+                            s.pop_mode_after_movement(MoveType::Inclusive, e)
+                        }),
+                    )
                 }
                 _ => self.normal_mode_abort(ed),
             },
