@@ -894,6 +894,19 @@ impl<'a> Editor<'a> {
         self.display()
     }
 
+    pub fn cursor_is_at_beginning_of_word(&self) -> bool {
+        let buf = cur_buf!(self);
+        let num_chars = buf.num_chars();
+        let cursor_pos = self.cursor;
+        if num_chars > 0 && cursor_pos != 0 {
+            let c = buf.char_before(cursor_pos);
+            if let Some(c) = c {
+                return c.is_whitespace();
+            }
+        }
+        true
+    }
+
     pub fn cursor_is_at_end_of_line(&self) -> bool {
         let num_chars = cur_buf!(self).num_chars();
         if self.no_eol {

@@ -1279,36 +1279,40 @@ impl Vi {
         res
     }
 
+    fn pre_move_text_object<'a>(&mut self, ed: &mut Editor<'a>) -> Option<(Mode, usize)> {
+        match self.mode_stack.pop() {
+            Mode::Delete(_) => {
+                self.mode_stack.push(Mode::Delete(ed.cursor()));
+            }
+            Mode::Yank(_) => {
+                self.mode_stack.push(Mode::Yank(ed.cursor()));
+            }
+            // Delete and Yank are the only supported modes. THey are the only command objects
+            // that currently work with text objects.
+            _ => return None,
+        }
+        let mode = self.mode();
+        let before = ed.cursor();
+        Some((mode, before))
+    }
+
     fn handle_key_text_object<'a>(
         &mut self,
         key: Key,
         prev: KeyCode,
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
+
         self.pop_mode(ed)?;
-        let handle_movement = |s: &mut Vi,
-                               e: &mut Editor,
-                               movement: Box<dyn Fn(&mut Vi, &mut Editor) -> io::Result<()>>|
-                               -> io::Result<()> {
-            match s.mode_stack.pop() {
-                Mode::Delete(_) => {
-                    s.mode_stack.push(Mode::Delete(e.cursor()));
+
+        let post_movement = |pre_move_state, e: &mut Editor|
+         -> io::Result<()> {
+            if let Some((mode, before)) = pre_move_state {
+                if let Mode::Yank(_) = mode {
+                    e.move_cursor_to(before)
+                } else {
+                    Ok(())
                 }
-                Mode::Yank(_) => {
-                    s.mode_stack.push(Mode::Yank(e.cursor()));
-                }
-                // Delete and Yank are the only supported modes. THey are the only command objects
-                // that currently work with text objects.
-                _ => return s.normal_mode_abort(e),
-            }
-
-            let mode = s.mode();
-            let before = e.cursor();
-
-            movement(s, e)?;
-
-            if let Mode::Yank(_) = mode {
-                e.move_cursor_to(before)
             } else {
                 Ok(())
             }
@@ -1318,29 +1322,26 @@ impl Vi {
             key if is_text_object_end(key) && key.mods == None => match prev {
                 KeyCode::Char('a') => {
                     let count = self.move_count();
-                    move_word_ws_back(ed, 1)?;
+                    if !ed.cursor_is_at_beginning_of_word() {
+                        move_word_ws_back(ed, 1)?;
+                    }
 
-                    handle_movement(
-                        self,
-                        ed,
-                        Box::new(|s, e| {
-                            move_word(e, count)?;
-                            s.pop_mode_after_movement(MoveType::Exclusive, e)
-                        }),
-                    )
+                    let pre_move_state = self.pre_move_text_object(ed);
+                    move_word(ed, count)?;
+                    self.pop_mode_after_movement(MoveType::Exclusive, ed)?;
+                    post_movement(pre_move_state, ed)
+
                 }
                 KeyCode::Char('i') => {
                     let count = self.move_count();
-                    move_word_back(ed, 1)?;
+                    if !ed.cursor_is_at_beginning_of_word() {
+                        move_word_back(ed, 1)?;
+                    }
 
-                    handle_movement(
-                        self,
-                        ed,
-                        Box::new(|s, e| {
-                            move_to_end_of_word_ws(e, count)?;
-                            s.pop_mode_after_movement(MoveType::Inclusive, e)
-                        }),
-                    )
+                    let pre_move_state = self.pre_move_text_object(ed);
+                    move_to_end_of_word_ws(ed, count)?;
+                    self.pop_mode_after_movement(MoveType::Inclusive, ed)?;
+                    post_movement(pre_move_state, ed)
                 }
                 _ => self.normal_mode_abort(ed),
             },
