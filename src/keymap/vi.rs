@@ -43,12 +43,14 @@ impl TextObjectState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TextObjectMovement {
     Word,
+    Surround(char, char),
 }
 
 impl TextObjectMovement {
     fn from_key_code(k: KeyCode) -> Option<TextObjectMovement> {
         match k {
             KeyCode::Char('w') => Some(TextObjectMovement::Word),
+            KeyCode::Char('(') => Some(TextObjectMovement::Surround('(', ')')),
             _ => None,
         }
     }
@@ -284,7 +286,7 @@ fn vi_move_word(
     // default positioning of cursor when moving in this manner ends one
     // position to the left of the desired positioning in vi when moving
     // and treating whitespace as words for the purposed of text objects.
-    if ws_included_in_count {
+    if ws_included_in_count && count > 0 {
         cursor -= 1;
     }
     ed.move_cursor_to(cursor)
@@ -1348,15 +1350,15 @@ impl Vi {
         res
     }
 
-    fn reset_curor_pos_for_command_mode<'a>(&mut self, ed: &mut Editor<'a>) -> Option<Mode> {
+    fn reset_curor_pos_for_command_mode(&mut self, pos: usize) -> Option<Mode> {
         match self.mode_stack.pop() {
             Mode::Delete(_) => {
-                self.mode_stack.push(Mode::Delete(ed.cursor()));
+                self.mode_stack.push(Mode::Delete(pos));
             }
             Mode::Yank(_) => {
-                self.mode_stack.push(Mode::Yank(ed.cursor()));
+                self.mode_stack.push(Mode::Yank(pos));
             }
-            // Delete and Yank are the only supported modes. THey are the only command objects
+            // Delete and Yank are the only supported modes. They are the only command objects
             // that currently work with text objects.
             _ => return None,
         }
@@ -1376,8 +1378,52 @@ impl Vi {
         match (TextObjectMovement::from_key_code(key.code), key.mods) {
             (Some(movement), None) => match movement {
                 TextObjectMovement::Word => self.handle_text_object_movement_word(text_object, ed),
+                TextObjectMovement::Surround(beg, end) => {
+                    self.handle_text_object_movement_surround(text_object, beg, end, ed)
+                }
             },
             (_, _) => self.normal_mode_abort(ed),
+        }
+    }
+
+    fn handle_text_object_movement_surround<'a>(
+        &mut self,
+        text_object: TextObjectState,
+        beg: char,
+        end: char,
+        ed: &mut Editor<'a>,
+    ) -> io::Result<()> {
+        let count = self.move_count();
+
+        let forward = find_char(ed.current_buffer(), ed.cursor(), end, count);
+        let rev = find_char_rev(ed.current_buffer(), ed.cursor() + 1, beg, count);
+        if let (Some(f_idx), Some(r_idx)) = (forward, rev) {
+            let (mode, move_type) = match text_object {
+                TextObjectState::AWord => {
+                    let mode = self.reset_curor_pos_for_command_mode(r_idx);
+                    ed.move_cursor_to(f_idx)?;
+                    (mode, MoveType::Inclusive)
+                }
+                TextObjectState::InnerWord => {
+                    let mode = self.reset_curor_pos_for_command_mode(r_idx + 1);
+                    ed.move_cursor_to(f_idx)?;
+                    (mode, MoveType::Exclusive)
+                }
+            };
+            match mode {
+                Some(mode) => {
+                    // match move_type { }
+                    self.pop_mode_after_movement(move_type, ed)?;
+                    if let Mode::Yank(before) = mode {
+                        ed.move_cursor_to(before)
+                    } else {
+                        Ok(())
+                    }
+                }
+                None => self.normal_mode_abort(ed),
+            }
+        } else {
+            self.normal_mode_abort(ed)
         }
     }
 
@@ -1393,7 +1439,7 @@ impl Vi {
                 TextObjectState::InnerWord => move_word_back(ed, 1)?,
             }
         }
-        let mode = self.reset_curor_pos_for_command_mode(ed);
+        let mode = self.reset_curor_pos_for_command_mode(ed.cursor());
         match mode {
             Some(mode) => {
                 let move_type = match text_object {
@@ -7415,5 +7461,83 @@ mod tests {
             [KeyCode::Esc, KeyCode::Char('$'), KeyCode::Char(';')].iter(),
         );
         assert_eq!(ed.cursor(), 7);
+    }
+
+    //TODO
+    // need test where
+    // this is ' quoted text' and it 'can be' however it likes.
+    //                      ^ putting the cursor here and using
+    // surround for the ' char works whether or not the first
+    // single quote is present. But it favors the left if it
+    // is present.
+
+    #[test]
+    fn test_delete_surround_text_object() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+            .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("(abc defg)").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('('),
+            ]
+                .iter(),
+        );
+        assert_eq!(ed.cursor(), 1);
+        assert_eq!(String::from(ed), "()");
+    }
+
+    #[test]
+    fn test_delete_surround_empty_text_object() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("()").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('('),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 1);
+        assert_eq!(String::from(ed), "()");
     }
 }
