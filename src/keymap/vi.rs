@@ -51,6 +51,17 @@ impl TextObjectMovement {
         match k {
             KeyCode::Char('w') => Some(TextObjectMovement::Word),
             KeyCode::Char('(') => Some(TextObjectMovement::Surround('(', ')')),
+            KeyCode::Char(')') => Some(TextObjectMovement::Surround('(', ')')),
+            KeyCode::Char('{') => Some(TextObjectMovement::Surround('{', '}')),
+            KeyCode::Char('}') => Some(TextObjectMovement::Surround('{', '}')),
+            KeyCode::Char('[') => Some(TextObjectMovement::Surround('[', ']')),
+            KeyCode::Char(']') => Some(TextObjectMovement::Surround('[', ']')),
+            KeyCode::Char('`') => Some(TextObjectMovement::Surround('`', '`')),
+            KeyCode::Char('\'') => Some(TextObjectMovement::Surround('\'', '\'')),
+            KeyCode::Char('"') => Some(TextObjectMovement::Surround('"', '"')),
+            KeyCode::Char('t') => Some(TextObjectMovement::Surround('>', '<')),
+            KeyCode::Char('>') => Some(TextObjectMovement::Surround('<', '>')),
+            KeyCode::Char('a') => Some(TextObjectMovement::Surround(',', ',')),
             _ => None,
         }
     }
@@ -1395,32 +1406,52 @@ impl Vi {
     ) -> io::Result<()> {
         let count = self.move_count();
 
-        let forward = find_char(ed.current_buffer(), ed.cursor(), end, count);
-        let rev = find_char_rev(ed.current_buffer(), ed.cursor() + 1, beg, count);
-        if let (Some(f_idx), Some(r_idx)) = (forward, rev) {
-            let (mode, move_type) = match text_object {
-                TextObjectState::AWord => {
-                    let mode = self.reset_curor_pos_for_command_mode(r_idx);
-                    ed.move_cursor_to(f_idx)?;
-                    (mode, MoveType::Inclusive)
-                }
-                TextObjectState::InnerWord => {
-                    let mode = self.reset_curor_pos_for_command_mode(r_idx + 1);
-                    ed.move_cursor_to(f_idx)?;
-                    (mode, MoveType::Exclusive)
-                }
-            };
-            match mode {
-                Some(mode) => {
-                    // match move_type { }
-                    self.pop_mode_after_movement(move_type, ed)?;
-                    if let Mode::Yank(before) = mode {
-                        ed.move_cursor_to(before)
-                    } else {
-                        Ok(())
+        if let Some(curr_char) = ed.curr_char() {
+            let mut ahead = None;
+            let mut behind = None;
+            if curr_char == beg || curr_char == end {
+                let is_behind = find_char_rev(ed.current_buffer(), ed.cursor(), beg, count);
+                if is_behind.is_some() {
+                    ahead = Some(ed.cursor());
+                    behind = is_behind
+                } else {
+                    let is_ahead = find_char(ed.current_buffer(), ed.cursor() + 1, end, count);
+                    if is_ahead.is_some() {
+                        ahead = is_ahead;
+                        behind = Some(ed.cursor());
                     }
                 }
-                None => self.normal_mode_abort(ed),
+            } else {
+                ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
+                behind = find_char_rev(ed.current_buffer(), ed.cursor() + 1, beg, count);
+            }
+            if let (Some(f_idx), Some(r_idx)) = (ahead, behind) {
+                let (mode, move_type) = match text_object {
+                    TextObjectState::AWord => {
+                        let mode = self.reset_curor_pos_for_command_mode(r_idx);
+                        ed.move_cursor_to(f_idx)?;
+                        (mode, MoveType::Inclusive)
+                    }
+                    TextObjectState::InnerWord => {
+                        let mode = self.reset_curor_pos_for_command_mode(r_idx + 1);
+                        ed.move_cursor_to(f_idx)?;
+                        (mode, MoveType::Exclusive)
+                    }
+                };
+                match mode {
+                    Some(mode) => {
+                        // match move_type { }
+                        self.pop_mode_after_movement(move_type, ed)?;
+                        if let Mode::Yank(before) = mode {
+                            ed.move_cursor_to(before)
+                        } else {
+                            Ok(())
+                        }
+                    }
+                    None => self.normal_mode_abort(ed),
+                }
+            } else {
+                self.normal_mode_abort(ed)
             }
         } else {
             self.normal_mode_abort(ed)
@@ -7485,7 +7516,7 @@ mod tests {
             &words,
             &mut buf,
         )
-            .unwrap();
+        .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
         ed.insert_str_after_cursor("(abc defg)").unwrap();
@@ -7500,7 +7531,7 @@ mod tests {
                 KeyCode::Char('i'),
                 KeyCode::Char('('),
             ]
-                .iter(),
+            .iter(),
         );
         assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "()");
@@ -7540,4 +7571,45 @@ mod tests {
         assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "()");
     }
+
+    #[test]
+    fn test_delete_surround_text_object_paste() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("aaaa(bbbb)cccc").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('2'),
+                KeyCode::Char('w'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('('),
+                KeyCode::Char('p'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 9);
+        assert_eq!(String::from(ed), "aaaa()bbbbcccc");
+    }
+    //TODO issue with assymetrical matching, e.g.
+    // "aaabbb)ccc)ddd"
+    //        ^ cursor here can trigger erroneous surround currently
 }
