@@ -434,9 +434,9 @@ impl<'a> Editor<'a> {
 
     /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
     /// character inserted.
-    pub fn paste(&mut self, right: bool) -> usize {
+    pub fn paste(&mut self, right: bool, count: usize) -> usize {
         let buf = cur_buf_mut!(self);
-        buf.insert_register_around_cursor(self.cursor, right)
+        buf.insert_register_around_cursor(self.cursor, count, right)
     }
 
     pub fn revert(&mut self) -> io::Result<bool> {
@@ -892,6 +892,19 @@ impl<'a> Editor<'a> {
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
         self.cursor = cur_buf!(self).num_chars();
         self.display()
+    }
+
+    pub fn cursor_at_beginning_of_word_or_line(&self) -> bool {
+        let buf = cur_buf!(self);
+        let num_chars = buf.num_chars();
+        let cursor_pos = self.cursor;
+        if num_chars > 0 && cursor_pos != 0 {
+            let c = buf.char_before(cursor_pos);
+            if let Some(c) = c {
+                return c.is_whitespace();
+            }
+        }
+        true
     }
 
     pub fn cursor_is_at_end_of_line(&self) -> bool {

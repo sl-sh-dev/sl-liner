@@ -244,6 +244,11 @@ impl Buffer {
 
     /// Returns the number of characters removed.
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
+        let end = if end >= self.data.len() {
+            self.data.len()
+        } else {
+            end
+        };
         let s = self.remove_raw(start, end);
         let num_removed = s.len();
         self.push_action(Action::Remove {
@@ -256,7 +261,12 @@ impl Buffer {
 
     /// Insert contents of register to the right or to the left of start in the current buffer
     /// and return length of text inserted.
-    pub fn insert_register_around_cursor(&mut self, mut start: usize, right: bool) -> usize {
+    pub fn insert_register_around_cursor(
+        &mut self,
+        mut start: usize,
+        count: usize,
+        right: bool,
+    ) -> usize {
         let mut inserted = 0;
         if let Some(text) = self.register.as_ref() {
             inserted = text.len();
@@ -266,11 +276,19 @@ impl Buffer {
                     start += 1;
                 }
 
-                let act = Action::Insert {
-                    start,
-                    text: text.clone(),
+                let text = if count > 1 {
+                    let mut full_text = Vec::with_capacity(text.len() * count);
+                    for _i in 0..count {
+                        for c in text.iter() {
+                            full_text.push(*c);
+                        }
+                    }
+                    inserted = full_text.len();
+                    full_text
+                } else {
+                    text.to_vec()
                 };
-                self.insert_action(act);
+                self.insert_action(Action::Insert { start, text });
             }
         }
         inserted
