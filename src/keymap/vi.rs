@@ -430,57 +430,60 @@ fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<u
         .map(|(i, _)| i)
 }
 
-fn find_char_balance(
+fn find_char_balance_delim(
     buf: &Buffer,
     start: usize,
-    search: char,
-    search_opp: char,
+    to_find: char,
+    to_find_opposite: char,
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
-    let iter =  buf.chars().enumerate().skip(start).into_iter();
-    let idx_xform = |i| {
-        start + i
-    };
-    find_balance(search, search_opp, count, idx_xform, iter)
+    let iter = buf.chars().enumerate().skip(start);
+    let to_skip = |i| start + i;
+    find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
 }
 
-fn find_char_rev_balance(
+fn find_char_rev_balance_delim(
     buf: &Buffer,
     start: usize,
-    search: char,
-    search_opp: char,
+    to_find: char,
+    to_find_opposite: char,
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
     let rstart = buf.num_chars() - start;
-    let iter =  buf.chars().enumerate().rev().skip(rstart).into_iter();
-    let idx_xform = |i| {
-        buf.num_chars() - rstart - i - 1
-    };
-    find_balance(search, search_opp, count, idx_xform, iter)
+    let iter = buf.chars().enumerate().rev().skip(rstart);
+    let to_skip = |i| buf.num_chars() - rstart - i - 1;
+    find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
 }
 
 /// searches through string for matching character but refuses to match
 /// characters if they are unbalanced, used for matching pairs of (), {}, and []
-fn find_balance<'a, F, I>(search: char, search_opp: char, count: usize, idx_xform: F, iter: I) -> Option<usize> where
+fn find_balance_delim<'a, F, I>(
+    to_find: char,
+    to_find_opposite: char,
+    count: usize,
+    to_skip: F,
+    iter: I,
+) -> Option<usize>
+where
     F: Fn(usize) -> usize,
     I: Iterator<Item = (usize, &'a char)>,
 {
-    let mut i = 0;
     let mut count = count;
     let mut balance = LinkedList::new();
-    for (_, c) in iter {
-        // if the current character is equal to the opposite delim of the search
+    for (i, (_, c)) in iter.enumerate() {
+        // if the current character is equal to the opposite delim of the to_find
         // char, i.e. searching for a matching open paren and encountering a
         // close paren, then the close paren must be added to the stack and
-        // taken off only when the search char is found.
-        if *c == search_opp {
-            balance.push_back(search_opp);
-        } else if *c == search {
+        // popped only when another to_find char is found. An idx is returned
+        // only when the to_find character is found and the stack is empty.
+        if *c == to_find_opposite {
+            balance.push_back(to_find_opposite);
+        } else if *c == to_find {
             if balance.is_empty() {
                 if count == 1 {
-                    return Some(idx_xform(i));
+                    return Some(to_skip(i));
                 } else {
                     count -= 1;
                 }
@@ -488,7 +491,6 @@ fn find_balance<'a, F, I>(search: char, search_opp: char, count: usize, idx_xfor
                 balance.pop_back();
             }
         }
-        i += 1;
     }
     None
 }
@@ -1500,28 +1502,29 @@ impl Vi {
         if let Some(curr_char) = ed.curr_char() {
             let mut ahead = None;
             let mut behind = None;
-
+            let start = ed.cursor();
+            let buf = ed.current_buffer();
             if curr_char == end {
                 let is_behind;
                 if beg != end {
-                    is_behind = find_char_rev_balance(ed.current_buffer(), ed.cursor(), beg, end, count);
+                    is_behind = find_char_rev_balance_delim(buf, start, beg, end, count);
                 } else {
-                    is_behind = find_char_rev(ed.current_buffer(), ed.cursor(), beg, count);
+                    is_behind = find_char_rev(buf, start, beg, count);
                 }
                 if is_behind.is_some() {
-                    ahead = Some(ed.cursor());
+                    ahead = Some(start);
                     behind = is_behind
                 }
             } else if curr_char == beg {
                 let is_ahead;
                 if beg != end {
-                    is_ahead = find_char_balance(ed.current_buffer(), ed.cursor() + 1, end, beg, count);
+                    is_ahead = find_char_balance_delim(buf, start + 1, end, beg, count);
                 } else {
-                    is_ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
+                    is_ahead = find_char(buf, start, end, count);
                 }
                 if is_ahead.is_some() {
                     ahead = is_ahead;
-                    behind = Some(ed.cursor());
+                    behind = Some(start);
                 }
             } else {
                 // if the beginning and end characters are different
@@ -1538,17 +1541,11 @@ impl Vi {
                 //     "(aa|a|a(bbbb)cccc"
                 // To account for this, balancing logic must be applied.
                 if beg != end {
-                    ahead = find_char_balance(ed.current_buffer(), ed.cursor(), end, beg, count);
-                    behind = find_char_rev_balance(
-                        ed.current_buffer(),
-                        ed.cursor(),
-                        beg,
-                        end,
-                        count,
-                    );
+                    ahead = find_char_balance_delim(buf, start, end, beg, count);
+                    behind = find_char_rev_balance_delim(buf, start, beg, end, count);
                 } else {
-                    ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
-                    behind = find_char_rev(ed.current_buffer(), ed.cursor(), beg, count);
+                    ahead = find_char(buf, start, end, count);
+                    behind = find_char_rev(buf, start, beg, count);
                 }
             }
             if let (Some(f_idx), Some(r_idx)) = (ahead, behind) {
@@ -8076,7 +8073,7 @@ mod tests {
             &words,
             &mut buf,
         )
-            .unwrap();
+        .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
         ed.insert_str_after_cursor("(aaaa(bbbb)cccddd").unwrap();
@@ -8094,7 +8091,7 @@ mod tests {
                 KeyCode::Char('i'),
                 KeyCode::Char(')'),
             ]
-                .iter(),
+            .iter(),
         );
         assert_eq!(ed.cursor(), 6);
         assert_eq!(String::from(ed), "(aaaa(bbbb)cccddd");
@@ -8114,7 +8111,7 @@ mod tests {
             &words,
             &mut buf,
         )
-            .unwrap();
+        .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
         ed.insert_str_after_cursor("(aaaa(bbbb)cccddd)").unwrap();
@@ -8132,7 +8129,7 @@ mod tests {
                 KeyCode::Char('i'),
                 KeyCode::Char(')'),
             ]
-                .iter(),
+            .iter(),
         );
         assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "()");
