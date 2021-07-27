@@ -7,6 +7,7 @@ use sl_console::event::{Key, KeyCode, KeyMod};
 use crate::buffer::Buffer;
 use crate::Editor;
 use crate::KeyMap;
+use std::collections::LinkedList;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharMovement {
@@ -427,6 +428,75 @@ fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<u
         .filter(|&(_, &c)| c == ch)
         .nth(count - 1)
         .map(|(i, _)| i)
+}
+
+fn find_char_balance(
+    buf: &Buffer,
+    start: usize,
+    search: char,
+    search_opp: char,
+    count: usize,
+) -> Option<usize> {
+    assert!(count > 0);
+    let mut i = 0;
+    let mut count = count;
+    let mut balance = LinkedList::new();
+    for (_, c) in buf.chars().enumerate().skip(start).into_iter() {
+        // if the current character is equal to the opposite delim of the search
+        // char, i.e. searching for a matching close paren and encountering an
+        // open paren, then the open paren must be added to the stack and
+        // taken off only when the search char is found.
+        if *c == search_opp {
+            balance.push_back(search_opp);
+        } else if *c == search {
+            if balance.is_empty() {
+                if count == 1 {
+                    return Some(i + start);
+                } else {
+                    count -= 1;
+                }
+            } else {
+                balance.pop_back();
+            }
+        }
+        i += 1;
+    }
+    None
+}
+
+fn find_char_rev_balance(
+    buf: &Buffer,
+    start: usize,
+    search: char,
+    search_opp: char,
+    count: usize,
+) -> Option<usize> {
+    assert!(count > 0);
+    let rstart = buf.num_chars() - start;
+    let mut i = 0;
+    let mut count = count;
+    let mut balance = LinkedList::new();
+    for (_, c) in buf.chars().enumerate().rev().skip(rstart).into_iter() {
+        // if the current character is equal to the opposite delim of the search
+        // char, i.e. searching for a matching open paren and encountering a
+        // close paren, then the close paren must be added to the stack and
+        // taken off only when the search char is found.
+        if *c == search_opp {
+            balance.push_back(search_opp);
+        } else if *c == search {
+            if balance.is_empty() {
+                if count == 1 {
+                    return Some(buf.num_chars() - i - rstart - 1);
+                } else {
+                    count -= 1;
+                }
+            } else {
+                balance.pop_back();
+            }
+        }
+        i += 1;
+    }
+    None
 }
 
 /// Vi keybindings for `Editor`.
@@ -1436,21 +1506,57 @@ impl Vi {
         if let Some(curr_char) = ed.curr_char() {
             let mut ahead = None;
             let mut behind = None;
+            if beg != end {
+            }
             if curr_char == end {
-                let is_behind = find_char_rev(ed.current_buffer(), ed.cursor(), beg, count);
+                let is_behind;
+                if beg != end {
+                    is_behind = find_char_rev_balance(ed.current_buffer(), ed.cursor(), beg, end, count);
+                } else {
+                    is_behind = find_char_rev(ed.current_buffer(), ed.cursor(), beg, count);
+                }
                 if is_behind.is_some() {
                     ahead = Some(ed.cursor());
                     behind = is_behind
                 }
             } else if curr_char == beg {
-                let is_ahead = find_char(ed.current_buffer(), ed.cursor() + 1, end, count);
+                let is_ahead;
+                if beg != end {
+                    is_ahead = find_char_balance(ed.current_buffer(), ed.cursor() + 1, end, beg, count);
+                } else {
+                    is_ahead = find_char(ed.current_buffer(), ed.cursor() + 1, end, count);
+                }
                 if is_ahead.is_some() {
                     ahead = is_ahead;
                     behind = Some(ed.cursor());
                 }
             } else {
-                ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
-                behind = find_char_rev(ed.current_buffer(), ed.cursor() + 1, beg, count);
+                // if the beginning and end characters are different
+                // (parentheses, brackes, and braces) then balance matters and
+                // matches must be excluded if they are matched. For example
+                // the vim sequence 'di(' (cursor is indicates by bars)
+                // applies on the following strings:
+                //     "(aaaa)b|b|bb)"
+                // does not result in a deletion because the open parentheses
+                // at position 0 matches the close parentheses at position 5
+                // and is thus precluded from matching the close parenthenses
+                // to the right of the cursor. For analogous reasons 'di('
+                // does nothing to this string as well:
+                //     "(aa|a|a(bbbb)cccc"
+                // To account for this, balancing logic must be applied.
+                if beg != end {
+                    ahead = find_char_balance(ed.current_buffer(), ed.cursor(), end, beg, count);
+                    behind = find_char_rev_balance(
+                        ed.current_buffer(),
+                        ed.cursor(),
+                        beg,
+                        end,
+                        count,
+                    );
+                } else {
+                    ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
+                    behind = find_char_rev(ed.current_buffer(), ed.cursor() + 1, beg, count);
+                }
             }
             if let (Some(f_idx), Some(r_idx)) = (ahead, behind) {
                 let (mode, move_type) = match text_object {
@@ -7608,7 +7714,7 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("aaaa(bbbb)cccc").unwrap();
+        ed.insert_str_after_cursor("aaaa(Bbbb)cccc").unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7626,7 +7732,7 @@ mod tests {
             .iter(),
         );
         assert_eq!(ed.cursor(), 9);
-        assert_eq!(String::from(ed), "aaaa()bbbbcccc");
+        assert_eq!(String::from(ed), "aaaa()Bbbbcccc");
     }
 
     #[test]
@@ -7891,4 +7997,76 @@ mod tests {
         assert_eq!(ed.cursor(), 6);
         assert_eq!(String::from(ed), "aaabbb)ccc)ddd");
     }
+
+    #[test]
+    fn test_do_not_match_unbalanced_asymmetrical_surround_objects_close() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("aaaa(bbbb)ccc)ddd").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('4'),
+                KeyCode::Char('h'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('('),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 12);
+        assert_eq!(String::from(ed), "aaaa(bbbb)ccc)ddd");
+    }
+
+    #[test]
+    fn test_do_not_match_unbalanced_asymmetrical_surround_objects_open() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("(aaaa(bbbb)cccddd").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char(')'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 0);
+        assert_eq!(String::from(ed), "(aaaa(bbbb)cccddd");
+    }
+    //TODO no tests for count modifier with surround chars
 }
