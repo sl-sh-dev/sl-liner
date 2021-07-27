@@ -7,7 +7,6 @@ use sl_console::event::{Key, KeyCode, KeyMod};
 use crate::buffer::Buffer;
 use crate::Editor;
 use crate::KeyMap;
-use std::collections::LinkedList;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharMovement {
@@ -470,7 +469,7 @@ where
     I: Iterator<Item = (usize, &'a char)>,
 {
     let mut count = count;
-    let mut balance = LinkedList::new();
+    let mut balance = 0;
     for (i, (_, c)) in iter.enumerate() {
         // if the current character is equal to the opposite delim of the to_find
         // char, i.e. searching for a matching open paren and encountering a
@@ -478,16 +477,16 @@ where
         // popped only when another to_find char is found. An idx is returned
         // only when the to_find character is found and the stack is empty.
         if *c == to_find_opposite {
-            balance.push_back(to_find_opposite);
+            balance += 1;
         } else if *c == to_find {
-            if balance.is_empty() {
+            if balance == 0 {
                 if count == 1 {
                     return Some(to_skip(i));
                 } else {
                     count -= 1;
                 }
             } else {
-                balance.pop_back();
+                balance -= 1;
             }
         }
     }
