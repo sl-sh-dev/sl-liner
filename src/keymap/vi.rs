@@ -438,30 +438,11 @@ fn find_char_balance(
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
-    let mut i = 0;
-    let mut count = count;
-    let mut balance = LinkedList::new();
-    for (_, c) in buf.chars().enumerate().skip(start).into_iter() {
-        // if the current character is equal to the opposite delim of the search
-        // char, i.e. searching for a matching close paren and encountering an
-        // open paren, then the open paren must be added to the stack and
-        // taken off only when the search char is found.
-        if *c == search_opp {
-            balance.push_back(search_opp);
-        } else if *c == search {
-            if balance.is_empty() {
-                if count == 1 {
-                    return Some(i + start);
-                } else {
-                    count -= 1;
-                }
-            } else {
-                balance.pop_back();
-            }
-        }
-        i += 1;
-    }
-    None
+    let iter =  buf.chars().enumerate().skip(start).into_iter();
+    let idx_xform = |i| {
+        start + i
+    };
+    find_balance(search, search_opp, count, idx_xform, iter)
 }
 
 fn find_char_rev_balance(
@@ -473,10 +454,23 @@ fn find_char_rev_balance(
 ) -> Option<usize> {
     assert!(count > 0);
     let rstart = buf.num_chars() - start;
+    let iter =  buf.chars().enumerate().rev().skip(rstart).into_iter();
+    let idx_xform = |i| {
+        buf.num_chars() - rstart - i - 1
+    };
+    find_balance(search, search_opp, count, idx_xform, iter)
+}
+
+/// searches through string for matching character but refuses to match
+/// characters if they are unbalanced, used for matching pairs of (), {}, and []
+fn find_balance<'a, F, I>(search: char, search_opp: char, count: usize, idx_xform: F, iter: I) -> Option<usize> where
+    F: Fn(usize) -> usize,
+    I: Iterator<Item = (usize, &'a char)>,
+{
     let mut i = 0;
     let mut count = count;
     let mut balance = LinkedList::new();
-    for (_, c) in buf.chars().enumerate().rev().skip(rstart).into_iter() {
+    for (_, c) in iter {
         // if the current character is equal to the opposite delim of the search
         // char, i.e. searching for a matching open paren and encountering a
         // close paren, then the close paren must be added to the stack and
@@ -486,7 +480,7 @@ fn find_char_rev_balance(
         } else if *c == search {
             if balance.is_empty() {
                 if count == 1 {
-                    return Some(buf.num_chars() - i - rstart - 1);
+                    return Some(idx_xform(i));
                 } else {
                     count -= 1;
                 }
@@ -1506,8 +1500,7 @@ impl Vi {
         if let Some(curr_char) = ed.curr_char() {
             let mut ahead = None;
             let mut behind = None;
-            if beg != end {
-            }
+
             if curr_char == end {
                 let is_behind;
                 if beg != end {
@@ -1524,7 +1517,7 @@ impl Vi {
                 if beg != end {
                     is_ahead = find_char_balance(ed.current_buffer(), ed.cursor() + 1, end, beg, count);
                 } else {
-                    is_ahead = find_char(ed.current_buffer(), ed.cursor() + 1, end, count);
+                    is_ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
                 }
                 if is_ahead.is_some() {
                     ahead = is_ahead;
@@ -1555,7 +1548,7 @@ impl Vi {
                     );
                 } else {
                     ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
-                    behind = find_char_rev(ed.current_buffer(), ed.cursor() + 1, beg, count);
+                    behind = find_char_rev(ed.current_buffer(), ed.cursor(), beg, count);
                 }
             }
             if let (Some(f_idx), Some(r_idx)) = (ahead, behind) {
@@ -8068,5 +8061,80 @@ mod tests {
         assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "(aaaa(bbbb)cccddd");
     }
-    //TODO no tests for count modifier with surround chars
+
+    #[test]
+    fn test_do_not_match_surround_balanced_text_objects_with_count() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+            .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("(aaaa(bbbb)cccddd").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('w'),
+                KeyCode::Char('2'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char(')'),
+            ]
+                .iter(),
+        );
+        assert_eq!(ed.cursor(), 6);
+        assert_eq!(String::from(ed), "(aaaa(bbbb)cccddd");
+    }
+
+    #[test]
+    fn test_match_surround_balanced_text_objects_with_count() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+            .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("(aaaa(bbbb)cccddd)").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('3'),
+                KeyCode::Char('w'),
+                KeyCode::Char('2'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char(')'),
+            ]
+                .iter(),
+        );
+        assert_eq!(ed.cursor(), 1);
+        assert_eq!(String::from(ed), "()");
+    }
 }
