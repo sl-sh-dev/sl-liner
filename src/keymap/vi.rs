@@ -24,22 +24,50 @@ enum MoveType {
     Exclusive,
 }
 
+/// defines the two modes available to text objects, a and w. TextObjectModes
+/// are preceded by the commands c, d, and y, and followed by a
+/// TextObjectMovement which specified the range of characters in the buffer to
+/// which the command applies. a indicates the whole range including the
+/// surrounding characters and i indicates the inner range excluding the
+/// surrounding characters. Assuming the cursor is on the word whole the vim
+/// commands yi' and ya' on the string: "the 'whole' point"
+///                     ^___^ inner range
+///                    ^_____^ outer range
+/// yi' results in paste buffer of whole
+/// ya' results in paste buffer of 'whole'
+/// This is because a includes the surrounding characters in the
+/// TextObjectMovement for apostrophe and i excludes them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TextObjectState {
-    AWord,
-    InnerWord,
+enum TextObjectMode {
+    Whole,
+    Inner,
 }
 
-impl TextObjectState {
-    fn from_key_code(k: KeyCode) -> Option<TextObjectState> {
+impl TextObjectMode {
+    fn from_key_code(k: KeyCode) -> Option<TextObjectMode> {
         match k {
-            KeyCode::Char('a') => Some(TextObjectState::AWord),
-            KeyCode::Char('i') => Some(TextObjectState::InnerWord),
+            KeyCode::Char('a') => Some(TextObjectMode::Whole),
+            KeyCode::Char('i') => Some(TextObjectMode::Inner),
             _ => None,
         }
     }
 }
 
+/// TextObjectMovement defines the range of characters that will be applied to
+/// the command chosen: c, d, and y.
+/// Supported text object movements:
+///     w   vi keyword (all alphanumeric characters and _) surrounded by whitespace
+///     (   area surrounded by ( and )
+///     )   area surrounded by ( and )
+///     {   area surrounded by { and }
+///     }   area surrounded by { and }
+///     [   area surrounded by [ and ]
+///     ]   area surrounded by [ and ]
+///     `   area surrounded by ` characters
+///     '   area surrounded by ' characters
+///     "   area surrounded by " characters
+///     t   area surrounded by > and <
+///     >   area surrounded by < and >
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TextObjectMovement {
     Word,
@@ -61,7 +89,6 @@ impl TextObjectMovement {
             KeyCode::Char('"') => Some(TextObjectMovement::Surround('"', '"')),
             KeyCode::Char('t') => Some(TextObjectMovement::Surround('>', '<')),
             KeyCode::Char('>') => Some(TextObjectMovement::Surround('<', '>')),
-            KeyCode::Char('a') => Some(TextObjectMovement::Surround(',', ',')),
             _ => None,
         }
     }
@@ -75,7 +102,7 @@ enum Mode {
     Replace,
     Delete(usize),
     Yank(usize),
-    TextObject(TextObjectState),
+    TextObject(TextObjectMode),
     MoveToChar(CharMovement),
     G,
     Tilde,
@@ -1131,7 +1158,7 @@ impl Vi {
     ) -> io::Result<()> {
         match (
             key,
-            TextObjectState::from_key_code(key.code),
+            TextObjectMode::from_key_code(key.code),
             self.current_insert,
         ) {
             // check if this is a movement key
@@ -1379,7 +1406,7 @@ impl Vi {
     fn handle_key_text_object<'a>(
         &mut self,
         key: Key,
-        text_object: TextObjectState,
+        text_object: TextObjectMode,
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         self.pop_mode(ed)?;
@@ -1399,7 +1426,7 @@ impl Vi {
 
     fn handle_text_object_movement_surround<'a>(
         &mut self,
-        text_object: TextObjectState,
+        text_object: TextObjectMode,
         beg: char,
         end: char,
         ed: &mut Editor<'a>,
@@ -1427,12 +1454,12 @@ impl Vi {
             }
             if let (Some(f_idx), Some(r_idx)) = (ahead, behind) {
                 let (mode, move_type) = match text_object {
-                    TextObjectState::AWord => {
+                    TextObjectMode::Whole => {
                         let mode = self.reset_curor_pos_for_command_mode(r_idx);
                         ed.move_cursor_to(f_idx)?;
                         (mode, MoveType::Inclusive)
                     }
-                    TextObjectState::InnerWord => {
+                    TextObjectMode::Inner => {
                         let mode = self.reset_curor_pos_for_command_mode(r_idx + 1);
                         ed.move_cursor_to(f_idx)?;
                         (mode, MoveType::Exclusive)
@@ -1460,25 +1487,25 @@ impl Vi {
 
     fn handle_text_object_movement_word<'a>(
         &mut self,
-        text_object: TextObjectState,
+        text_object: TextObjectMode,
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         let count = self.move_count();
         if !ed.cursor_at_beginning_of_word_or_line() {
             match text_object {
-                TextObjectState::AWord => move_word_ws_back(ed, 1)?,
-                TextObjectState::InnerWord => move_word_back(ed, 1)?,
+                TextObjectMode::Whole => move_word_ws_back(ed, 1)?,
+                TextObjectMode::Inner => move_word_back(ed, 1)?,
             }
         }
         let mode = self.reset_curor_pos_for_command_mode(ed.cursor());
         match mode {
             Some(mode) => {
                 let move_type = match text_object {
-                    TextObjectState::AWord => {
+                    TextObjectMode::Whole => {
                         move_word(ed, count)?;
                         MoveType::Exclusive
                     }
-                    TextObjectState::InnerWord => {
+                    TextObjectMode::Inner => {
                         if self.count > 1 {
                             move_word_ws_is_word(ed, count)?;
                         } else {
@@ -7494,13 +7521,9 @@ mod tests {
         assert_eq!(ed.cursor(), 7);
     }
 
-    //TODO
-    // need test where
-    // this is ' quoted text' and it 'can be' however it likes.
-    //                      ^ putting the cursor here and using
-    // surround for the ' char works whether or not the first
-    // single quote is present. But it favors the left if it
-    // is present.
+    //TODO issue with asymmetrical matching, e.g.
+    // "aaabbb)ccc)ddd"
+    //        ^ cursor here can trigger surround incorrectly
 
     #[test]
     fn test_delete_surround_text_object() {
@@ -7601,7 +7624,7 @@ mod tests {
                 KeyCode::Char('w'),
                 KeyCode::Char('d'),
                 KeyCode::Char('i'),
-                KeyCode::Char('('),
+                KeyCode::Char(')'),
                 KeyCode::Char('p'),
             ]
             .iter(),
@@ -7609,7 +7632,231 @@ mod tests {
         assert_eq!(ed.cursor(), 9);
         assert_eq!(String::from(ed), "aaaa()bbbbcccc");
     }
-    //TODO issue with assymetrical matching, e.g.
-    // "aaabbb)ccc)ddd"
-    //        ^ cursor here can trigger erroneous surround currently
+
+    #[test]
+    fn test_delete_surround_text_object_over_match_character_left() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("`aaaa` bbbb `cccc`").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('5'),
+                KeyCode::Char('h'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('`'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 6);
+        assert_eq!(String::from(ed), "`aaaa``cccc`");
+    }
+
+    #[test]
+    fn test_delete_surround_text_object_over_match_character_no_match() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("aaaa bbbb 'cccc").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('4'),
+                KeyCode::Char('h'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('\''),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 10);
+        assert_eq!(String::from(ed), "aaaa bbbb 'cccc");
+    }
+
+    #[test]
+    fn test_yank_surround_text_object() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("echo \"hello world\"").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('y'),
+                KeyCode::Char('i'),
+                KeyCode::Char('"'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 16);
+        assert_eq!(String::from(ed), "echo \"hello worldhello world\"");
+    }
+
+    #[test]
+    fn test_change_surround_text_object() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("echo {hello world}").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('c'),
+                KeyCode::Char('i'),
+                KeyCode::Char('}'),
+                KeyCode::Esc,
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 5);
+        assert_eq!(String::from(ed), "echo {}");
+    }
+
+    #[test]
+    fn test_change_and_insert_surround_text_object() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("echo [hello world]").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('c'),
+                KeyCode::Char('i'),
+                KeyCode::Char('['),
+                KeyCode::Char('o'),
+                KeyCode::Char('h'),
+                KeyCode::Char(' '),
+                KeyCode::Char('h'),
+                KeyCode::Char('i'),
+                KeyCode::Esc,
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 10);
+        assert_eq!(String::from(ed), "echo [oh hi]");
+    }
+
+    #[test]
+    fn test_yank_and_delete_surround_xml() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("<div id='foo'>content</p>")
+            .unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('w'),
+                KeyCode::Char('c'),
+                KeyCode::Char('i'),
+                KeyCode::Char('>'),
+                KeyCode::Char('p'),
+                KeyCode::Esc,
+                KeyCode::Char('2'),
+                KeyCode::Char('w'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('t'),
+                KeyCode::Esc,
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 3);
+        assert_eq!(String::from(ed), "<p></p>");
+    }
 }
