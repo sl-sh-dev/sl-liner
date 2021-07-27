@@ -30,12 +30,11 @@ enum MoveType {
 /// TextObjectMovement which specified the range of characters in the buffer to
 /// which the command applies. a indicates the whole range including the
 /// surrounding characters and i indicates the inner range excluding the
-/// surrounding characters. Assuming the cursor is on the word whole the vim
-/// commands yi' and ya' on the string: "the 'whole' point"
-///                     ^___^ inner range
-///                    ^_____^ outer range
-/// yi' results in paste buffer of whole
-/// ya' results in paste buffer of 'whole'
+/// surrounding characters. The commands yi' and ya' on the string
+/// (bars indicate cursor position):
+/// "the 'wh|o|le' point"
+///       ^____^ inner range = yi' results in paste buffer of whole
+///      ^______^ outer range = ya' results in paste bufer of 'whole'
 /// This is because a includes the surrounding characters in the
 /// TextObjectMovement for apostrophe and i excludes them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,7 +54,7 @@ impl TextObjectMode {
 }
 
 /// TextObjectMovement defines the range of characters that will be applied to
-/// the command chosen: c, d, and y.
+/// the command chosen: c, d, or y.
 /// Supported text object movements:
 ///     w   vi keyword (all alphanumeric characters and _) surrounded by whitespace
 ///     (   area surrounded by ( and )
@@ -1500,10 +1499,22 @@ impl Vi {
         let count = self.move_count();
 
         if let Some(curr_char) = ed.curr_char() {
-            let mut ahead = None;
             let mut behind = None;
+            let mut ahead = None;
             let start = ed.cursor();
             let buf = ed.current_buffer();
+            // if the beg and end chars are different, e.g. beg != end
+            // (parentheses, brackets, and braces but not quotes, backticks etc.)
+            // then balance matters and matches must be excluded if they are
+            // matched. For example the vim sequence 'di(' (cursor is indicated
+            // by bars) applied on the following string:
+            //     "(aaaa)b|b|bb)"
+            // does not result in a deletion because the open parens at position
+            // 0 matches the close parentheses at position 5 and is thus
+            // precluded from matching the close parens to the right of the
+            // cursor. For analogous reasons 'di(' does nothing to this string:
+            //     "(aa|a|a(bbbb)cccc"
+            // To ensure this behavior, balancing logic for beg, and end must be applied.
             if curr_char == end {
                 let is_behind;
                 if beg != end {
@@ -1512,8 +1523,8 @@ impl Vi {
                     is_behind = find_char_rev(buf, start, beg, count);
                 }
                 if is_behind.is_some() {
+                    behind = is_behind;
                     ahead = Some(start);
-                    behind = is_behind
                 }
             } else if curr_char == beg {
                 let is_ahead;
@@ -1523,32 +1534,17 @@ impl Vi {
                     is_ahead = find_char(buf, start, end, count);
                 }
                 if is_ahead.is_some() {
-                    ahead = is_ahead;
                     behind = Some(start);
+                    ahead = is_ahead;
                 }
+            } else if beg != end {
+                behind = find_char_rev_balance_delim(buf, start, beg, end, count);
+                ahead = find_char_balance_delim(buf, start, end, beg, count);
             } else {
-                // if the beginning and end characters are different
-                // (parentheses, brackes, and braces) then balance matters and
-                // matches must be excluded if they are matched. For example
-                // the vim sequence 'di(' (cursor is indicates by bars)
-                // applies on the following strings:
-                //     "(aaaa)b|b|bb)"
-                // does not result in a deletion because the open parentheses
-                // at position 0 matches the close parentheses at position 5
-                // and is thus precluded from matching the close parenthenses
-                // to the right of the cursor. For analogous reasons 'di('
-                // does nothing to this string as well:
-                //     "(aa|a|a(bbbb)cccc"
-                // To account for this, balancing logic must be applied.
-                if beg != end {
-                    ahead = find_char_balance_delim(buf, start, end, beg, count);
-                    behind = find_char_rev_balance_delim(buf, start, beg, end, count);
-                } else {
-                    ahead = find_char(buf, start, end, count);
-                    behind = find_char_rev(buf, start, beg, count);
-                }
+                behind = find_char_rev(buf, start, beg, count);
+                ahead = find_char(buf, start, end, count);
             }
-            if let (Some(f_idx), Some(r_idx)) = (ahead, behind) {
+            if let (Some(r_idx), Some(f_idx)) = (behind, ahead) {
                 let (mode, move_type) = match text_object {
                     TextObjectMode::Whole => {
                         let mode = self.reset_curor_pos_for_command_mode(r_idx);
