@@ -1436,17 +1436,17 @@ impl Vi {
         if let Some(curr_char) = ed.curr_char() {
             let mut ahead = None;
             let mut behind = None;
-            if curr_char == beg || curr_char == end {
+            if curr_char == end {
                 let is_behind = find_char_rev(ed.current_buffer(), ed.cursor(), beg, count);
                 if is_behind.is_some() {
                     ahead = Some(ed.cursor());
                     behind = is_behind
-                } else {
-                    let is_ahead = find_char(ed.current_buffer(), ed.cursor() + 1, end, count);
-                    if is_ahead.is_some() {
-                        ahead = is_ahead;
-                        behind = Some(ed.cursor());
-                    }
+                }
+            } else if curr_char == beg {
+                let is_ahead = find_char(ed.current_buffer(), ed.cursor() + 1, end, count);
+                if is_ahead.is_some() {
+                    ahead = is_ahead;
+                    behind = Some(ed.cursor());
                 }
             } else {
                 ahead = find_char(ed.current_buffer(), ed.cursor(), end, count);
@@ -7521,10 +7521,6 @@ mod tests {
         assert_eq!(ed.cursor(), 7);
     }
 
-    //TODO issue with asymmetrical matching, e.g.
-    // "aaabbb)ccc)ddd"
-    //        ^ cursor here can trigger surround incorrectly
-
     #[test]
     fn test_delete_surround_text_object() {
         let mut out = Vec::new();
@@ -7660,13 +7656,13 @@ mod tests {
                 KeyCode::Char('5'),
                 KeyCode::Char('h'),
                 KeyCode::Char('d'),
-                KeyCode::Char('i'),
+                KeyCode::Char('a'),
                 KeyCode::Char('`'),
             ]
             .iter(),
         );
-        assert_eq!(ed.cursor(), 6);
-        assert_eq!(String::from(ed), "`aaaa``cccc`");
+        assert_eq!(ed.cursor(), 5);
+        assert_eq!(String::from(ed), "`aaaacccc`");
     }
 
     #[test]
@@ -7757,7 +7753,7 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("echo {hello world}").unwrap();
+        ed.insert_str_after_cursor("echo ").unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7765,14 +7761,14 @@ mod tests {
             [
                 KeyCode::Esc,
                 KeyCode::Char('c'),
-                KeyCode::Char('i'),
+                KeyCode::Char('a'),
                 KeyCode::Char('}'),
                 KeyCode::Esc,
             ]
             .iter(),
         );
-        assert_eq!(ed.cursor(), 5);
-        assert_eq!(String::from(ed), "echo {}");
+        assert_eq!(ed.cursor(), 4);
+        assert_eq!(String::from(ed), "echo ");
     }
 
     #[test]
@@ -7858,5 +7854,41 @@ mod tests {
         );
         assert_eq!(ed.cursor(), 3);
         assert_eq!(String::from(ed), "<p></p>");
+    }
+
+    #[test]
+    fn test_do_not_match_asymmetrical_surround_objects() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("aaabbb)ccc)ddd").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('4'),
+                KeyCode::Char('b'),
+                KeyCode::Char('d'),
+                KeyCode::Char('i'),
+                KeyCode::Char('('),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 6);
+        assert_eq!(String::from(ed), "aaabbb)ccc)ddd");
     }
 }
