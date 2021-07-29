@@ -894,6 +894,11 @@ impl<'a> Editor<'a> {
         self.display()
     }
 
+    pub fn curr_char(&self) -> Option<char> {
+        let buf = cur_buf!(self);
+        buf.char_after(self.cursor)
+    }
+
     pub fn cursor_at_beginning_of_word_or_line(&self) -> bool {
         let buf = cur_buf!(self);
         let num_chars = buf.num_chars();
