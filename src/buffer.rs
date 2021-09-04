@@ -2,6 +2,7 @@ use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, Write};
 use std::iter::FromIterator;
 use unicode_width::UnicodeWidthStr;
+use unicode_segmentation::UnicodeSegmentation;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
 #[derive(Debug, Clone)]
@@ -127,6 +128,11 @@ impl Buffer {
             undone_actions: Vec::new(),
             register: None,
         }
+    }
+
+    pub fn len(cs: &[char]) -> usize {
+        let cs: String = cs.into_iter().collect();
+        UnicodeSegmentation::graphemes(&cs[..], true).count()
     }
 
     pub fn clear_actions(&mut self) {
@@ -300,12 +306,14 @@ impl Buffer {
         inserted
     }
 
-    pub fn insert(&mut self, start: usize, text: &[char]) {
+    pub fn insert(&mut self, start: usize, text: &[char]) -> usize {
         let act = Action::Insert {
             start,
             text: text.into(),
         };
         self.insert_action(act);
+        let text: String = text.into_iter().collect();
+        UnicodeSegmentation::graphemes(&text[..], true).count()
     }
 
     pub fn insert_action(&mut self, act: Action) {
@@ -314,12 +322,12 @@ impl Buffer {
     }
 
     // XXX rename, too confusing
-    pub fn insert_from_buffer(&mut self, other: &Buffer) {
+    pub fn insert_from_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.data.len();
         self.insert(start, &other.data[start..])
     }
 
-    pub fn copy_buffer(&mut self, other: &Buffer) {
+    pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
         let data_len = self.data.len();
         self.remove(0, data_len);
         self.insert(0, &other.data[0..])
@@ -658,5 +666,29 @@ mod tests {
         let mut out: Vec<u8> = vec![];
         buf.print_rest(&mut out, buf2.data.len()).unwrap();
         assert_eq!(out.len(), 4);
+    }
+
+    #[test]
+    fn test_unicode() {
+
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        enum GraphemeCluster {
+            Char(char),
+            Cluster(Vec<char>),
+        }
+        let c = GraphemeCluster::Char('a');
+        println!("memsize char: {}.", std::mem::size_of_val::<GraphemeCluster>(&c));
+        let cs = GraphemeCluster::Cluster("ते".chars().collect::<Vec<char>>());
+        println!("memsize cluster: {}.", std::mem::size_of_val::<GraphemeCluster>(&cs));
+//        match cs {
+//            GraphemeCluster::Char(_) => {},
+//            GraphemeCluster::Cluster(cs) => {
+//
+//            },
+//        }
+
+        //let clusters = vec![GraphemeCluster::Char('a'), GraphemeCluster::Cluster(Some(vec![]))];
+        //TODO cursor functionality into buffer so editor does not have to think about it,
+        // it can reference the buffer for the copyable usize
     }
 }

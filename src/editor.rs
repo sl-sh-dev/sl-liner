@@ -737,10 +737,9 @@ impl<'a> Editor<'a> {
     pub fn insert_chars_after_cursor(&mut self, cs: &[char]) -> io::Result<()> {
         {
             let buf = cur_buf_mut!(self);
-            buf.insert(self.cursor, cs);
+            let _len = buf.insert(self.cursor, cs);
+            self.cursor += cs.len();
         }
-
-        self.cursor += cs.len();
         self.display()
     }
 
@@ -955,8 +954,12 @@ impl<'a> Editor<'a> {
                 let search = self.is_search();
                 let buf = self.current_buffer_mut();
                 match autosuggestion {
-                    Some(ref x) if search => buf.copy_buffer(x),
-                    Some(ref x) => buf.insert_from_buffer(x),
+                    Some(ref x) if search => {
+                        buf.copy_buffer(x);
+                    },
+                    Some(ref x) => {
+                        buf.insert_from_buffer(x);
+                    },
                     None => (),
                 }
             }
