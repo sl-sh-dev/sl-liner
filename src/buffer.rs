@@ -1,8 +1,8 @@
 use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, Write};
 use std::iter::FromIterator;
-use unicode_width::UnicodeWidthStr;
 use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
 #[derive(Debug, Clone)]
@@ -670,22 +670,46 @@ mod tests {
 
     #[test]
     fn test_unicode() {
-
         #[derive(Debug, Clone, PartialEq, Eq)]
         enum GraphemeCluster {
             Char(char),
             Cluster(Vec<char>),
         }
         let c = GraphemeCluster::Char('a');
-        println!("memsize char: {}.", std::mem::size_of_val::<GraphemeCluster>(&c));
+        println!(
+            "memsize char: {}.",
+            std::mem::size_of_val::<GraphemeCluster>(&c)
+        );
         let cs = GraphemeCluster::Cluster("ते".chars().collect::<Vec<char>>());
-        println!("memsize cluster: {}.", std::mem::size_of_val::<GraphemeCluster>(&cs));
-//        match cs {
-//            GraphemeCluster::Char(_) => {},
-//            GraphemeCluster::Cluster(cs) => {
-//
-//            },
-//        }
+        println!(
+            "memsize cluster: {}.",
+            std::mem::size_of_val::<GraphemeCluster>(&cs)
+        );
+        let s = "नमस्ते";
+        let g = s.graphemes(true).collect::<Vec<&str>>();
+        println!("cool vec: {:?}.", g);
+        let b: &[_] = &["न", "म", "स\u{94d}", "त\u{947}"];
+        assert_eq!(g, b);
+        
+        println!(
+            "memsize charvec: {}.",
+            "ते".chars().collect::<Vec<char>>().len()
+        );
+        println!(
+            "memsize charvec: {}.",
+            "ते".chars().collect::<Vec<char>>().len()
+        );
+        //        match cs {
+        println!(
+            "memsize charvec: {}.",
+            "न".chars().collect::<Vec<char>>().len()
+        );
+        //        match cs {
+        //            GraphemeCluster::Char(_) => {},
+        //            GraphemeCluster::Cluster(cs) => {
+        //
+        //            },
+        //        }
 
         //let clusters = vec![GraphemeCluster::Char('a'), GraphemeCluster::Cluster(Some(vec![]))];
         //TODO cursor functionality into buffer so editor does not have to think about it,
