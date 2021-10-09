@@ -242,14 +242,20 @@ impl Buffer {
         self.data.get(cursor).cloned()
     }
 
-    /// Returns the number of characters removed.
-    pub fn remove(&mut self, start: usize, end: usize) -> usize {
+    /// Returns the number of characters removed. Does not register as an action in the undo/redo
+    /// buffer or in the buffer's register.
+    pub fn remove_silent(&mut self, start: usize, end: usize) -> Vec<char> {
         let end = if end >= self.data.len() {
             self.data.len()
         } else {
             end
         };
-        let s = self.remove_raw(start, end);
+        self.remove_raw(start, end)
+    }
+
+    /// Returns the number of characters removed.
+    pub fn remove(&mut self, start: usize, end: usize) -> usize {
+        let s = self.remove_silent(start, end);
         let num_removed = s.len();
         self.push_action(Action::Remove {
             start,

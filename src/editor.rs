@@ -806,6 +806,20 @@ impl<'a> Editor<'a> {
         self.display()
     }
 
+    /// Deletes every character from the cursor until the given position. Does not register as an
+    /// action in the undo/redo buffer or in the buffer's register.
+    pub fn delete_until_silent(&mut self, position: usize) -> io::Result<()> {
+        {
+            let buf = cur_buf_mut!(self);
+            buf.remove_silent(
+                cmp::min(self.cursor, position),
+                cmp::max(self.cursor, position),
+            );
+            self.cursor = cmp::min(self.cursor, position);
+        }
+        self.display()
+    }
+
     /// Deletes every character from the cursor until the given position.
     pub fn delete_until(&mut self, position: usize) -> io::Result<()> {
         {
