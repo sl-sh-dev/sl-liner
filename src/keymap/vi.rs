@@ -846,7 +846,7 @@ impl Vi {
                 if esc {
                     ed.move_cursor_left(1)?;
                     let pos = ed.cursor() + self.move_count_right(ed);
-                    ed.delete_until(pos)?;
+                    ed.delete_until_silent(pos)?;
                     self.handle_key_insert(Key::new(KeyCode::Esc), ed)
                 } else {
                     self.last_command.push(key);
@@ -2736,6 +2736,51 @@ mod tests {
         assert_eq!(ed.cursor(), 9);
         assert_eq!(String::from(ed), "data data data data data");
     }
+
+    #[test]
+    fn vi_delete_paste_multi_key_esc_sequence() {
+        let mut history = History::new();
+        let mut out = Vec::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+            .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        map.set_esc_sequence('j', 'k', 1000u32);
+        ed.insert_str_after_cursor("data").unwrap();
+        assert_eq!(ed.cursor(), 4);
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Delete,
+                KeyCode::Char('x'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+                KeyCode::Char('i'),
+                KeyCode::Char('j'),
+                KeyCode::Char('k'),
+                KeyCode::Char('p'),
+                KeyCode::Char('p'),
+            ]
+                .iter(),
+        );
+        assert_eq!(ed.cursor(), 4);
+        assert_eq!(String::from(ed), "taaaaaa");
+    }
+
 
     #[test]
     fn vi_delete_paste() {
