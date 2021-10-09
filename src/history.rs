@@ -305,7 +305,7 @@ impl History {
         let mut same_last_context = true;
         if let Some(context) = &self.search_context {
             if let Some(Some(last_context)) = self.buffers.back().map(|b| &b.context) {
-                same_last_context = last_context.contains(&context);
+                same_last_context = last_context.contains(context);
             }
         }
         if self.buffers.back().map(|b| b.buffer.to_string()) == Some(new_item.to_string())
@@ -433,7 +433,7 @@ impl History {
                     let contains = tested.buffer.contains(search_term);
                     let has_context = if let Some(context) = &self.search_context {
                         if let Some(con_list) = &tested.context {
-                            con_list.contains(&"*".to_string()) || con_list.contains(&context)
+                            con_list.contains(&"*".to_string()) || con_list.contains(context)
                         } else {
                             false
                         }
@@ -492,7 +492,7 @@ impl History {
                     let _ = file.write_all(b":");
                     ret += 1;
                 }
-                let _ = file.write_all(&ctx.as_bytes());
+                let _ = file.write_all(ctx.as_bytes());
                 ret += ctx.as_bytes().len();
                 first = false;
             }
