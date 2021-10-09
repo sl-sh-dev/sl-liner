@@ -1143,22 +1143,12 @@ impl Vi {
                     KeyCode::Char('p') => {
                         let count = self.move_count();
                         self.count = 0;
-                        let delta = ed.paste(true, count);
-                        if delta > 0 {
-                            ed.move_cursor_to(ed.cursor() + delta)
-                        } else {
-                            Ok(())
-                        }
+                        ed.paste(true, count)
                     }
                     KeyCode::Char('P') => {
                         let count = self.move_count();
                         self.count = 0;
-                        let delta = ed.paste(false, count);
-                        if delta > 0 {
-                            ed.move_cursor_to(ed.cursor() + delta - 1)
-                        } else {
-                            Ok(())
-                        }
+                        ed.paste(false, count)
                     }
                     _ => self.handle_key_common(key, ed),
                 }

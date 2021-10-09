@@ -432,11 +432,16 @@ impl<'a> Editor<'a> {
         cur_buf_mut!(self).redo()
     }
 
-    /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
-    /// character inserted.
-    pub fn paste(&mut self, right: bool, count: usize) -> usize {
+    /// Inserts characters from internal register to the right or the left of the cursor, moving the
+    /// cursor to the last character inserted.
+    pub fn paste(&mut self, right: bool, count: usize) -> io::Result<()> {
         let buf = cur_buf_mut!(self);
-        buf.insert_register_around_cursor(self.cursor, count, right)
+        let delta = buf.insert_register_around_cursor(self.cursor, count, right);
+        if delta > 0 {
+            self.move_cursor_to(self.cursor + delta)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn revert(&mut self) -> io::Result<bool> {
@@ -956,10 +961,10 @@ impl<'a> Editor<'a> {
                 match autosuggestion {
                     Some(ref x) if search => {
                         buf.copy_buffer(x);
-                    },
+                    }
                     Some(ref x) => {
                         buf.insert_from_buffer(x);
-                    },
+                    }
                     None => (),
                 }
             }
