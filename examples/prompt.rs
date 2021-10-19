@@ -136,7 +136,6 @@ fn main() {
                     _ => {
                         // Ensure that all writes to the history file
                         // are written before exiting due to error.
-                        //panic!("error: {:?}", e)
                         println!("error: {:?}", e)
                     }
                 }

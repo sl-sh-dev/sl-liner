@@ -185,7 +185,6 @@ macro_rules! cur_buf {
     ($s:expr) => {
         match $s.cur_history_loc {
             Some(_) if $s.hist_buf_valid => &$s.hist_buf,
-            //Some(i) => &$s.history[i],
             _ => &$s.new_buf,
         }
     };
