@@ -17,6 +17,9 @@ pub use context::*;
 mod buffer;
 pub use buffer::*;
 
+mod term;
+pub use term::*;
+
 mod history;
 pub use history::*;
 

@@ -7,9 +7,9 @@ use std::io;
 use super::complete::Completer;
 use crate::context::ColorClosure;
 use crate::event::*;
-use crate::util;
 use crate::Buffer;
 use crate::History;
+use crate::{util, Term};
 
 /// User-defined prompt.
 ///
@@ -138,9 +138,8 @@ pub struct Editor<'a> {
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
-    // The line of the cursor relative to the prompt. 1-indexed.
-    // So if the cursor is on the same line as the prompt, `term_cursor_line == 1`.
-    // If the cursor is on the line below the prompt, `term_cursor_line == 2`.
+    // TODO doc
+    term: Term,
     term_cursor_line: usize,
 
     // The next completion to suggest, or none
@@ -256,6 +255,7 @@ impl<'a> Editor<'a> {
             buf,
             show_completions_hint: None,
             show_autosuggestions: true,
+            term: Term::new(),
             term_cursor_line: 1,
             no_eol: false,
             reverse_search: false,
@@ -622,8 +622,8 @@ impl<'a> Editor<'a> {
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
         write!(&mut self.buf, "{}{}", clear::All, cursor::Goto(1, 1)).map_err(fmt_io_err)?;
-
         self.term_cursor_line = 1;
+        //self.term.clear(self.buf)?;
         self.clear_search();
         self.display()
     }
@@ -1071,7 +1071,11 @@ impl<'a> Editor<'a> {
         Ok(())
     }
 
-    fn show_lines(&mut self, show_autosuggest: bool, prompt_width: usize) -> io::Result<()> {
+    pub(crate) fn show_lines(
+        &mut self,
+        show_autosuggest: bool,
+        prompt_width: usize,
+    ) -> io::Result<()> {
         let buf = cur_buf!(self);
         // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
         // We get the number of bytes in the buffer (but NOT the autosuggestion).
@@ -1125,13 +1129,21 @@ impl<'a> Editor<'a> {
 
             total
         }
-
         let prompt = self.search_prompt();
+        let buf = cur_buf!(self);
+
+
+        //        self.term.display(&mut self.buf, buf, self.search_prompt(), self.cursor, self.autosuggestion.as_ref(), self.show_completions_hint.as_ref(), &mut self, show_autosuggest, self.no_eol);
+        //        {
+        //            let out = &mut self.out;
+        //            out.write_all(self.buf.as_bytes())?;
+        //            self.buf.clear();
+        //            out.flush()
+        //        }
 
         let terminal_width = util::terminal_width()?;
         let prompt_width = util::last_prompt_line_width(&prompt);
 
-        let buf = cur_buf!(self);
         let buf_width = buf.width();
 
         // Don't let the cursor go over the end!
@@ -1166,16 +1178,6 @@ impl<'a> Editor<'a> {
         let new_num_lines = (new_total_width + terminal_width) / terminal_width;
 
         self.buf.push_str("\x1B[?1000l\x1B[?1l");
-
-        // Move the term cursor to the same line as the prompt.
-        if self.term_cursor_line > 1 {
-            write!(
-                &mut self.buf,
-                "{}",
-                cursor::Up(self.term_cursor_line as u16 - 1)
-            )
-            .map_err(fmt_io_err)?;
-        }
 
         write!(&mut self.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)?;
 
@@ -1226,6 +1228,7 @@ impl<'a> Editor<'a> {
             }
             Ordering::Equal => {}
         }
+
         self.term_cursor_line += completion_lines;
 
         {

@@ -131,7 +131,7 @@ impl Buffer {
     }
 
     pub fn len(cs: &[char]) -> usize {
-        let cs: String = cs.into_iter().collect();
+        let cs: String = cs.iter().collect();
         UnicodeSegmentation::graphemes(&cs[..], true).count()
     }
 
@@ -228,7 +228,8 @@ impl Buffer {
     }
 
     pub fn num_chars(&self) -> usize {
-        self.data.len()
+        let s: String = self.clone().into();
+        s.width()
     }
 
     pub fn num_bytes(&self) -> usize {
@@ -312,7 +313,7 @@ impl Buffer {
             text: text.into(),
         };
         self.insert_action(act);
-        let text: String = text.into_iter().collect();
+        let text: String = text.iter().collect();
         UnicodeSegmentation::graphemes(&text[..], true).count()
     }
 
@@ -690,7 +691,7 @@ mod tests {
         println!("cool vec: {:?}.", g);
         let b: &[_] = &["न", "म", "स\u{94d}", "त\u{947}"];
         assert_eq!(g, b);
-        
+
         println!(
             "memsize charvec: {}.",
             "ते".chars().collect::<Vec<char>>().len()
