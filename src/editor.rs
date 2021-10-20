@@ -1,4 +1,5 @@
-use sl_console::{self, clear, color, cursor};
+
+use sl_console::{self, color, cursor};
 use std::cmp;
 use std::cmp::Ordering;
 use std::fmt::{self, Write};
@@ -140,7 +141,6 @@ pub struct Editor<'a> {
 
     // TODO doc
     term: Term,
-    term_cursor_line: usize,
 
     // The next completion to suggest, or none
     show_completions_hint: Option<(Vec<String>, Option<usize>)>,
@@ -256,7 +256,6 @@ impl<'a> Editor<'a> {
             show_completions_hint: None,
             show_autosuggestions: true,
             term: Term::new(),
-            term_cursor_line: 1,
             no_eol: false,
             reverse_search: false,
             forward_search: false,
@@ -437,7 +436,14 @@ impl<'a> Editor<'a> {
         let buf = cur_buf_mut!(self);
         let delta = buf.insert_register_around_cursor(self.cursor, count, right);
         if delta > 0 {
-            self.move_cursor_to(self.cursor + delta)
+            // if moving to the left we move one less than the number of chars inserted because
+            // the cursor rests on the last character inserted.
+            let adjustment = if right {
+                delta
+            } else {
+                delta - 1
+            };
+            self.move_cursor_to(self.cursor + adjustment)
         } else {
             Ok(())
         }
@@ -621,9 +627,7 @@ impl<'a> Editor<'a> {
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
-        write!(&mut self.buf, "{}{}", clear::All, cursor::Goto(1, 1)).map_err(fmt_io_err)?;
-        self.term_cursor_line = 1;
-        //self.term.clear(self.buf)?;
+        self.term.clear(self.buf)?;
         self.clear_search();
         self.display()
     }
@@ -1116,130 +1120,15 @@ impl<'a> Editor<'a> {
     }
 
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
-        fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
-            let mut total = 0;
-
-            for line in buf_widths {
-                if total % terminal_width != 0 {
-                    total = ((total / terminal_width) + 1) * terminal_width;
-                }
-
-                total += prompt_width + line;
-            }
-
-            total
-        }
         let prompt = self.search_prompt();
         let buf = cur_buf!(self);
+        let is_search = self.is_search();
 
-
-        //        self.term.display(&mut self.buf, buf, self.search_prompt(), self.cursor, self.autosuggestion.as_ref(), self.show_completions_hint.as_ref(), &mut self, show_autosuggest, self.no_eol);
-        //        {
-        //            let out = &mut self.out;
-        //            out.write_all(self.buf.as_bytes())?;
-        //            self.buf.clear();
-        //            out.flush()
-        //        }
-
-        let terminal_width = util::terminal_width()?;
-        let prompt_width = util::last_prompt_line_width(&prompt);
-
-        let buf_width = buf.width();
-
-        // Don't let the cursor go over the end!
-        let buf_num_chars = buf.num_chars();
-        if buf_num_chars < self.cursor {
-            self.cursor = buf_num_chars;
-        }
-
-        // Can't move past the last character in vi normal mode
-        if self.no_eol && self.cursor != 0 && self.cursor == buf_num_chars {
-            self.cursor -= 1;
-        }
-
-        let buf_widths = match self.autosuggestion {
-            Some(ref suggestion) => suggestion.width(),
-            None => buf_width,
-        };
-        // Width of the current buffer lines (including autosuggestion) from the start to the cursor
-        let buf_widths_to_cursor = match self.autosuggestion {
-            // Cursor might overrun autosuggestion with history search.
-            Some(ref suggestion) if self.cursor < suggestion.num_chars() => {
-                suggestion.range_width(0, self.cursor)
-            }
-            _ => buf.range_width(0, self.cursor),
-        };
-
-        // Total number of terminal spaces taken up by prompt and buffer
-        let new_total_width = calc_width(prompt_width, &buf_widths, terminal_width);
-        let new_total_width_to_cursor =
-            calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
-
-        let new_num_lines = (new_total_width + terminal_width) / terminal_width;
-
-        self.buf.push_str("\x1B[?1000l\x1B[?1l");
-
-        write!(&mut self.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)?;
-
-        // If we're cycling through completions, show those
-        let mut completion_lines = 0;
-        if let Some((completions, i)) = self.show_completions_hint.as_ref() {
-            completion_lines = 1 + Self::print_completion_list(completions, *i, &mut self.buf)?;
-            self.buf.push_str("\r\n");
-        }
-
-        // Write the prompt
-        write!(&mut self.buf, "{}", prompt).map_err(fmt_io_err)?;
-
-        self.show_lines(show_autosuggest, prompt_width)?;
-
-        // at the end of the line, move the cursor down a line
-        if new_total_width % terminal_width == 0 {
-            self.buf.push_str("\r\n");
-        }
-
-        self.term_cursor_line = (new_total_width_to_cursor + terminal_width) / terminal_width;
-
-        // The term cursor is now on the bottom line. We may need to move the term cursor up
-        // to the line where the true cursor is.
-        let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
-        match cursor_line_diff.cmp(&0) {
-            Ordering::Greater => write!(&mut self.buf, "{}", cursor::Up(cursor_line_diff as u16))
-                .map_err(fmt_io_err)?,
-            Ordering::Less => unreachable!(),
-            Ordering::Equal => {}
-        }
-
-        // Now that we are on the right line, we must move the term cursor left or right
-        // to match the true cursor.
-        let cursor_col_diff = new_total_width as isize
-            - new_total_width_to_cursor as isize
-            - cursor_line_diff * terminal_width as isize;
-        match cursor_col_diff.cmp(&0) {
-            Ordering::Greater => write!(&mut self.buf, "{}", cursor::Left(cursor_col_diff as u16))
-                .map_err(fmt_io_err)?,
-            Ordering::Less => {
-                write!(
-                    &mut self.buf,
-                    "{}",
-                    cursor::Right((-cursor_col_diff) as u16)
-                )
-                .map_err(fmt_io_err)?;
-            }
-            Ordering::Equal => {}
-        }
-
-        self.term_cursor_line += completion_lines;
-
+        let new_cur = self.term.display(&mut self.buf, buf, prompt, self.cursor, self.autosuggestion.as_ref(), self.show_completions_hint.as_ref(),  show_autosuggest, self.no_eol, is_search)?;
+        self.cursor = new_cur;
+        
         {
             let out = &mut self.out;
-            write!(
-                &mut self.buf,
-                "{}{}",
-                color::Reset.fg_str(),
-                color::Reset.bg_str()
-            )
-            .map_err(fmt_io_err)?;
             out.write_all(self.buf.as_bytes())?;
             self.buf.clear();
             out.flush()

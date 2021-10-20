@@ -1,15 +1,18 @@
-use crate::{util, Buffer, Editor};
+use crate::{util, Buffer};
+use crate::context::ColorClosure;
 use sl_console::{clear, color, cursor};
 use std::cmp::Ordering;
 use std::fmt::Write;
 use std::io;
 
-#[derive(Debug, Clone)]
 pub struct Term {
     // The line of the cursor relative to the prompt. 1-indexed.
     // So if the cursor is on the same line as the prompt, `term_cursor_line == 1`.
     // If the cursor is on the line below the prompt, `term_cursor_line == 2`.
     term_cursor_line: usize,
+    color_lines: Option<(String, String)>,
+    closure: Option<ColorClosure>,
+    use_closure: bool,
 }
 
 impl Default for Term {
@@ -27,7 +30,111 @@ impl Term {
     pub fn new() -> Self {
         Term {
             term_cursor_line: 1,
+            color_lines: None,
+            // A closure that is evaluated just before we write to out.
+            // This allows us to do custom syntax highlighting and other fun stuff.
+            closure: None,
+            // Use the closure if it is set.
+            use_closure: false,
         }
+    }
+
+    pub fn set_closure(&mut self, closure: ColorClosure) -> &mut Self {
+        self.closure = Some(closure);
+        self
+    }
+
+    pub fn use_closure(&mut self, use_closure: bool) {
+        self.use_closure = use_closure;
+    }
+
+    fn colorize(&mut self, line: &str) -> String {
+        match self.closure {
+            Some(ref mut f) if self.use_closure => {
+                let color = f(line);
+                self.color_lines = Some((line.to_string(), color.clone()));
+                color
+            }
+            Some(_) => {
+                if let Some((old_line, colorized)) = &self.color_lines {
+                    if line.starts_with(old_line) {
+                        let mut new_line = colorized.clone();
+                        new_line.push_str(&line[old_line.len()..]);
+                        new_line
+                    } else {
+                        line.to_owned()
+                    }
+                } else {
+                    line.to_owned()
+                }
+            }
+            _ => line.to_owned(),
+        }
+    }
+
+    fn display_with_suggest(&mut self,
+                            str_buf: &mut String,
+                            line: &str,
+                            is_search: bool,
+                            buf_num_remaining_bytes: usize,
+    ) -> io::Result<()> {
+        let start = self.colorize(&line[..buf_num_remaining_bytes]);
+        if is_search {
+            write!(str_buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+        }
+        write!(str_buf, "{}", start).map_err(fmt_io_err)?;
+        if !is_search {
+            write!(str_buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+        }
+        str_buf.push_str(&line[buf_num_remaining_bytes..]);
+        Ok(())
+    }
+
+    pub(crate) fn show_lines(
+        &mut self,
+        buf: &Buffer,
+        str_buf: &mut String,
+        autosuggestion: Option<&Buffer>,
+        show_autosuggest: bool,
+        prompt_width: usize,
+        is_search: bool,
+    ) -> io::Result<()> {
+        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
+        // We get the number of bytes in the buffer (but NOT the autosuggestion).
+        // Then, we loop and subtract from that number until it's 0, in which case we are printing
+        // the autosuggestion from here on (in a different color).
+        let lines = match autosuggestion {
+            Some(suggestion) if show_autosuggest => suggestion.lines(),
+            _ => buf.lines(),
+        };
+        let mut buf_num_remaining_bytes = buf.num_bytes();
+
+        let lines_len = lines.len();
+        for (i, line) in lines.into_iter().enumerate() {
+            if i > 0 {
+                write!(str_buf, "{}", cursor::Right(prompt_width as u16))
+                    .map_err(fmt_io_err)?;
+            }
+
+            if buf_num_remaining_bytes == 0 {
+                str_buf.push_str(&line);
+            } else if line.len() > buf_num_remaining_bytes {
+                self.display_with_suggest(str_buf, &line, is_search, buf_num_remaining_bytes)?;
+                buf_num_remaining_bytes = 0;
+            } else {
+                buf_num_remaining_bytes -= line.len();
+                let written_line = self.colorize(&line);
+                if is_search {
+                    write!(str_buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+                }
+                str_buf.push_str(&written_line);
+            }
+
+            if i + 1 < lines_len {
+                str_buf.push_str("\r\n");
+            }
+        }
+        Ok(())
     }
 
     pub fn clear(&mut self, buf: &mut String) -> io::Result<()> {
@@ -113,9 +220,9 @@ impl Term {
         cursor: usize,
         autosuggestion: Option<&Buffer>,
         show_completions_hint: Option<&(Vec<String>, Option<usize>)>,
-        ed: &mut Editor,
         show_autosuggest: bool,
         no_eol: bool,
+        is_search: bool,
     ) -> io::Result<usize> {
         let mut cur = cursor;
         let terminal_width = util::terminal_width()?;
@@ -165,7 +272,7 @@ impl Term {
             str_buf.push_str("\r\n");
         }
 
-        ed.show_lines(show_autosuggest, prompt_width)?;
+        self.show_lines(buf, str_buf, autosuggestion, show_autosuggest, prompt_width, is_search)?;
 
         // at the end of the line, move the cursor down a line
         if new_total_width % terminal_width == 0 {
