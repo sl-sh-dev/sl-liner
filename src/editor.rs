@@ -109,7 +109,6 @@ impl CursorPosition {
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a> {
     prompt: Prompt,
-    out: &'a mut dyn io::Write,
     history: &'a mut History,
     word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
 
@@ -199,34 +198,11 @@ impl<'a> Editor<'a> {
         buf: &'a mut String,
         buffer: B,
     ) -> io::Result<Self> {
-        out.write_all("⏎".as_bytes())?;
-        for _ in 0..(util::terminal_width().unwrap_or(80) - 1) {
-            out.write_all(b" ")?; // if the line is not empty, overflow on next line
-        }
-        out.write_all("\r \r".as_bytes())?; // Erase the "⏎" if nothing overwrites it
-        let Prompt {
-            prefix,
-            mut prompt,
-            suffix,
-        } = prompt;
-        for (i, pline) in prompt.split('\n').enumerate() {
-            if i > 0 {
-                out.write_all(b"\r\n")?;
-            }
-            out.write_all(pline.as_bytes())?;
-        }
-        if let Some(index) = prompt.rfind('\n') {
-            prompt = prompt.split_at(index + 1).1.into()
-        }
-        let prompt = Prompt {
-            prefix,
-            prompt,
-            suffix,
-        };
+        let mut term = Term::new(f, buf, out);
+        let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
             cursor: 0,
-            out,
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
@@ -235,7 +211,7 @@ impl<'a> Editor<'a> {
             word_divider_fn,
             show_completions_hint: None,
             show_autosuggestions: true,
-            term: Term::new(f, buf),
+            term,
             no_eol: false,
             reverse_search: false,
             forward_search: false,
@@ -315,7 +291,7 @@ impl<'a> Editor<'a> {
         } else {
             self.cursor = cur_buf!(self).num_chars();
             self._display(false)?;
-            self.out.write_all(b"\r\n")?;
+            self.term.write_newline()?;
             self.show_completions_hint = None;
             Ok(true)
         }
@@ -395,7 +371,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
-        self.out.flush()
+        self.term.flush()
     }
 
     /// Attempts to undo an action on the current buffer.
@@ -970,7 +946,6 @@ impl<'a> Editor<'a> {
             show_autosuggest,
             self.no_eol,
             is_search,
-            self.out,
         )?;
         self.cursor = new_cur;
         Ok(())

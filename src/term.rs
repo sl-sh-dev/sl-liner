@@ -1,11 +1,12 @@
 use crate::context::ColorClosure;
-use crate::{util, Buffer};
+use crate::{util, Buffer, Prompt};
 use sl_console::{clear, color, cursor};
 use std::cmp::Ordering;
 use std::fmt::Write;
 use std::io;
 
 pub struct Term<'a> {
+    out: &'a mut dyn io::Write,
     // The line of the cursor relative to the prompt. 1-indexed.
     // So if the cursor is on the same line as the prompt, `term_cursor_line == 1`.
     // If the cursor is on the line below the prompt, `term_cursor_line == 2`.
@@ -26,14 +27,46 @@ fn fmt_io_err(err: std::fmt::Error) -> io::Error {
 }
 
 impl<'a> Term<'a> {
-    pub fn new(f: Option<ColorClosure>, b: &'a mut String) -> Self {
+    pub fn new(
+        closure: Option<ColorClosure>,
+        buf: &'a mut String,
+        out: &'a mut dyn io::Write,
+    ) -> Self {
         Term {
+            out,
             term_cursor_line: 1,
             color_lines: None,
-            closure: f,
-            buf: b,
+            closure,
+            buf,
             use_closure: true,
         }
+    }
+
+    pub fn make_prompt(&mut self, prompt: Prompt) -> io::Result<Prompt> {
+        self.out.write_all("⏎".as_bytes())?;
+        for _ in 0..(util::terminal_width().unwrap_or(80) - 1) {
+            self.out.write_all(b" ")?; // if the line is not empty, overflow on next line
+        }
+        self.out.write_all("\r \r".as_bytes())?; // Erase the "⏎" if nothing overwrites it
+        let Prompt {
+            prefix,
+            mut prompt,
+            suffix,
+        } = prompt;
+        for (i, pline) in prompt.split('\n').enumerate() {
+            if i > 0 {
+                self.out.write_all(b"\r\n")?;
+            }
+            self.out.write_all(pline.as_bytes())?;
+        }
+        if let Some(index) = prompt.rfind('\n') {
+            prompt = prompt.split_at(index + 1).1.into()
+        }
+        Ok(Prompt {
+            prefix,
+            prompt,
+            suffix,
+        })
     }
 
     pub fn set_closure(&mut self, closure: ColorClosure) -> &mut Self {
@@ -222,7 +255,6 @@ impl<'a> Term<'a> {
         show_autosuggest: bool,
         no_eol: bool,
         is_search: bool,
-        out: &mut dyn io::Write,
     ) -> io::Result<usize> {
         let mut cur = cursor;
         let terminal_width = util::terminal_width()?;
@@ -325,10 +357,18 @@ impl<'a> Term<'a> {
         )
         .map_err(fmt_io_err)?;
 
-        out.write_all(self.buf.as_bytes())?;
+        self.out.write_all(self.buf.as_bytes())?;
         self.buf.clear();
-        out.flush()?;
+        self.out.flush()?;
 
         Ok(cur)
+    }
+
+    pub fn flush(&mut self) -> io::Result<()> {
+        self.out.flush()
+    }
+
+    pub fn write_newline(&mut self) -> io::Result<()> {
+        self.out.write_all(b"\r\n")
     }
 }
