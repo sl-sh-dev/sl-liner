@@ -4,7 +4,6 @@ use std::time;
 use sl_console::*;
 
 use super::*;
-use crate::editor::Prompt;
 
 pub type ColorClosure = Box<dyn FnMut(&str) -> String>;
 

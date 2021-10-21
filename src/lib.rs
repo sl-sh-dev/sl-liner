@@ -26,7 +26,11 @@ pub use history::*;
 pub mod keymap;
 pub use keymap::*;
 
+pub mod prompt;
+pub use prompt::*;
+
 mod util;
 
+mod cursor;
 #[cfg(test)]
 mod test;

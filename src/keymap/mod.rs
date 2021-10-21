@@ -81,8 +81,7 @@ pub use emacs::Emacs;
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
-    use crate::editor::Prompt;
-    use crate::History;
+    use crate::{History, Prompt};
     use sl_console::event::Key;
     use std::io::ErrorKind;
 

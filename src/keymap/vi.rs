@@ -1644,8 +1644,7 @@ impl KeyMap for Vi {
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
-    use crate::editor::Prompt;
-    use crate::{Buffer, Completer, Editor, History, KeyMap};
+    use crate::{Buffer, Completer, Editor, History, KeyMap, Prompt};
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
         keymap: &mut M,

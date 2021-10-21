@@ -1,5 +1,6 @@
 use crate::context::ColorClosure;
-use crate::{util, Buffer, Prompt};
+use crate::prompt::Prompt;
+use crate::{util, Buffer};
 use sl_console::{clear, color, cursor};
 use std::cmp::Ordering;
 use std::fmt::Write;
