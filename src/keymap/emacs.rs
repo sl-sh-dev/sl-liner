@@ -2,7 +2,7 @@ use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io;
 
 use crate::buffer::Buffer;
-use crate::CursorPosition;
+use crate::cursor::CursorPosition;
 use crate::Editor;
 use crate::KeyMap;
 

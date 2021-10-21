@@ -30,7 +30,8 @@ pub mod prompt;
 pub use prompt::*;
 
 mod util;
+pub mod cursor;
+pub use cursor::*;
 
-mod cursor;
 #[cfg(test)]
 mod test;
