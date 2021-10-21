@@ -1,4 +1,3 @@
-
 use sl_console::{self, color};
 use std::cmp;
 use std::fmt;
@@ -113,7 +112,6 @@ pub struct Editor<'a> {
     out: &'a mut dyn io::Write,
     history: &'a mut History,
     word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
-    buf: &'a mut String,
 
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
@@ -131,7 +129,7 @@ pub struct Editor<'a> {
     cur_history_loc: Option<usize>,
 
     // TODO doc
-    term: Term,
+    term: Term<'a>,
 
     // The next completion to suggest, or none
     show_completions_hint: Option<(Vec<String>, Option<usize>)>,
@@ -235,10 +233,9 @@ impl<'a> Editor<'a> {
             cur_history_loc: None,
             history,
             word_divider_fn,
-            buf,
             show_completions_hint: None,
             show_autosuggestions: true,
-            term: Term::new(f),
+            term: Term::new(f, buf),
             no_eol: false,
             reverse_search: false,
             forward_search: false,
@@ -421,11 +418,7 @@ impl<'a> Editor<'a> {
         if delta > 0 {
             // if moving to the left we move one less than the number of chars inserted because
             // the cursor rests on the last character inserted.
-            let adjustment = if right {
-                delta
-            } else {
-                delta - 1
-            };
+            let adjustment = if right { delta } else { delta - 1 };
             self.move_cursor_to(self.cursor + adjustment)
         } else {
             Ok(())
@@ -556,7 +549,7 @@ impl<'a> Editor<'a> {
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
-        self.term.clear(self.buf)?;
+        self.term.clear()?;
         self.clear_search();
         self.display()
     }
@@ -968,15 +961,19 @@ impl<'a> Editor<'a> {
         let buf = cur_buf!(self);
         let is_search = self.is_search();
 
-        let new_cur = self.term.display(&mut self.buf, buf, prompt, self.cursor, self.autosuggestion.as_ref(), self.show_completions_hint.as_ref(),  show_autosuggest, self.no_eol, is_search)?;
+        let new_cur = self.term.display(
+            buf,
+            prompt,
+            self.cursor,
+            self.autosuggestion.as_ref(),
+            self.show_completions_hint.as_ref(),
+            show_autosuggest,
+            self.no_eol,
+            is_search,
+            self.out,
+        )?;
         self.cursor = new_cur;
-        
-        {
-            let out = &mut self.out;
-            out.write_all(self.buf.as_bytes())?;
-            self.buf.clear();
-            out.flush()
-        }
+        Ok(())
     }
 
     /// Deletes the displayed prompt and buffer, replacing them with the current prompt and buffer
