@@ -10,14 +10,18 @@ pub struct Term {
     // So if the cursor is on the same line as the prompt, `term_cursor_line == 1`.
     // If the cursor is on the line below the prompt, `term_cursor_line == 2`.
     term_cursor_line: usize,
+    // Last string that was colorized and last colorized version.
     color_lines: Option<(String, String)>,
+    // A closure that is evaluated just before we write to out.
+    // This allows us to do custom syntax highlighting and other fun stuff.
     closure: Option<ColorClosure>,
+    // Use the closure if it is set.
     use_closure: bool,
 }
 
 impl Default for Term {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
@@ -27,15 +31,12 @@ fn fmt_io_err(err: std::fmt::Error) -> io::Error {
 }
 
 impl Term {
-    pub fn new() -> Self {
+    pub fn new(f: Option<ColorClosure>) -> Self {
         Term {
             term_cursor_line: 1,
             color_lines: None,
-            // A closure that is evaluated just before we write to out.
-            // This allows us to do custom syntax highlighting and other fun stuff.
-            closure: None,
-            // Use the closure if it is set.
-            use_closure: false,
+            closure: f,
+            use_closure: true,
         }
     }
 

@@ -1,8 +1,7 @@
 
-use sl_console::{self, color, cursor};
+use sl_console::{self, color};
 use std::cmp;
-use std::cmp::Ordering;
-use std::fmt::{self, Write};
+use std::fmt;
 use std::io;
 
 use super::complete::Completer;
@@ -116,14 +115,6 @@ pub struct Editor<'a> {
     word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
     buf: &'a mut String,
 
-    // A closure that is evaluated just before we write to out.
-    // This allows us to do custom syntax highlighting and other fun stuff.
-    closure: Option<ColorClosure>,
-    // Use the closure if it is set.
-    use_closure: bool,
-    // Last string that was colorized and last colorized version.
-    color_lines: Option<(String, String)>,
-
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
     // and if `cursor == 1` ten the cursor is after the first char and before the second char.
@@ -189,11 +180,6 @@ macro_rules! cur_buf {
     };
 }
 
-fn fmt_io_err(err: std::fmt::Error) -> io::Error {
-    let msg = format!("{}", err);
-    io::Error::new(io::ErrorKind::Other, msg)
-}
-
 impl<'a> Editor<'a> {
     pub fn new(
         out: &'a mut dyn io::Write,
@@ -243,9 +229,6 @@ impl<'a> Editor<'a> {
             prompt,
             cursor: 0,
             out,
-            closure: f,
-            use_closure: true,
-            color_lines: None,
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
@@ -255,7 +238,7 @@ impl<'a> Editor<'a> {
             buf,
             show_completions_hint: None,
             show_autosuggestions: true,
-            term: Term::new(),
+            term: Term::new(f),
             no_eol: false,
             reverse_search: false,
             forward_search: false,
@@ -274,12 +257,12 @@ impl<'a> Editor<'a> {
     }
 
     pub fn set_closure(&mut self, closure: ColorClosure) -> &mut Self {
-        self.closure = Some(closure);
+        self.term.set_closure(closure);
         self
     }
 
     pub fn use_closure(&mut self, use_closure: bool) {
-        self.use_closure = use_closure;
+        self.term.use_closure(use_closure)
     }
 
     fn is_search(&self) -> bool {
@@ -457,60 +440,6 @@ impl<'a> Editor<'a> {
             self.display()?;
         }
         Ok(did)
-    }
-
-    fn print_completion_list(
-        completions: &[String],
-        highlighted: Option<usize>,
-        output_buf: &mut String,
-    ) -> io::Result<usize> {
-        use std::cmp::max;
-
-        let (w, _) = sl_console::terminal_size()?;
-
-        // XXX wide character support
-        let max_word_size = completions.iter().fold(1, |m, x| max(m, x.chars().count()));
-        let cols = max(1, w as usize / (max_word_size));
-        let col_width = 2 + w as usize / cols;
-        let cols = max(1, w as usize / col_width);
-
-        let lines = completions.len() / cols;
-
-        let mut i = 0;
-        for (index, com) in completions.iter().enumerate() {
-            match i.cmp(&cols) {
-                Ordering::Greater => unreachable!(),
-                Ordering::Less => {}
-                Ordering::Equal => {
-                    output_buf.push_str("\r\n");
-                    i = 0;
-                }
-            }
-
-            if Some(index) == highlighted {
-                write!(
-                    output_buf,
-                    "{}{}",
-                    color::Black.fg_str(),
-                    color::White.bg_str()
-                )
-                .map_err(fmt_io_err)?;
-            }
-            write!(output_buf, "{:<1$}", com, col_width).map_err(fmt_io_err)?;
-            if Some(index) == highlighted {
-                write!(
-                    output_buf,
-                    "{}{}",
-                    color::Reset.bg_str(),
-                    color::Reset.fg_str()
-                )
-                .map_err(fmt_io_err)?;
-            }
-
-            i += 1;
-        }
-
-        Ok(lines)
     }
 
     pub fn skip_completions_hint(&mut self) {
@@ -1032,91 +961,6 @@ impl<'a> Editor<'a> {
         } else {
             self.prompt.to_string()
         }
-    }
-
-    fn colorize(&mut self, line: &str) -> String {
-        match self.closure {
-            Some(ref mut f) if self.use_closure => {
-                let color = f(line);
-                self.color_lines = Some((line.to_string(), color.clone()));
-                color
-            }
-            Some(_) => {
-                if let Some((old_line, colorized)) = &self.color_lines {
-                    if line.starts_with(old_line) {
-                        let mut new_line = colorized.clone();
-                        new_line.push_str(&line[old_line.len()..]);
-                        new_line
-                    } else {
-                        line.to_owned()
-                    }
-                } else {
-                    line.to_owned()
-                }
-            }
-            _ => line.to_owned(),
-        }
-    }
-
-    fn display_with_suggest(
-        &mut self,
-        line: &str,
-        buf_num_remaining_bytes: usize,
-    ) -> io::Result<()> {
-        let start = self.colorize(&line[..buf_num_remaining_bytes]);
-        if self.is_search() {
-            write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
-        }
-        write!(&mut self.buf, "{}", start).map_err(fmt_io_err)?;
-        if !self.is_search() {
-            write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
-        }
-        self.buf.push_str(&line[buf_num_remaining_bytes..]);
-        Ok(())
-    }
-
-    pub(crate) fn show_lines(
-        &mut self,
-        show_autosuggest: bool,
-        prompt_width: usize,
-    ) -> io::Result<()> {
-        let buf = cur_buf!(self);
-        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
-        // We get the number of bytes in the buffer (but NOT the autosuggestion).
-        // Then, we loop and subtract from that number until it's 0, in which case we are printing
-        // the autosuggestion from here on (in a different color).
-        let lines = match self.autosuggestion {
-            Some(ref suggestion) if show_autosuggest => suggestion.lines(),
-            _ => buf.lines(),
-        };
-        let mut buf_num_remaining_bytes = buf.num_bytes();
-
-        let lines_len = lines.len();
-        for (i, line) in lines.into_iter().enumerate() {
-            if i > 0 {
-                write!(&mut self.buf, "{}", cursor::Right(prompt_width as u16))
-                    .map_err(fmt_io_err)?;
-            }
-
-            if buf_num_remaining_bytes == 0 {
-                self.buf.push_str(&line);
-            } else if line.len() > buf_num_remaining_bytes {
-                self.display_with_suggest(&line, buf_num_remaining_bytes)?;
-                buf_num_remaining_bytes = 0;
-            } else {
-                buf_num_remaining_bytes -= line.len();
-                let written_line = self.colorize(&line);
-                if self.is_search() {
-                    write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
-                }
-                self.buf.push_str(&written_line);
-            }
-
-            if i + 1 < lines_len {
-                self.buf.push_str("\r\n");
-            }
-        }
-        Ok(())
     }
 
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
