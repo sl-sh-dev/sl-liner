@@ -250,7 +250,7 @@ impl<'a> Term<'a> {
         &mut self,
         buf: &Buffer,
         prompt: String,
-        mut cursor: Cursor,
+        mut cursor: &mut Cursor,
         autosuggestion: Option<&Buffer>,
         show_completions_hint: Option<&(Vec<String>, Option<usize>)>,
         show_autosuggest: bool,

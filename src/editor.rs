@@ -574,10 +574,6 @@ impl<'a> Editor<'a> {
         self.display()
     }
 
-    pub fn set_char_vec_pos(&mut self, pos: usize) {
-        self.cursor.set_char_vec_pos(pos);
-    }
-
     /// Deletes every character from the cursor until the given position. Does not register as an
     /// action in the undo/redo buffer or in the buffer's register.
     pub fn delete_until_silent(&mut self, position: usize) -> io::Result<()> {
@@ -644,13 +640,11 @@ impl<'a> Editor<'a> {
     }
 
     pub fn is_cursor_at_beginning_of_word_or_line(&self) -> bool {
-        self.cursor
-            .is_cursor_at_beginning_of_word_or_line(cur_buf!(self))
+        self.cursor.is_at_beginning_of_word_or_line(cur_buf!(self))
     }
 
     pub fn is_cursor_at_end_of_line(&self) -> bool {
-        self.cursor
-            .is_cursor_at_end_of_line(cur_buf!(self), self.no_eol)
+        self.cursor.is_at_end_of_line(cur_buf!(self), self.no_eol)
     }
 
     ///  Returns a reference to the current buffer being edited.
@@ -753,7 +747,7 @@ impl<'a> Editor<'a> {
         self.term.display(
             buf,
             prompt,
-            self.cursor,
+            &mut self.cursor,
             self.autosuggestion.as_ref(),
             self.show_completions_hint.as_ref(),
             show_autosuggest,
@@ -936,7 +930,7 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.set_char_vec_pos(0);
+        ed.cursor.set_char_vec_pos(0);
 
         ed.delete_until(5).unwrap();
         assert_eq!(ed.cursor(), 0);
@@ -959,7 +953,7 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.set_char_vec_pos(4);
+        ed.cursor.set_char_vec_pos(4);
 
         ed.delete_until(1).unwrap();
         assert_eq!(ed.cursor(), 1);
@@ -982,7 +976,7 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.set_char_vec_pos(4);
+        ed.cursor.set_char_vec_pos(4);
 
         ed.delete_until_inclusive(1).unwrap();
         assert_eq!(ed.cursor(), 1);

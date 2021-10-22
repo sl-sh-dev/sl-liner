@@ -48,14 +48,13 @@ impl CursorPosition {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct Cursor<'a> {
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
     // and if `cursor == 1` ten the cursor is after the first char and before the second char.
     char_vec_pos: usize,
     //TODO doc
-    grapheme_cluster_pos: usize,
     word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
 }
 
@@ -63,7 +62,6 @@ impl<'a> Cursor<'a> {
     pub fn new(word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>) -> Self {
         Cursor {
             char_vec_pos: 0,
-            grapheme_cluster_pos: 0,
             word_divider_fn,
         }
     }
@@ -82,7 +80,7 @@ impl<'a> Cursor<'a> {
             // if moving to the left we move one less than the number of chars inserted because
             // the cursor rests on the last character inserted.
             let adjustment = if right { delta } else { delta - 1 };
-            self.move_cursor_to(buf, adjustment)
+            self.move_cursor_to(buf, self.char_vec_pos + adjustment)
         }
     }
 
@@ -205,7 +203,7 @@ impl<'a> Cursor<'a> {
         self.char_vec_pos = buf.num_chars();
     }
 
-    pub fn is_cursor_at_beginning_of_word_or_line(&self, buf: &Buffer) -> bool {
+    pub fn is_at_beginning_of_word_or_line(&self, buf: &Buffer) -> bool {
         let num_chars = buf.num_chars();
         let cursor_pos = self.char_vec_pos;
         if num_chars > 0 && cursor_pos != 0 {
@@ -217,7 +215,7 @@ impl<'a> Cursor<'a> {
         true
     }
 
-    pub fn is_cursor_at_end_of_line(&self, buf: &Buffer, no_eol: bool) -> bool {
+    pub fn is_at_end_of_line(&self, buf: &Buffer, no_eol: bool) -> bool {
         let num_chars = buf.num_chars();
         if no_eol {
             self.char_vec_pos == num_chars - 1
@@ -227,10 +225,10 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn pre_display_adjustment(&mut self, buf: &Buffer, no_eol: bool) {
-        // Don't let the cursor go over the end!
         let buf_num_chars = buf.num_chars();
+        // Don't let the cursor go over the end!
         if buf_num_chars < self.char_vec_pos {
-            self.move_cursor_to_end_of_line(buf);
+            self.char_vec_pos = buf_num_chars;
         }
 
         // Can't move past the last character in vi normal mode
