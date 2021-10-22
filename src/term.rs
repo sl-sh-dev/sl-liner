@@ -1,6 +1,6 @@
 use crate::context::ColorClosure;
 use crate::prompt::Prompt;
-use crate::{util, Buffer};
+use crate::{util, Buffer, Cursor};
 use sl_console::{clear, color, cursor};
 use std::cmp::Ordering;
 use std::fmt::Write;
@@ -250,29 +250,20 @@ impl<'a> Term<'a> {
         &mut self,
         buf: &Buffer,
         prompt: String,
-        cursor: usize,
+        mut cursor: Cursor,
         autosuggestion: Option<&Buffer>,
         show_completions_hint: Option<&(Vec<String>, Option<usize>)>,
         show_autosuggest: bool,
         no_eol: bool,
         is_search: bool,
-    ) -> io::Result<usize> {
-        let mut cur = cursor;
+    ) -> io::Result<()> {
         let terminal_width = util::terminal_width()?;
         let prompt_width = util::last_prompt_line_width(&prompt);
 
         let buf_width = buf.width();
 
-        // Don't let the cursor go over the end!
-        let buf_num_chars = buf.num_chars();
-        if buf_num_chars < cur {
-            cur = buf_num_chars;
-        }
+        cursor.pre_display_adjustment(buf, no_eol);
 
-        // Can't move past the last character in vi normal mode
-        if no_eol && cur != 0 && cur == buf_num_chars {
-            cur -= 1;
-        }
         let buf_widths = match autosuggestion {
             Some(suggestion) => suggestion.width(),
             None => buf_width,
@@ -280,8 +271,10 @@ impl<'a> Term<'a> {
         // Width of the current buffer lines (including autosuggestion) from the start to the cursor
         let buf_widths_to_cursor = match autosuggestion {
             // Cursor might overrun autosuggestion with history search.
-            Some(suggestion) if cur < suggestion.num_chars() => suggestion.range_width(0, cur),
-            _ => buf.range_width(0, cur),
+            Some(suggestion) if cursor.char_vec_pos() < suggestion.num_chars() => {
+                suggestion.range_width(0, cursor.char_vec_pos())
+            }
+            _ => buf.range_width(0, cursor.char_vec_pos()),
         };
         // Total number of terminal spaces taken up by prompt and buffer
         let new_total_width = self.calc_width(prompt_width, &buf_widths, terminal_width);
@@ -362,7 +355,7 @@ impl<'a> Term<'a> {
         self.buf.clear();
         self.out.flush()?;
 
-        Ok(cur)
+        Ok(())
     }
 
     pub fn flush(&mut self) -> io::Result<()> {

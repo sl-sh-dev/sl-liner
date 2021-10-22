@@ -29,8 +29,8 @@ pub use keymap::*;
 pub mod prompt;
 pub use prompt::*;
 
-mod util;
 pub mod cursor;
+mod util;
 pub use cursor::*;
 
 #[cfg(test)]

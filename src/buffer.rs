@@ -275,7 +275,7 @@ impl Buffer {
 
     /// Insert contents of register to the right or to the left of start in the current buffer
     /// and return length of text inserted.
-    pub fn insert_register_around_cursor(
+    pub fn insert_register_around_start(
         &mut self,
         mut start: usize,
         count: usize,
@@ -314,6 +314,7 @@ impl Buffer {
             text: text.into(),
         };
         self.insert_action(act);
+        //TODO take this out
         let text: String = text.iter().collect();
         UnicodeSegmentation::graphemes(&text[..], true).count()
     }

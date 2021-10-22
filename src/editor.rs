@@ -1,15 +1,14 @@
-use std::cmp;
 use std::io;
 
 use sl_console::{self, color};
 
-use crate::{Term, util};
-use crate::Buffer;
 use crate::context::ColorClosure;
 use crate::cursor::CursorPosition;
 use crate::event::*;
-use crate::History;
 use crate::prompt::Prompt;
+use crate::History;
+use crate::{util, Term};
+use crate::{Buffer, Cursor};
 
 use super::complete::Completer;
 
@@ -17,12 +16,9 @@ use super::complete::Completer;
 pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
-    word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
 
-    // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
-    // So, if `cursor == 0` then the cursor is before the first char,
-    // and if `cursor == 1` ten the cursor is after the first char and before the second char.
-    cursor: usize,
+    //TODO doc
+    cursor: Cursor<'a>,
 
     // Buffer for the new line (ie. not from editing history)
     new_buf: Buffer,
@@ -109,13 +105,12 @@ impl<'a> Editor<'a> {
         let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
-            cursor: 0,
+            cursor: Cursor::new(word_divider_fn),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
             cur_history_loc: None,
             history,
-            word_divider_fn,
             show_completions_hint: None,
             show_autosuggestions: true,
             term,
@@ -162,10 +157,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn get_words_and_cursor_position(&self) -> (Vec<(usize, usize)>, CursorPosition) {
-        let word_fn = &self.word_divider_fn;
-        let words = word_fn(cur_buf!(self));
-        let pos = CursorPosition::get(self.cursor, &words);
-        (words, pos)
+        self.cursor.get_words_and_cursor_position(cur_buf!(self))
     }
 
     pub fn history(&mut self) -> &mut History {
@@ -173,7 +165,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn cursor(&self) -> usize {
-        self.cursor
+        self.cursor.char_vec_pos()
     }
 
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
@@ -192,11 +184,11 @@ impl<'a> Editor<'a> {
         if last_char == Some(&'\\') {
             let buf = cur_buf_mut!(self);
             buf.push('\n');
-            self.cursor = buf.num_chars();
+            self.cursor.move_cursor_to_end_of_line(buf);
             self.display()?;
             Ok(false)
         } else {
-            self.cursor = cur_buf!(self).num_chars();
+            self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
             self._display(false)?;
             self.term.write_newline()?;
             self.show_completions_hint = None;
@@ -296,16 +288,8 @@ impl<'a> Editor<'a> {
     /// Inserts characters from internal register to the right or the left of the cursor, moving the
     /// cursor to the last character inserted.
     pub fn paste(&mut self, right: bool, count: usize) -> io::Result<()> {
-        let buf = cur_buf_mut!(self);
-        let delta = buf.insert_register_around_cursor(self.cursor, count, right);
-        if delta > 0 {
-            // if moving to the left we move one less than the number of chars inserted because
-            // the cursor rests on the last character inserted.
-            let adjustment = if right { delta } else { delta - 1 };
-            self.move_cursor_to(self.cursor + adjustment)
-        } else {
-            Ok(())
-        }
+        self.cursor.insert_around(cur_buf_mut!(self), right, count);
+        self.display()
     }
 
     pub fn revert(&mut self) -> io::Result<bool> {
@@ -330,8 +314,7 @@ impl<'a> Editor<'a> {
 
             match i_in {
                 Some(x) if cur_buf!(self) == &Buffer::from(&completions[x][..]) => {
-                    cur_buf_mut!(self).truncate(0);
-                    self.cursor = 0;
+                    self.cursor.reset(cur_buf_mut!(self));
                 }
                 _ => self.delete_word_before_cursor(false)?,
             }
@@ -424,8 +407,7 @@ impl<'a> Editor<'a> {
         ignore_space_before_cursor: bool,
     ) -> io::Result<()> {
         if let Some((start, _)) = self.get_word_before_cursor(ignore_space_before_cursor) {
-            let moved = cur_buf_mut!(self).remove(start, self.cursor);
-            self.cursor -= moved;
+            self.cursor.remove(cur_buf_mut!(self), start);
         }
         self.display()
     }
@@ -549,9 +531,7 @@ impl<'a> Editor<'a> {
     /// Inserts characters directly after the cursor, moving the cursor to the right.
     pub fn insert_chars_after_cursor(&mut self, cs: &[char]) -> io::Result<()> {
         {
-            let buf = cur_buf_mut!(self);
-            let _len = buf.insert(self.cursor, cs);
-            self.cursor += cs.len();
+            self.cursor.insert(cur_buf_mut!(self), cs);
         }
         self.display()
     }
@@ -559,192 +539,118 @@ impl<'a> Editor<'a> {
     /// Deletes the character directly before the cursor, moving the cursor to the left.
     /// If the cursor is at the start of the line, nothing happens.
     pub fn delete_before_cursor(&mut self) -> io::Result<()> {
-        if self.cursor > 0 {
-            let buf = cur_buf_mut!(self);
-            buf.remove(self.cursor - 1, self.cursor);
-            self.cursor -= 1;
-        }
-
+        self.cursor.delete_before_cursor(cur_buf_mut!(self));
         self.display()
     }
 
     /// Deletes the character directly after the cursor. The cursor does not move.
     /// If the cursor is at the end of the line, nothing happens.
     pub fn delete_after_cursor(&mut self) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-
-            if self.cursor < buf.num_chars() {
-                buf.remove(self.cursor, self.cursor + 1);
-            }
-        }
+        self.cursor.delete_after_cursor(cur_buf_mut!(self));
         self.display()
     }
 
     /// Deletes every character preceding the cursor until the beginning of the line.
     pub fn delete_all_before_cursor(&mut self) -> io::Result<()> {
-        cur_buf_mut!(self).remove(0, self.cursor);
-        self.cursor = 0;
+        self.cursor.delete_all_before_cursor(cur_buf_mut!(self));
         self.display()
     }
 
     /// Yanks every character after the cursor until the end of the line.
     pub fn yank_all_after_cursor(&mut self) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.yank(self.cursor, buf.num_chars());
-        }
+        self.cursor.yank_all_after_cursor(cur_buf_mut!(self));
         self.display()
     }
 
     /// Deletes every character after the cursor until the end of the line.
     pub fn delete_all_after_cursor(&mut self) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.truncate(self.cursor);
-        }
+        self.cursor.delete_all_after_cursor(cur_buf_mut!(self));
         self.display()
     }
 
     /// Yanks every character from the cursor until the given position.
     pub fn yank_until(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.yank(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor, position),
-            );
-        }
+        self.cursor.yank_until(cur_buf_mut!(self), position);
         self.display()
+    }
+
+    pub fn set_char_vec_pos(&mut self, pos: usize) {
+        self.cursor.set_char_vec_pos(pos);
     }
 
     /// Deletes every character from the cursor until the given position. Does not register as an
     /// action in the undo/redo buffer or in the buffer's register.
     pub fn delete_until_silent(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.remove_silent(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor, position),
-            );
-            self.cursor = cmp::min(self.cursor, position);
-        }
+        self.cursor
+            .delete_until_silent(cur_buf_mut!(self), position);
         self.display()
     }
 
     /// Deletes every character from the cursor until the given position.
     pub fn delete_until(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.remove(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor, position),
-            );
-            self.cursor = cmp::min(self.cursor, position);
-        }
+        self.cursor.delete_until(cur_buf_mut!(self), position);
         self.display()
     }
 
     /// Yanks every character from the cursor until the given position, inclusive.
     pub fn yank_until_inclusive(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.yank(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor + 1, position + 1),
-            );
-        }
+        self.cursor
+            .yank_until_inclusive(cur_buf_mut!(self), position);
         self.display()
     }
 
     /// Deletes every character from the cursor until the given position, inclusive.
     pub fn delete_until_inclusive(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.remove(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor + 1, position + 1),
-            );
-            self.cursor = cmp::min(self.cursor, position);
-        }
+        self.cursor
+            .delete_until_inclusive(cur_buf_mut!(self), position);
         self.display()
     }
 
     /// Moves the cursor to the left by `count` characters.
     /// The cursor will not go past the start of the buffer.
-    pub fn move_cursor_left(&mut self, mut count: usize) -> io::Result<()> {
-        if count > self.cursor {
-            count = self.cursor;
-        }
-
-        self.cursor -= count;
-
+    pub fn move_cursor_left(&mut self, count: usize) -> io::Result<()> {
+        self.cursor.move_cursor_left(count);
         self.display()
     }
 
     /// Moves the cursor to the right by `count` characters.
     /// The cursor will not go past the end of the buffer.
-    pub fn move_cursor_right(&mut self, mut count: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf!(self);
-
-            if count > buf.num_chars() - self.cursor {
-                count = buf.num_chars() - self.cursor;
-            }
-
-            self.cursor += count;
-        }
-
+    pub fn move_cursor_right(&mut self, count: usize) -> io::Result<()> {
+        self.cursor.move_cursor_right(cur_buf!(self), count);
         self.display()
     }
 
     /// Moves the cursor to `pos`. If `pos` is past the end of the buffer, it will be clamped.
     pub fn move_cursor_to(&mut self, pos: usize) -> io::Result<()> {
-        self.cursor = pos;
-        let buf_len = cur_buf!(self).num_chars();
-        if self.cursor > buf_len {
-            self.cursor = buf_len;
-        }
+        self.cursor.move_cursor_to(cur_buf!(self), pos);
         self.display()
     }
 
     /// Moves the cursor to the start of the line.
     pub fn move_cursor_to_start_of_line(&mut self) -> io::Result<()> {
-        self.cursor = 0;
+        self.cursor.move_cursor_to(cur_buf!(self), 0);
         self.display()
     }
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
-        self.cursor = cur_buf!(self).num_chars();
+        self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
         self.display()
     }
 
     pub fn curr_char(&self) -> Option<char> {
         let buf = cur_buf!(self);
-        buf.char_after(self.cursor)
+        buf.char_after(self.cursor.char_vec_pos())
     }
 
-    pub fn cursor_at_beginning_of_word_or_line(&self) -> bool {
-        let buf = cur_buf!(self);
-        let num_chars = buf.num_chars();
-        let cursor_pos = self.cursor;
-        if num_chars > 0 && cursor_pos != 0 {
-            let c = buf.char_before(cursor_pos);
-            if let Some(c) = c {
-                return c.is_whitespace();
-            }
-        }
-        true
+    pub fn is_cursor_at_beginning_of_word_or_line(&self) -> bool {
+        self.cursor
+            .is_cursor_at_beginning_of_word_or_line(cur_buf!(self))
     }
 
-    pub fn cursor_is_at_end_of_line(&self) -> bool {
-        let num_chars = cur_buf!(self).num_chars();
-        if self.no_eol {
-            self.cursor == num_chars - 1
-        } else {
-            self.cursor == num_chars
-        }
+    pub fn is_cursor_at_end_of_line(&self) -> bool {
+        self.cursor
+            .is_cursor_at_end_of_line(cur_buf!(self), self.no_eol)
     }
 
     ///  Returns a reference to the current buffer being edited.
@@ -844,7 +750,7 @@ impl<'a> Editor<'a> {
         let buf = cur_buf!(self);
         let is_search = self.is_search();
 
-        let new_cur = self.term.display(
+        self.term.display(
             buf,
             prompt,
             self.cursor,
@@ -854,7 +760,6 @@ impl<'a> Editor<'a> {
             self.no_eol,
             is_search,
         )?;
-        self.cursor = new_cur;
         Ok(())
     }
 
@@ -914,8 +819,8 @@ impl<'a> From<Editor<'a>> for String {
 #[cfg(test)]
 mod tests {
     use crate::context::get_buffer_words;
-    use crate::History;
     use crate::prompt::Prompt;
+    use crate::History;
 
     use super::*;
 
@@ -959,13 +864,13 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("let").unwrap();
-        assert_eq!(ed.cursor, 3);
+        assert_eq!(ed.cursor(), 3);
 
         ed.move_cursor_left(1).unwrap();
-        assert_eq!(ed.cursor, 2);
+        assert_eq!(ed.cursor(), 2);
 
         ed.insert_after_cursor('f').unwrap();
-        assert_eq!(ed.cursor, 3);
+        assert_eq!(ed.cursor(), 3);
         assert_eq!(String::from(ed), "left");
     }
 
@@ -985,11 +890,11 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        assert_eq!(ed.cursor, 5);
+        assert_eq!(ed.cursor(), 5);
 
         ed.move_cursor_left(2).unwrap();
         ed.move_cursor_right(1).unwrap();
-        assert_eq!(ed.cursor, 4);
+        assert_eq!(ed.cursor(), 4);
     }
 
     #[test]
@@ -1008,10 +913,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        assert_eq!(ed.cursor, 5);
+        assert_eq!(ed.cursor(), 5);
 
         ed.delete_until(0).unwrap();
-        assert_eq!(ed.cursor, 0);
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
 
@@ -1031,10 +936,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor = 0;
+        ed.set_char_vec_pos(0);
 
         ed.delete_until(5).unwrap();
-        assert_eq!(ed.cursor, 0);
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
 
@@ -1054,10 +959,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor = 4;
+        ed.set_char_vec_pos(4);
 
         ed.delete_until(1).unwrap();
-        assert_eq!(ed.cursor, 1);
+        assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "rt");
     }
 
@@ -1077,10 +982,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor = 4;
+        ed.set_char_vec_pos(4);
 
         ed.delete_until_inclusive(1).unwrap();
-        assert_eq!(ed.cursor, 1);
+        assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "r");
     }
 }

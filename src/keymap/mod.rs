@@ -53,7 +53,7 @@ pub trait KeyMap {
             }
             (KeyCode::Right, None)
                 if editor.is_currently_showing_autosuggestion()
-                    && editor.cursor_is_at_end_of_line() =>
+                    && editor.is_cursor_at_end_of_line() =>
             {
                 editor.accept_autosuggestion()?;
             }

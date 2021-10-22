@@ -9,9 +9,9 @@ use std::mem::replace;
 use regex::Regex;
 use sl_console::color;
 
-use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 use sl_liner::cursor::CursorPosition;
 use sl_liner::keymap;
+use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen
 fn highlight_dodo(s: &str) -> String {

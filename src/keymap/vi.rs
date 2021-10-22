@@ -1572,7 +1572,7 @@ impl Vi {
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         let count = self.move_count();
-        if !ed.cursor_at_beginning_of_word_or_line() {
+        if !ed.is_cursor_at_beginning_of_word_or_line() {
             match text_object {
                 TextObjectMode::Whole => move_word_ws_back(ed, 1)?,
                 TextObjectMode::Inner => move_word_back(ed, 1)?,
