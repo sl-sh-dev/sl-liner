@@ -250,11 +250,10 @@ impl<'a> Term<'a> {
         &mut self,
         buf: &Buffer,
         prompt: String,
-        mut cursor: &mut Cursor,
+        cursor: &mut Cursor,
         autosuggestion: Option<&Buffer>,
         show_completions_hint: Option<&(Vec<String>, Option<usize>)>,
         show_autosuggest: bool,
-        no_eol: bool,
         is_search: bool,
     ) -> io::Result<()> {
         let terminal_width = util::terminal_width()?;
@@ -262,7 +261,7 @@ impl<'a> Term<'a> {
 
         let buf_width = buf.width();
 
-        cursor.pre_display_adjustment(buf, no_eol);
+        cursor.pre_display_adjustment(buf);
 
         let buf_widths = match autosuggestion {
             Some(suggestion) => suggestion.width(),

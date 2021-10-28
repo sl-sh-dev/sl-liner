@@ -56,6 +56,10 @@ pub struct Cursor<'a> {
     char_vec_pos: usize,
     //TODO doc
     word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
+
+    // if set, the cursor will not be allow to move one past the end of the line, this is necessary
+    // for Vi's normal mode.
+    pub no_eol: bool,
 }
 
 impl<'a> Cursor<'a> {
@@ -63,6 +67,7 @@ impl<'a> Cursor<'a> {
         Cursor {
             char_vec_pos: 0,
             word_divider_fn,
+            no_eol: false,
         }
     }
 
@@ -215,16 +220,20 @@ impl<'a> Cursor<'a> {
         true
     }
 
-    pub fn is_at_end_of_line(&self, buf: &Buffer, no_eol: bool) -> bool {
+    pub fn set_no_eol(&mut self, no_eol: bool) {
+        self.no_eol = no_eol;
+    }
+
+    pub fn is_at_end_of_line(&self, buf: &Buffer) -> bool {
         let num_chars = buf.num_chars();
-        if no_eol {
+        if self.no_eol {
             self.char_vec_pos == num_chars - 1
         } else {
             self.char_vec_pos == num_chars
         }
     }
 
-    pub fn pre_display_adjustment(&mut self, buf: &Buffer, no_eol: bool) {
+    pub fn pre_display_adjustment(&mut self, buf: &Buffer) {
         let buf_num_chars = buf.num_chars();
         // Don't let the cursor go over the end!
         if buf_num_chars < self.char_vec_pos {
@@ -232,7 +241,7 @@ impl<'a> Cursor<'a> {
         }
 
         // Can't move past the last character in vi normal mode
-        if no_eol && self.char_vec_pos != 0 && self.char_vec_pos == buf_num_chars {
+        if self.no_eol && self.char_vec_pos != 0 && self.char_vec_pos == buf_num_chars {
             self.char_vec_pos -= 1;
         }
     }

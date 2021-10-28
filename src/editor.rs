@@ -39,10 +39,6 @@ pub struct Editor<'a> {
     // Show autosuggestions based on history
     show_autosuggestions: bool,
 
-    // if set, the cursor will not be allow to move one past the end of the line, this is necessary
-    // for Vi's normal mode.
-    pub no_eol: bool,
-
     reverse_search: bool,
     forward_search: bool,
     buffer_changed: bool,
@@ -114,7 +110,6 @@ impl<'a> Editor<'a> {
             show_completions_hint: None,
             show_autosuggestions: true,
             term,
-            no_eol: false,
             reverse_search: false,
             forward_search: false,
             buffer_changed: false,
@@ -644,7 +639,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn is_cursor_at_end_of_line(&self) -> bool {
-        self.cursor.is_at_end_of_line(cur_buf!(self), self.no_eol)
+        self.cursor.is_at_end_of_line(cur_buf!(self))
     }
 
     ///  Returns a reference to the current buffer being edited.
@@ -739,6 +734,10 @@ impl<'a> Editor<'a> {
         }
     }
 
+    pub fn set_no_eol(&mut self, no_eol: bool) {
+        self.cursor.set_no_eol(no_eol);
+    }
+
     fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
         let prompt = self.search_prompt();
         let buf = cur_buf!(self);
@@ -751,7 +750,6 @@ impl<'a> Editor<'a> {
             self.autosuggestion.as_ref(),
             self.show_completions_hint.as_ref(),
             show_autosuggest,
-            self.no_eol,
             is_search,
         )?;
         Ok(())

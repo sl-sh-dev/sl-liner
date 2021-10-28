@@ -634,7 +634,7 @@ impl Vi {
     ) -> io::Result<()> {
         use self::Mode::*;
 
-        ed.no_eol = mode == Normal;
+        ed.set_no_eol(mode == Normal);
         self.movement_reset = mode != Insert;
         self.mode_stack.push(mode);
         self.set_editor_mode(&mut ed)?;
@@ -663,7 +663,7 @@ impl Vi {
             }
         };
 
-        ed.no_eol = self.mode() == Mode::Normal;
+        ed.set_no_eol(self.mode() == Normal);
         self.movement_reset = self.mode() != Mode::Insert;
 
         if let Delete(_) | Yank(_) = last_mode {
@@ -702,7 +702,7 @@ impl Vi {
         use self::Mode::*;
 
         let last_mode = self.mode_stack.pop();
-        ed.no_eol = self.mode() == Normal;
+        ed.set_no_eol(self.mode() == Normal);
         self.movement_reset = self.mode() != Insert;
 
         if last_mode == Insert || last_mode == Tilde {
@@ -719,7 +719,7 @@ impl Vi {
     /// Return to normal mode.
     fn normal_mode_abort<'a>(&mut self, mut ed: &mut Editor<'a>) -> io::Result<()> {
         self.mode_stack.clear();
-        ed.no_eol = true;
+        ed.set_no_eol(true);
         self.count = 0;
         self.set_editor_mode(&mut ed)
     }
