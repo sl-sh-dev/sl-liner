@@ -6,6 +6,72 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 use std::io;
 
+#[derive(Clone, Copy)]
+pub struct Metrics {
+    width: usize,
+    prompt_width: usize,
+    new_total_width: usize,
+    new_total_width_to_cursor: usize,
+    new_num_lines: usize,
+}
+
+impl Metrics {
+    pub fn new(
+        prompt: String,
+        buf: &Buffer,
+        cursor: &Cursor,
+        autosuggestion: Option<&Buffer>,
+    ) -> io::Result<Self> {
+        let width = util::terminal_width()?;
+        let prompt_width = util::last_prompt_line_width(&prompt);
+        let buf_width = buf.width();
+
+        let buf_widths = match autosuggestion {
+            Some(suggestion) => suggestion.width(),
+            None => buf_width,
+        };
+
+        // Width of the current buffer lines (including autosuggestion) from the start to the cursor
+        let buf_widths_to_cursor = match autosuggestion {
+            // Cursor might overrun autosuggestion with history search.
+            Some(suggestion) if cursor.char_vec_pos() < suggestion.num_chars() => {
+                suggestion.range_width(0, cursor.char_vec_pos())
+            }
+            _ => buf.range_width(0, cursor.char_vec_pos()),
+        };
+        // Total number of terminal spaces taken up by prompt and buffer
+        let new_total_width = Metrics::calc_width(prompt_width, &buf_widths, width);
+        let new_total_width_to_cursor =
+            Metrics::calc_width(prompt_width, &buf_widths_to_cursor, width);
+
+        let new_num_lines = (new_total_width + width) / width;
+
+        Ok(Metrics {
+            width,
+            prompt_width,
+            new_total_width,
+            new_total_width_to_cursor,
+            new_num_lines,
+        })
+    }
+
+    pub fn max_x_dimensions(&self) -> bool {
+        return self.new_total_width % self.width == 0;
+    }
+
+    /// Move the term cursor to the same line as the prompt.
+    fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
+        let mut total = 0;
+        for line in buf_widths {
+            if total % terminal_width != 0 {
+                total = ((total / terminal_width) + 1) * terminal_width;
+            }
+            total += prompt_width + line;
+        }
+        total
+    }
+}
+
 pub struct Terminal<'a> {
     out: &'a mut dyn io::Write,
     // The line of the cursor relative to the prompt. 1-indexed.
@@ -121,51 +187,6 @@ impl<'a> Terminal<'a> {
         Ok(())
     }
 
-    pub(crate) fn show_lines(
-        &mut self,
-        buf: &Buffer,
-        autosuggestion: Option<&Buffer>,
-        show_autosuggest: bool,
-        prompt_width: usize,
-        is_search: bool,
-    ) -> io::Result<()> {
-        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
-        // We get the number of bytes in the buffer (but NOT the autosuggestion).
-        // Then, we loop and subtract from that number until it's 0, in which case we are printing
-        // the autosuggestion from here on (in a different color).
-        let lines = match autosuggestion {
-            Some(suggestion) if show_autosuggest => suggestion.lines(),
-            _ => buf.lines(),
-        };
-        let mut buf_num_remaining_bytes = buf.num_bytes();
-
-        let lines_len = lines.len();
-        for (i, line) in lines.into_iter().enumerate() {
-            if i > 0 {
-                write!(self.buf, "{}", cursor::Right(prompt_width as u16)).map_err(fmt_io_err)?;
-            }
-
-            if buf_num_remaining_bytes == 0 {
-                self.buf.push_str(&line);
-            } else if line.len() > buf_num_remaining_bytes {
-                self.display_with_suggest(&line, is_search, buf_num_remaining_bytes)?;
-                buf_num_remaining_bytes = 0;
-            } else {
-                buf_num_remaining_bytes -= line.len();
-                let written_line = self.colorize(&line);
-                if is_search {
-                    write!(self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
-                }
-                self.buf.push_str(&written_line);
-            }
-
-            if i + 1 < lines_len {
-                self.buf.push_str("\r\n");
-            }
-        }
-        Ok(())
-    }
-
     pub fn clear(&mut self) -> io::Result<()> {
         write!(self.buf, "{}{}", clear::All, cursor::Goto(1, 1)).map_err(fmt_io_err)?;
         self.term_cursor_line = 1;
@@ -226,62 +247,7 @@ impl<'a> Terminal<'a> {
         Ok(lines)
     }
 
-    /// Move the term cursor to the same line as the prompt.
-    fn calc_width(
-        &self,
-        prompt_width: usize,
-        buf_widths: &[usize],
-        terminal_width: usize,
-    ) -> usize {
-        let mut total = 0;
-
-        for line in buf_widths {
-            if total % terminal_width != 0 {
-                total = ((total / terminal_width) + 1) * terminal_width;
-            }
-
-            total += prompt_width + line;
-        }
-
-        total
-    }
-
-    pub fn display(
-        &mut self,
-        buf: &Buffer,
-        prompt: String,
-        cursor: &mut Cursor,
-        autosuggestion: Option<&Buffer>,
-        show_completions_hint: Option<&(Vec<String>, Option<usize>)>,
-        show_autosuggest: bool,
-        is_search: bool,
-    ) -> io::Result<()> {
-        let terminal_width = util::terminal_width()?;
-        let prompt_width = util::last_prompt_line_width(&prompt);
-
-        let buf_width = buf.width();
-
-        cursor.pre_display_adjustment(buf);
-
-        let buf_widths = match autosuggestion {
-            Some(suggestion) => suggestion.width(),
-            None => buf_width,
-        };
-        // Width of the current buffer lines (including autosuggestion) from the start to the cursor
-        let buf_widths_to_cursor = match autosuggestion {
-            // Cursor might overrun autosuggestion with history search.
-            Some(suggestion) if cursor.char_vec_pos() < suggestion.num_chars() => {
-                suggestion.range_width(0, cursor.char_vec_pos())
-            }
-            _ => buf.range_width(0, cursor.char_vec_pos()),
-        };
-        // Total number of terminal spaces taken up by prompt and buffer
-        let new_total_width = self.calc_width(prompt_width, &buf_widths, terminal_width);
-        let new_total_width_to_cursor =
-            self.calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
-
-        let new_num_lines = (new_total_width + terminal_width) / terminal_width;
-
+    pub fn clear_after_cursor(&mut self) -> io::Result<()> {
         self.buf.push_str("\x1B[?1000l\x1B[?1l");
 
         if self.term_cursor_line > 1 {
@@ -289,33 +255,79 @@ impl<'a> Terminal<'a> {
                 .map_err(fmt_io_err)?;
         }
 
-        write!(self.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)?;
+        write!(self.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)
+    }
 
+    pub fn maybe_write_completions(
+        &mut self,
+        show_completions_hint: Option<&(Vec<String>, Option<usize>)>,
+    ) -> io::Result<usize> {
         // If we're cycling through completions, show those
         let mut completion_lines = 0;
         if let Some((completions, i)) = show_completions_hint {
             completion_lines = 1 + Self::print_completion_list(completions, *i, self.buf)?;
             self.buf.push_str("\r\n");
         }
+        Ok(completion_lines)
+    }
 
-        self.show_lines(
-            buf,
-            autosuggestion,
-            show_autosuggest,
-            prompt_width,
-            is_search,
-        )?;
+    pub(crate) fn show_lines(
+        &mut self,
+        buf: &Buffer,
+        autosuggestion: Option<&Buffer>,
+        show_autosuggest: bool,
+        metrics: Metrics,
+        is_search: bool,
+    ) -> io::Result<()> {
+        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
+        // We get the number of bytes in the buffer (but NOT the autosuggestion).
+        // Then, we loop and subtract from that number until it's 0, in which case we are printing
+        // the autosuggestion from here on (in a different color).
+        let lines = match autosuggestion {
+            Some(suggestion) if show_autosuggest => suggestion.lines(),
+            _ => buf.lines(),
+        };
+        let mut buf_num_remaining_bytes = buf.num_bytes();
 
+        let lines_len = lines.len();
+        for (i, line) in lines.into_iter().enumerate() {
+            if i > 0 {
+                write!(self.buf, "{}", cursor::Right(metrics.prompt_width as u16))
+                    .map_err(fmt_io_err)?;
+            }
+
+            if buf_num_remaining_bytes == 0 {
+                self.buf.push_str(&line);
+            } else if line.len() > buf_num_remaining_bytes {
+                self.display_with_suggest(&line, is_search, buf_num_remaining_bytes)?;
+                buf_num_remaining_bytes = 0;
+            } else {
+                buf_num_remaining_bytes -= line.len();
+                let written_line = self.colorize(&line);
+                if is_search {
+                    write!(self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
+                }
+                self.buf.push_str(&written_line);
+            }
+
+            if i + 1 < lines_len {
+                self.buf.push_str("\r\n");
+            }
+        }
+        Ok(())
+    }
+
+    pub fn display(&mut self, metrics: Metrics, completion_lines: usize) -> io::Result<()> {
         // at the end of the line, move the cursor down a line
-        if new_total_width % terminal_width == 0 {
+        if metrics.new_total_width % metrics.width == 0 {
             self.buf.push_str("\r\n");
         }
 
-        self.term_cursor_line = (new_total_width_to_cursor + terminal_width) / terminal_width;
+        self.term_cursor_line = (metrics.new_total_width_to_cursor + metrics.width) / metrics.width;
 
         // The term cursor is now on the bottom line. We may need to move the term cursor up
         // to the line where the true cursor is.
-        let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
+        let cursor_line_diff = metrics.new_num_lines as isize - self.term_cursor_line as isize;
         match cursor_line_diff.cmp(&0) {
             Ordering::Greater => {
                 write!(self.buf, "{}", cursor::Up(cursor_line_diff as u16)).map_err(fmt_io_err)?
@@ -326,9 +338,9 @@ impl<'a> Terminal<'a> {
 
         // Now that we are on the right line, we must move the term cursor left or right
         // to match the true cursor.
-        let cursor_col_diff = new_total_width as isize
-            - new_total_width_to_cursor as isize
-            - cursor_line_diff * terminal_width as isize;
+        let cursor_col_diff = metrics.new_total_width as isize
+            - metrics.new_total_width_to_cursor as isize
+            - cursor_line_diff * metrics.width as isize;
         match cursor_col_diff.cmp(&0) {
             Ordering::Greater => {
                 write!(self.buf, "{}", cursor::Left(cursor_col_diff as u16)).map_err(fmt_io_err)?

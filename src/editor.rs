@@ -6,9 +6,9 @@ use crate::context::ColorClosure;
 use crate::cursor::CursorPosition;
 use crate::event::*;
 use crate::prompt::Prompt;
-use crate::History;
 use crate::{util, Terminal};
 use crate::{Buffer, Cursor};
+use crate::{History, Metrics};
 
 use super::complete::Completer;
 
@@ -743,15 +743,22 @@ impl<'a> Editor<'a> {
         let buf = cur_buf!(self);
         let is_search = self.is_search();
 
-        self.term.display(
+        let metrics = Metrics::new(prompt, buf, &self.cursor, self.autosuggestion.as_ref())?;
+        self.cursor.pre_display_adjustment(buf);
+        self.term.clear_after_cursor()?;
+        let completion_lines = self
+            .term
+            .maybe_write_completions(self.show_completions_hint.as_ref())?;
+
+        self.term.show_lines(
             buf,
-            prompt,
-            &mut self.cursor,
             self.autosuggestion.as_ref(),
-            self.show_completions_hint.as_ref(),
             show_autosuggest,
+            metrics,
             is_search,
         )?;
+
+        self.term.display(metrics, completion_lines)?;
 
         Ok(())
     }
