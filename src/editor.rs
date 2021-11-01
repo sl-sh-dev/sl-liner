@@ -7,7 +7,7 @@ use crate::cursor::CursorPosition;
 use crate::event::*;
 use crate::prompt::Prompt;
 use crate::History;
-use crate::{util, Term};
+use crate::{util, Terminal};
 use crate::{Buffer, Cursor};
 
 use super::complete::Completer;
@@ -31,7 +31,7 @@ pub struct Editor<'a> {
     cur_history_loc: Option<usize>,
 
     // TODO doc
-    term: Term<'a>,
+    term: Terminal<'a>,
 
     // The next completion to suggest, or none
     show_completions_hint: Option<(Vec<String>, Option<usize>)>,
@@ -97,7 +97,7 @@ impl<'a> Editor<'a> {
         buf: &'a mut String,
         buffer: B,
     ) -> io::Result<Self> {
-        let mut term = Term::new(f, buf, out);
+        let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
@@ -752,6 +752,7 @@ impl<'a> Editor<'a> {
             show_autosuggest,
             is_search,
         )?;
+
         Ok(())
     }
 

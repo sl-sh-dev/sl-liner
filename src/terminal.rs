@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 use std::io;
 
-pub struct Term<'a> {
+pub struct Terminal<'a> {
     out: &'a mut dyn io::Write,
     // The line of the cursor relative to the prompt. 1-indexed.
     // So if the cursor is on the same line as the prompt, `term_cursor_line == 1`.
@@ -27,13 +27,13 @@ fn fmt_io_err(err: std::fmt::Error) -> io::Error {
     io::Error::new(io::ErrorKind::Other, msg)
 }
 
-impl<'a> Term<'a> {
+impl<'a> Terminal<'a> {
     pub fn new(
         closure: Option<ColorClosure>,
         buf: &'a mut String,
         out: &'a mut dyn io::Write,
     ) -> Self {
-        Term {
+        Terminal {
             out,
             term_cursor_line: 1,
             color_lines: None,

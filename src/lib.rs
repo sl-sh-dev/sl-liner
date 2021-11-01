@@ -17,8 +17,8 @@ pub use context::*;
 mod buffer;
 pub use buffer::*;
 
-mod term;
-pub use term::*;
+mod terminal;
+pub use terminal::*;
 
 mod history;
 pub use history::*;
