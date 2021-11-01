@@ -624,7 +624,7 @@ impl Vi {
             }
             _ => {} // Leave the last one
         }
-        ed.display()
+        ed.display_term()
     }
 
     fn set_mode_preserve_last<'a>(
@@ -710,7 +710,7 @@ impl Vi {
         }
 
         if last_mode == Tilde {
-            ed.display()
+            ed.display_term()
         } else {
             self.set_editor_mode(&mut ed)
         }

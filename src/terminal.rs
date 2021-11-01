@@ -56,7 +56,7 @@ impl Metrics {
     }
 
     pub fn max_x_dimensions(&self) -> bool {
-        return self.new_total_width % self.width == 0;
+        self.new_total_width % self.width == 0
     }
 
     /// Move the term cursor to the same line as the prompt.

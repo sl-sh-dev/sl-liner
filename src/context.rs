@@ -149,7 +149,7 @@ impl Context {
                 Some(Err(err)) if err.kind() == io::ErrorKind::WouldBlock => {
                     if do_color {
                         ed.use_closure(true);
-                        ed.display()?;
+                        ed.display_term()?;
                         ed.use_closure(false);
                         do_color = false;
                     }

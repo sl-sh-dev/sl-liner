@@ -16,7 +16,11 @@ use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 // This prints out the text back onto the screen
 fn highlight_dodo(s: &str) -> String {
     let reg_exp = Regex::new("(?P<k>dodo)").unwrap();
-    let format = format!("{}$k{}", color::Fg(color::Red), color::Fg(color::Reset));
+    let format = format!(
+        "{}$k{}",
+        color::Fg(color::LightYellow),
+        color::Fg(color::Reset)
+    );
     reg_exp.replace_all(s, format.as_str()).to_string()
 }
 

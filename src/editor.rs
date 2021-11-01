@@ -122,7 +122,7 @@ impl<'a> Editor<'a> {
         if !ed.new_buf.is_empty() {
             ed.move_cursor_to_end_of_line()?;
         }
-        ed.display()?;
+        ed.display_term()?;
         Ok(ed)
     }
 
@@ -180,11 +180,11 @@ impl<'a> Editor<'a> {
             let buf = cur_buf_mut!(self);
             buf.push('\n');
             self.cursor.move_cursor_to_end_of_line(buf);
-            self.display()?;
+            self.display_term()?;
             Ok(false)
         } else {
             self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
-            self._display(false)?;
+            self.display_term_with_autosuggest(false)?;
             self.term.write_newline()?;
             self.show_completions_hint = None;
             Ok(true)
@@ -260,7 +260,7 @@ impl<'a> Editor<'a> {
                 None
             };
         }
-        self.display()?;
+        self.display_term()?;
         Ok(())
     }
 
@@ -284,7 +284,7 @@ impl<'a> Editor<'a> {
     /// cursor to the last character inserted.
     pub fn paste(&mut self, right: bool, count: usize) -> io::Result<()> {
         self.cursor.insert_around(cur_buf_mut!(self), right, count);
-        self.display()
+        self.display_term()
     }
 
     pub fn revert(&mut self) -> io::Result<bool> {
@@ -292,7 +292,7 @@ impl<'a> Editor<'a> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
-            self.display()?;
+            self.display_term()?;
         }
         Ok(did)
     }
@@ -318,7 +318,7 @@ impl<'a> Editor<'a> {
             self.show_completions_hint = Some((completions, Some(i)));
         }
         if self.show_completions_hint.is_some() {
-            self.display()?;
+            self.display_term()?;
             return Ok(());
         }
 
@@ -363,7 +363,7 @@ impl<'a> Editor<'a> {
             }
 
             self.show_completions_hint = Some((completions, None));
-            self.display()?;
+            self.display_term()?;
 
             Ok(())
         }
@@ -404,14 +404,14 @@ impl<'a> Editor<'a> {
         if let Some((start, _)) = self.get_word_before_cursor(ignore_space_before_cursor) {
             self.cursor.remove(cur_buf_mut!(self), start);
         }
-        self.display()
+        self.display_term()
     }
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
         self.term.clear()?;
         self.clear_search();
-        self.display()
+        self.display_term()
     }
 
     /// Move up (backwards) in history.
@@ -490,7 +490,7 @@ impl<'a> Editor<'a> {
         if self.history.is_empty() {
             self.cur_history_loc = None;
             self.hist_buf_valid = false;
-            self.display()
+            self.display_term()
         } else {
             self.cur_history_loc = Some(0);
             self.hist_buf_valid = false;
@@ -507,7 +507,7 @@ impl<'a> Editor<'a> {
             self.hist_buf_valid = false;
             self.move_cursor_to_end_of_line()
         } else {
-            self.display()
+            self.display_term()
         }
     }
 
@@ -528,45 +528,45 @@ impl<'a> Editor<'a> {
         {
             self.cursor.insert(cur_buf_mut!(self), cs);
         }
-        self.display()
+        self.display_term()
     }
 
     /// Deletes the character directly before the cursor, moving the cursor to the left.
     /// If the cursor is at the start of the line, nothing happens.
     pub fn delete_before_cursor(&mut self) -> io::Result<()> {
         self.cursor.delete_before_cursor(cur_buf_mut!(self));
-        self.display()
+        self.display_term()
     }
 
     /// Deletes the character directly after the cursor. The cursor does not move.
     /// If the cursor is at the end of the line, nothing happens.
     pub fn delete_after_cursor(&mut self) -> io::Result<()> {
         self.cursor.delete_after_cursor(cur_buf_mut!(self));
-        self.display()
+        self.display_term()
     }
 
     /// Deletes every character preceding the cursor until the beginning of the line.
     pub fn delete_all_before_cursor(&mut self) -> io::Result<()> {
         self.cursor.delete_all_before_cursor(cur_buf_mut!(self));
-        self.display()
+        self.display_term()
     }
 
     /// Yanks every character after the cursor until the end of the line.
     pub fn yank_all_after_cursor(&mut self) -> io::Result<()> {
         self.cursor.yank_all_after_cursor(cur_buf_mut!(self));
-        self.display()
+        self.display_term()
     }
 
     /// Deletes every character after the cursor until the end of the line.
     pub fn delete_all_after_cursor(&mut self) -> io::Result<()> {
         self.cursor.delete_all_after_cursor(cur_buf_mut!(self));
-        self.display()
+        self.display_term()
     }
 
     /// Yanks every character from the cursor until the given position.
     pub fn yank_until(&mut self, position: usize) -> io::Result<()> {
         self.cursor.yank_until(cur_buf_mut!(self), position);
-        self.display()
+        self.display_term()
     }
 
     /// Deletes every character from the cursor until the given position. Does not register as an
@@ -574,59 +574,59 @@ impl<'a> Editor<'a> {
     pub fn delete_until_silent(&mut self, position: usize) -> io::Result<()> {
         self.cursor
             .delete_until_silent(cur_buf_mut!(self), position);
-        self.display()
+        self.display_term()
     }
 
     /// Deletes every character from the cursor until the given position.
     pub fn delete_until(&mut self, position: usize) -> io::Result<()> {
         self.cursor.delete_until(cur_buf_mut!(self), position);
-        self.display()
+        self.display_term()
     }
 
     /// Yanks every character from the cursor until the given position, inclusive.
     pub fn yank_until_inclusive(&mut self, position: usize) -> io::Result<()> {
         self.cursor
             .yank_until_inclusive(cur_buf_mut!(self), position);
-        self.display()
+        self.display_term()
     }
 
     /// Deletes every character from the cursor until the given position, inclusive.
     pub fn delete_until_inclusive(&mut self, position: usize) -> io::Result<()> {
         self.cursor
             .delete_until_inclusive(cur_buf_mut!(self), position);
-        self.display()
+        self.display_term()
     }
 
     /// Moves the cursor to the left by `count` characters.
     /// The cursor will not go past the start of the buffer.
     pub fn move_cursor_left(&mut self, count: usize) -> io::Result<()> {
         self.cursor.move_cursor_left(count);
-        self.display()
+        self.display_term()
     }
 
     /// Moves the cursor to the right by `count` characters.
     /// The cursor will not go past the end of the buffer.
     pub fn move_cursor_right(&mut self, count: usize) -> io::Result<()> {
         self.cursor.move_cursor_right(cur_buf!(self), count);
-        self.display()
+        self.display_term()
     }
 
     /// Moves the cursor to `pos`. If `pos` is past the end of the buffer, it will be clamped.
     pub fn move_cursor_to(&mut self, pos: usize) -> io::Result<()> {
         self.cursor.move_cursor_to(cur_buf!(self), pos);
-        self.display()
+        self.display_term()
     }
 
     /// Moves the cursor to the start of the line.
     pub fn move_cursor_to_start_of_line(&mut self) -> io::Result<()> {
         self.cursor.move_cursor_to(cur_buf!(self), 0);
-        self.display()
+        self.display_term()
     }
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
         self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
-        self.display()
+        self.display_term()
     }
 
     pub fn curr_char(&self) -> Option<char> {
@@ -706,7 +706,7 @@ impl<'a> Editor<'a> {
     }
 
     /// Override the prompt for incremental search if needed.
-    fn search_prompt(&mut self) -> String {
+    fn get_prompt(&self) -> String {
         if self.is_search() {
             // If we are searching override prompt to search prompt.
             let (hplace, color) = if self.history_subset_index.is_empty() {
@@ -738,8 +738,8 @@ impl<'a> Editor<'a> {
         self.cursor.set_no_eol(no_eol);
     }
 
-    fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
-        let prompt = self.search_prompt();
+    fn display_term_with_autosuggest(&mut self, show_autosuggest: bool) -> io::Result<()> {
+        let prompt = self.get_prompt();
         let buf = cur_buf!(self);
         let is_search = self.is_search();
 
@@ -764,7 +764,7 @@ impl<'a> Editor<'a> {
     }
 
     /// Deletes the displayed prompt and buffer, replacing them with the current prompt and buffer
-    pub fn display(&mut self) -> io::Result<()> {
+    pub fn display_term(&mut self) -> io::Result<()> {
         if self.is_search() && self.buffer_changed {
             // Refresh incremental search.
             let forward = self.forward_search;
@@ -772,7 +772,7 @@ impl<'a> Editor<'a> {
         }
         self.autosuggestion = self.current_autosuggestion();
 
-        self._display(true)
+        self.display_term_with_autosuggest(true)
     }
 
     /// Modifies the prompt prefix.

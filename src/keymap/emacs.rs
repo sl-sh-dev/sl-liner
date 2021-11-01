@@ -50,7 +50,7 @@ impl Emacs {
                 if ed.undo().is_some() {
                     ed.move_cursor_to_end_of_line()
                 } else {
-                    ed.display()
+                    ed.display_term()
                 }
             }
             _ => Ok(()),
