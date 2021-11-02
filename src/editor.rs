@@ -30,7 +30,7 @@ pub struct Editor<'a> {
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
-    // TODO doc
+    //TODO doc
     term: Terminal<'a>,
 
     // The next completion to suggest, or none

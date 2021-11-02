@@ -228,9 +228,8 @@ impl Buffer {
     }
 
     pub fn num_chars(&self) -> usize {
-        //let s: String = self.clone().into();
-        //s.width()
-        self.data.len()
+        let s: String = self.clone().into();
+        s.width()
     }
 
     pub fn num_bytes(&self) -> usize {
@@ -284,7 +283,7 @@ impl Buffer {
     ) -> usize {
         let mut inserted = 0;
         if let Some(text) = self.register.as_ref() {
-            inserted = text.len();
+            inserted = text.iter().cloned().collect::<String>().width();
             if inserted > 0 {
                 if self.num_chars() > start_idx && right {
                     // insert to right of cursor
