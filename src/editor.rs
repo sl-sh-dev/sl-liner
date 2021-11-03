@@ -515,19 +515,20 @@ impl<'a> Editor<'a> {
     ///
     /// Note: it is more efficient to call `insert_chars_after_cursor()` directly.
     pub fn insert_str_after_cursor(&mut self, s: &str) -> io::Result<()> {
-        self.insert_chars_after_cursor(&s.chars().collect::<Vec<char>>()[..])
+        self.cursor.insert_str_after_cursor(cur_buf_mut!(self), s);
+        self.display_term()
     }
 
     /// Inserts a character directly after the cursor, moving the cursor to the right.
     pub fn insert_after_cursor(&mut self, c: char) -> io::Result<()> {
-        self.insert_chars_after_cursor(&[c])
+        self.cursor.insert_char_after_cursor(cur_buf_mut!(self), c);
+        self.display_term()
     }
 
     /// Inserts characters directly after the cursor, moving the cursor to the right.
     pub fn insert_chars_after_cursor(&mut self, cs: &[char]) -> io::Result<()> {
-        {
-            self.cursor.insert(cur_buf_mut!(self), cs);
-        }
+        self.cursor
+            .insert_chars_after_cursor(cur_buf_mut!(self), cs);
         self.display_term()
     }
 

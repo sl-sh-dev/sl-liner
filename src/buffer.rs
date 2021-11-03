@@ -1,7 +1,6 @@
 use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, Write};
 use std::iter::FromIterator;
-use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
@@ -128,11 +127,6 @@ impl Buffer {
             undone_actions: Vec::new(),
             register: None,
         }
-    }
-
-    pub fn len(cs: &[char]) -> usize {
-        let cs: String = cs.iter().collect();
-        UnicodeSegmentation::graphemes(&cs[..], true).count()
     }
 
     pub fn clear_actions(&mut self) {
@@ -297,7 +291,7 @@ impl Buffer {
                             full_text.push(*c);
                         }
                     }
-                    inserted = full_text.len();
+                    inserted *= count;
                     full_text
                 } else {
                     text.to_vec()
@@ -317,9 +311,8 @@ impl Buffer {
             text: text.into(),
         };
         self.insert_action(act);
-        //TODO take this out
         let text: String = text.iter().collect();
-        UnicodeSegmentation::graphemes(&text[..], true).count()
+        text.width()
     }
 
     pub fn insert_action(&mut self, act: Action) {
@@ -676,6 +669,8 @@ mod tests {
 
     #[test]
     fn test_unicode() {
+        use unicode_segmentation::UnicodeSegmentation;
+
         #[derive(Debug, Clone, PartialEq, Eq)]
         enum GraphemeCluster {
             Char(char),

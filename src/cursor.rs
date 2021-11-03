@@ -118,7 +118,31 @@ impl<'a> Cursor<'a> {
         self.char_vec_pos -= moved;
     }
 
-    pub fn insert(&mut self, buf: &mut Buffer, cs: &[char]) {
+    /*
+            //TODO take this out
+    use unicode_segmentation::UnicodeSegmentation;
+            let text: String = text.iter().collect();
+            UnicodeSegmentation::graphemes(&text[..], true).count()
+            [(0, 1)
+            (1, 1)
+            (2, 1)
+            (3, 2)
+            (5, 1)]
+
+             [ 'a' 'b' 'c' "ते", 'd']
+         */
+    pub fn insert_char_after_cursor(&mut self, buf: &mut Buffer, c: char) {
+        let _len = buf.insert(self.char_vec_pos, &[c]);
+        self.char_vec_pos += 1;
+    }
+
+    pub fn insert_str_after_cursor(&mut self, buf: &mut Buffer, s: &str) {
+        let cs = &s.chars().collect::<Vec<char>>()[..];
+        let _len = buf.insert(self.char_vec_pos, cs);
+        self.char_vec_pos += cs.len();
+    }
+
+    pub fn insert_chars_after_cursor(&mut self, buf: &mut Buffer, cs: &[char]) {
         let _len = buf.insert(self.char_vec_pos, cs);
         self.char_vec_pos += cs.len();
     }
