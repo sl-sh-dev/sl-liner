@@ -17,7 +17,8 @@ pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
 
-    //TODO doc
+    // w/ buffer and pos/count directives maintain the location of the terminal's
+    // cursor
     cursor: Cursor<'a>,
 
     // Buffer for the new line (ie. not from editing history)
@@ -30,7 +31,7 @@ pub struct Editor<'a> {
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
-    //TODO doc
+    // Terminal is the interface editor uses to write to the actual terminal.
     term: Terminal<'a>,
 
     // The next completion to suggest, or none

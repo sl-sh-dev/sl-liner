@@ -48,13 +48,18 @@ impl CursorPosition {
     }
 }
 
+/// Cursor (as in the terminal's cursor) exposes various functions that modify the
+/// Buffer (Buffer for new line or for editing history, that's transparent to Cursor)
+/// and maintain the position on the terminal that the actual cursor needs to be
+/// drawn.
 #[derive(Clone)]
 pub struct Cursor<'a> {
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
     // and if `cursor == 1` ten the cursor is after the first char and before the second char.
     char_vec_pos: usize,
-    //TODO doc
+    // function to determine how to split words, returns vector of tuples representing index
+    // and length of word.
     word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
 
     // if set, the cursor will not be allow to move one past the end of the line, this is necessary
@@ -118,19 +123,6 @@ impl<'a> Cursor<'a> {
         self.char_vec_pos -= moved;
     }
 
-    /*
-            //TODO take this out
-    use unicode_segmentation::UnicodeSegmentation;
-            let text: String = text.iter().collect();
-            UnicodeSegmentation::graphemes(&text[..], true).count()
-            [(0, 1)
-            (1, 1)
-            (2, 1)
-            (3, 2)
-            (5, 1)]
-
-             [ 'a' 'b' 'c' "ते", 'd']
-         */
     pub fn insert_char_after_cursor(&mut self, buf: &mut Buffer, c: char) {
         let _len = buf.insert(self.char_vec_pos, &[c]);
         self.char_vec_pos += 1;

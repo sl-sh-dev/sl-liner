@@ -72,6 +72,8 @@ impl Metrics {
     }
 }
 
+/// An interface to simplify writing to and clearing the terminal. This is where most
+/// of the display logic for interfacing with the console library exists.
 pub struct Terminal<'a> {
     out: &'a mut dyn io::Write,
     // The line of the cursor relative to the prompt. 1-indexed.
