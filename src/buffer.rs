@@ -22,7 +22,7 @@ impl Action {
             }
             Action::Remove { start, ref text } => {
                 let text_len = text.len();
-                buf.remove_raw(start, start + text_len).len();
+                buf.remove_raw(start, start + text_len);
                 if text_len > start {
                     Some(0)
                 } else {
@@ -36,7 +36,7 @@ impl Action {
     pub fn undo(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
             Action::Insert { start, ref text } => {
-                buf.remove_raw(start, start + text.len()).len();
+                buf.remove_raw(start, start + text.len());
                 Some(start)
             }
             Action::Remove { start, ref text } => {
@@ -243,9 +243,9 @@ impl Buffer {
         self.data.get(cursor).cloned()
     }
 
-    /// Returns the number of characters removed. Does not register as an action in the undo/redo
+    /// Returns the graphemes removed. Does not register as an action in the undo/redo
     /// buffer or in the buffer's register.
-    pub fn remove_silent(&mut self, start: usize, end: usize) -> Vec<char> {
+    pub fn remove_silent(&mut self, start: usize, end: usize) -> Vec<String> {
         let end = if end >= self.data.len() {
             self.data.len()
         } else {
@@ -256,14 +256,18 @@ impl Buffer {
 
     /// Returns the number of characters removed.
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
-        let s = self.remove_silent(start, end);
-        let num_removed = s.len();
+        let removed = self.remove_silent(start, end);
+        let mut str = String::from("");
+        for x in removed {
+            str += &x;
+        }
+        let chars = str.chars().collect::<Vec<_>>();
         self.push_action(Action::Remove {
             start,
-            text: s.clone(),
+            text: chars.clone(),
         });
-        self.register = Some(s);
-        num_removed
+        self.register = Some(chars);
+        str.width()
     }
 
     /// Insert contents of register to the right or to the left of the provided start index in the
@@ -336,8 +340,9 @@ impl Buffer {
         self.data[start..end].iter().cloned().collect()
     }
 
-    pub fn range_chars(&self, start: usize, end: usize) -> Vec<char> {
-        self.data[start..end].to_owned()
+    pub fn range_chars(&self, start: usize, end: usize) -> Vec<String> {
+        let s = self.data[start..end].iter().collect::<String>();
+        Buffer::graphemes_to_vec(s)
     }
 
     pub fn width(&self) -> Vec<usize> {
@@ -406,8 +411,15 @@ impl Buffer {
         self.register = Some(slice.to_vec());
     }
 
-    fn remove_raw(&mut self, start: usize, end: usize) -> Vec<char> {
-        self.data.drain(start..end).collect()
+    fn graphemes_to_vec(str: String) -> Vec<String> {
+        let graphemes = str.graphemes(true);
+        graphemes.map(String::from).collect::<Vec<String>>()
+    }
+
+    fn remove_raw(&mut self, start: usize, end: usize) -> Vec<String> {
+        let cs = self.data.drain(start..end);
+        let str = cs.as_ref().iter().collect::<String>();
+        Buffer::graphemes_to_vec(str)
     }
 
     fn insert_raw(&mut self, start: usize, text: &[char]) {
