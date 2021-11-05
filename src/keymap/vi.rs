@@ -408,10 +408,11 @@ fn vi_move_word_end(
 
 fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
-    buf.chars()
+    buf.graphemes()
+        .iter()
         .enumerate()
         .skip(start)
-        .filter(|&(_, &c)| c == ch)
+        .filter(|&(_, c)| c as &str == ch.encode_utf8(&mut vec![0u8; 4][..]))
         .nth(count - 1)
         .map(|(i, _)| i)
 }
@@ -419,11 +420,12 @@ fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize
 fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
     let rstart = buf.num_chars() - start;
-    buf.chars()
+    buf.graphemes()
+        .iter()
         .enumerate()
         .rev()
         .skip(rstart)
-        .filter(|&(_, &c)| c == ch)
+        .filter(|&(_, c)| c as &str == ch.encode_utf8(&mut vec![0u8; 4][..]))
         .nth(count - 1)
         .map(|(i, _)| i)
 }
@@ -436,7 +438,8 @@ fn find_char_balance_delim(
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
-    let iter = buf.chars().enumerate().skip(start);
+    let buf_chars = buf.graphemes();
+    let iter = buf_chars.iter().enumerate().skip(start);
     let to_skip = |i| start + i;
     find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
 }
@@ -450,7 +453,8 @@ fn find_char_rev_balance_delim(
 ) -> Option<usize> {
     assert!(count > 0);
     let rstart = buf.num_chars() - start;
-    let iter = buf.chars().enumerate().rev().skip(rstart);
+    let buf_vec = buf.graphemes();
+    let iter = buf_vec.iter().enumerate().rev().skip(rstart);
     let to_skip = |i| buf.num_chars() - rstart - i - 1;
     find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
 }
@@ -466,7 +470,7 @@ fn find_balance_delim<'a, F, I>(
 ) -> Option<usize>
 where
     F: Fn(usize) -> usize,
-    I: Iterator<Item = (usize, &'a char)>,
+    I: Iterator<Item = (usize, &'a String)>,
 {
     let mut count = count;
     let mut balance = 0;
@@ -476,9 +480,9 @@ where
         // close paren, then the close paren must be added to the stack and
         // popped only when another to_find char is found. An idx is returned
         // only when the to_find character is found and the stack is empty.
-        if *c == to_find_opposite {
+        if &c[..] == to_find_opposite.encode_utf8(&mut vec![0u8; 4][..]) {
             balance += 1;
-        } else if *c == to_find {
+        } else if &c[..] == to_find.encode_utf8(&mut vec![0u8; 4][..]) {
             if balance == 0 {
                 if count == 1 {
                     return Some(to_skip(i));

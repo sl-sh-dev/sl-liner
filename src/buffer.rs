@@ -1,6 +1,7 @@
 use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, Write};
 use std::iter::FromIterator;
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
@@ -357,8 +358,10 @@ impl Buffer {
             .collect()
     }
 
-    pub fn chars(&self) -> ::std::slice::Iter<char> {
-        self.data.iter()
+    pub fn graphemes(&self) -> Vec<String> {
+        let s = self.data.iter().collect::<String>();
+        let graphemes = s.graphemes(true);
+        graphemes.map(String::from).collect::<Vec<String>>()
     }
 
     pub fn truncate(&mut self, num: usize) {
@@ -664,5 +667,19 @@ mod tests {
         let mut out: Vec<u8> = vec![];
         buf.print_rest(&mut out, buf2.data.len()).unwrap();
         assert_eq!(out.len(), 4);
+    }
+
+    #[test]
+    fn test_unicode() {
+        use unicode_segmentation::UnicodeSegmentation;
+
+        let s = "नमस्ते";
+        let g = s.graphemes(true).collect::<Vec<&str>>();
+        println!("cool vec: {:?}.", g);
+        let b: &[_] = &["न", "म", "स\u{94d}", "त\u{947}"];
+        assert_eq!(g, b);
+
+        println!("len charvec: {}.", "ते".chars().collect::<Vec<char>>().len());
+        println!("len charvec: {}.", "न".chars().collect::<Vec<char>>().len());
     }
 }
