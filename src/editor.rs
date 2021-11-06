@@ -515,15 +515,19 @@ impl<'a> Editor<'a> {
     pub fn flip_case(&mut self) -> io::Result<()> {
         let str = cur_buf!(self).char_after(self.cursor());
         if let Some(str) = str {
-            let c = str.chars().next();
-            match c {
-                Some(c) if c.is_lowercase() => {
+            let mut c = str.chars();
+            match c.next() {
+                Some(f) if f.is_lowercase() => {
                     self.cursor.delete_after_cursor(cur_buf_mut!(self));
-                    self.insert_str_after_cursor(&*str.to_uppercase())
+                    self.insert_str_after_cursor(
+                        &*(f.to_uppercase().collect::<String>() + c.as_str()),
+                    )
                 }
-                Some(c) if c.is_uppercase() => {
+                Some(f) if f.is_uppercase() => {
                     self.cursor.delete_after_cursor(cur_buf_mut!(self));
-                    self.insert_str_after_cursor(&*str.to_lowercase())
+                    self.insert_str_after_cursor(
+                        &*(f.to_lowercase().collect::<String>() + c.as_str()),
+                    )
                 }
                 _ => self.move_cursor_right(1),
             }

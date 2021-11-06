@@ -118,7 +118,7 @@ impl<'a> Cursor<'a> {
         let moved = buf.remove(start, self.char_vec_pos);
         println!("NUM REMOVED: {}.", moved);
         self.char_vec_pos -= moved;
-    } //TODO testme
+    }
 
     pub fn insert_char_after_cursor(&mut self, buf: &mut Buffer, c: char) {
         let _len = buf.insert(self.char_vec_pos, &[c]);
@@ -265,12 +265,12 @@ mod tests {
     use super::*;
     use crate::get_buffer_words;
     use unicode_segmentation::UnicodeSegmentation;
-    use unicode_width::UnicodeWidthStr;
 
     #[test]
     fn clamp_if_pos_is_past_move() {
         let word_divider_fcn = &Box::new(get_buffer_words);
         let mut cur = Cursor::new(word_divider_fcn);
+
         let mut buf = Buffer::from("01234".to_owned());
         cur.move_cursor_to(&buf, 100);
         assert_eq!(5, cur.char_vec_pos);
@@ -279,7 +279,7 @@ mod tests {
     }
 
     #[test]
-    fn free_female_scientist() {
+    fn test_clear_exit_for_female_scientist() {
         let word_divider_fcn = &Box::new(get_buffer_words);
         let mut cur = Cursor::new(word_divider_fcn);
 
@@ -296,9 +296,13 @@ mod tests {
         full_room.push_str(&male_scientist);
         full_room.push_str(&male_scientist);
         full_room.push_str(&decluttered_room);
+        let f = full_room
+            .graphemes(true)
+            .map(String::from)
+            .collect::<Vec<String>>();
+        println!("str_len: {}, and str: {:?}.", f.len(), f);
 
         let mut buf = Buffer::from(full_room.to_owned());
-        cur.move_cursor_right(&buf, 1);
         cur.move_cursor_right(&buf, 1);
         cur.move_cursor_right(&buf, 1);
         cur.move_cursor_right(&buf, 1);

@@ -259,11 +259,15 @@ impl Buffer {
     /// Returns the graphemes removed. Does not register as an action in the undo/redo
     /// buffer or in the buffer's register.
     pub fn remove_silent(&mut self, start: usize, end: usize) -> Vec<String> {
-        let end = if end >= self.data.len() {
-            self.data.len()
-        } else {
-            end
-        };
+        let len = self
+            .data
+            .iter()
+            .collect::<String>()
+            .graphemes(true)
+            .map(String::from)
+            .collect::<Vec<String>>()
+            .len();
+        let end = if end >= len { len } else { end };
         self.remove_raw(start, end)
     }
 
@@ -432,9 +436,36 @@ impl Buffer {
     }
 
     fn remove_raw(&mut self, start: usize, end: usize) -> Vec<String> {
-        let cs = self.data.drain(start..end);
-        let str = cs.as_ref().iter().collect::<String>();
-        Buffer::graphemes_to_vec(str)
+        //TODO fixme
+        //first turn underlying Vec<char> into  a vec of graphemes.
+        let mut graphemes = self.data
+            .iter()
+            .collect::<String>()
+            .graphemes(true)
+            .map(String::from)
+            .collect::<Vec<String>>();
+        // remove some graphemes
+        let removed = graphemes.drain(start..end);
+        // bind those graphemes to str so it can be returned
+        let str = removed.as_ref().iter()
+            .map(String::from)
+            .collect::<Vec<String>>();
+        // force removal of graphemes in removed from graphemes Vec
+        drop(removed);
+        // turn graphemes Vec<String> into Vec<char> as current
+        // temporary concession storage mechanism.
+        let new_chars = graphemes
+            .iter()
+            .map(|s| s.chars().collect())
+            .collect::<Vec<Vec<char>>>()
+            .into_iter()
+            .flatten()
+            .collect::<Vec<char>>();
+        // truncate existing storage mechanism
+        self.data.truncate(0);
+        // insert new data into existing storage mechanism
+        self.insert_raw(0, &*new_chars);
+        str
     }
 
     fn insert_raw(&mut self, start: usize, text: &[char]) {
