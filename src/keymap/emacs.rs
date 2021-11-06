@@ -1,5 +1,6 @@
 use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io;
+use unicode_width::UnicodeWidthStr;
 
 use crate::buffer::Buffer;
 use crate::cursor::CursorPosition;
@@ -91,15 +92,15 @@ impl Emacs {
         // this last arg fetch.
         if self.last_arg_fetch_index.is_some() {
             let buffer_len = ed.current_buffer().num_chars();
-            if let Some(last_arg_len) = ed.current_buffer().last_arg().map(|x| x.len()) {
-                ed.delete_until(buffer_len - last_arg_len)?;
+            if let Some(last_arg) = ed.current_buffer().last_arg() {
+                ed.delete_until(buffer_len - last_arg.width())?;
             }
         }
 
         // Actually insert it
         let buf: Buffer = ed.history()[history_index].into();
         if let Some(last_arg) = buf.last_arg() {
-            ed.insert_chars_after_cursor(last_arg)?;
+            ed.insert_str_after_cursor(&*last_arg)?;
         }
 
         // Edit the index in case the user does a last arg fetch again.

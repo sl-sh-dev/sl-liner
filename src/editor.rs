@@ -177,7 +177,7 @@ impl<'a> Editor<'a> {
         }
 
         let last_char = cur_buf!(self).last();
-        if last_char == Some(&'\\') {
+        if last_char == Some("\\".to_owned()) {
             let buf = cur_buf_mut!(self);
             buf.push('\n');
             self.cursor.move_cursor_to_end_of_line(buf);
@@ -512,6 +512,26 @@ impl<'a> Editor<'a> {
         }
     }
 
+    pub fn flip_case(&mut self) -> io::Result<()> {
+        let str = cur_buf!(self).char_after(self.cursor());
+        if let Some(str) = str {
+            let c = str.chars().next();
+            match c {
+                Some(c) if c.is_lowercase() => {
+                    self.cursor.delete_after_cursor(cur_buf_mut!(self));
+                    self.insert_str_after_cursor(&*str.to_uppercase())
+                }
+                Some(c) if c.is_uppercase() => {
+                    self.cursor.delete_after_cursor(cur_buf_mut!(self));
+                    self.insert_str_after_cursor(&*str.to_lowercase())
+                }
+                _ => self.move_cursor_right(1),
+            }
+        } else {
+            self.move_cursor_right(1)
+        }
+    }
+
     /// Inserts a string directly after the cursor, moving the cursor to the right.
     ///
     /// Note: it is more efficient to call `insert_chars_after_cursor()` directly.
@@ -631,8 +651,9 @@ impl<'a> Editor<'a> {
         self.display_term()
     }
 
-    pub fn curr_char(&self) -> Option<char> {
+    pub fn curr_char(&self) -> Option<String> {
         let buf = cur_buf!(self);
+        //TODO extract into cursor, maybe hand cursor buffer?
         buf.char_after(self.cursor.char_vec_pos())
     }
 

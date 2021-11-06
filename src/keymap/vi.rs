@@ -225,8 +225,21 @@ impl ViMoveDir {
 }
 
 /// All alphanumeric characters and _ are considered valid for keywords in vi by default.
-fn is_vi_keyword(c: char) -> bool {
-    c == '_' || c.is_alphanumeric()
+fn is_vi_keyword(str: &str) -> bool {
+    let mut ret = false;
+    if str == "_" {
+        ret = true
+    } else if !str.trim().is_empty() {
+        for c in str.chars() {
+            if c.is_alphanumeric() {
+                ret = true;
+            } else {
+                ret = false;
+                break;
+            }
+        }
+    }
+    ret
 }
 
 fn move_word_ws_is_word(ed: &mut Editor, count: usize) -> io::Result<()> {
@@ -268,16 +281,16 @@ fn vi_move_word(
         let buf = ed.current_buffer();
         let mut state = match buf.char_after(cursor) {
             None => break,
-            Some(c) => match c {
-                c if c.is_whitespace() => State::Whitespace,
-                c if is_vi_keyword(c) => State::Keyword,
+            Some(str) => match str {
+                str if str.trim().is_empty() => State::Whitespace,
+                str if is_vi_keyword(&str) => State::Keyword,
                 _ => State::NonKeyword,
             },
         };
 
         while direction.advance(&mut cursor, buf.num_chars()) {
-            let c = match buf.char_after(cursor) {
-                Some(c) => c,
+            let str = match buf.char_after(cursor) {
+                Some(str) => str,
                 _ => break 'repeat,
             };
 
@@ -288,32 +301,32 @@ fn vi_move_word(
             // increments one more time. The default behavior just cycles
             // through Whitespace.
             match state {
-                State::Whitespace => match c {
-                    c if c.is_whitespace() => {}
+                State::Whitespace => match str {
+                    str if str.trim().is_empty() => {}
                     _ => {
                         break;
                     }
                 },
-                State::Keyword => match c {
-                    c if c.is_whitespace() => {
+                State::Keyword => match str {
+                    str if str.trim().is_empty() => {
                         if ws_included_in_count {
                             break;
                         } else {
                             state = State::Whitespace
                         }
                     }
-                    c if move_mode == ViMoveMode::Keyword && !is_vi_keyword(c) => break,
+                    str if move_mode == ViMoveMode::Keyword && !is_vi_keyword(&str) => break,
                     _ => {}
                 },
-                State::NonKeyword => match c {
-                    c if c.is_whitespace() => {
+                State::NonKeyword => match str {
+                    str if str.trim().is_empty() => {
                         if ws_included_in_count {
                             break;
                         } else {
                             state = State::Whitespace
                         }
                     }
-                    c if move_mode == ViMoveMode::Keyword && is_vi_keyword(c) => break,
+                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(&str) => break,
                     _ => {}
                 },
             }
@@ -364,17 +377,17 @@ fn vi_move_word_end(
         let mut state = State::Whitespace;
 
         while direction.advance(&mut cursor, buf.num_chars()) {
-            let c = match buf.char_after(cursor) {
+            let str = match buf.char_after(cursor) {
                 Some(c) => c,
                 _ => break 'repeat,
             };
 
             match state {
-                State::Whitespace => match c {
+                State::Whitespace => match str {
                     // skip initial whitespace
-                    c if c.is_whitespace() => {}
+                    str if str.trim().is_empty() => {}
                     // if we are in keyword mode and found a keyword, stop on word
-                    c if move_mode == ViMoveMode::Keyword && is_vi_keyword(c) => {
+                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(&str) => {
                         state = State::EndOnWord;
                     }
                     // not in keyword mode, stop on whitespace
@@ -386,15 +399,15 @@ fn vi_move_word_end(
                         state = State::EndOnOther;
                     }
                 },
-                State::EndOnWord if !is_vi_keyword(c) => {
+                State::EndOnWord if !is_vi_keyword(&str) => {
                     direction.go_back(&mut cursor, buf.num_chars());
                     break;
                 }
-                State::EndOnWhitespace if c.is_whitespace() => {
+                State::EndOnWhitespace if str.trim().is_empty() => {
                     direction.go_back(&mut cursor, buf.num_chars());
                     break;
                 }
-                State::EndOnOther if c.is_whitespace() || is_vi_keyword(c) => {
+                State::EndOnOther if str.trim().is_empty() || is_vi_keyword(&str) => {
                     direction.go_back(&mut cursor, buf.num_chars());
                     break;
                 }
@@ -412,7 +425,7 @@ fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize
         .iter()
         .enumerate()
         .skip(start)
-        .filter(|&(_, c)| c as &str == ch.encode_utf8(&mut vec![0u8; 4][..]))
+        .filter(|&(_, c)| c as &str == ch.to_string())
         .nth(count - 1)
         .map(|(i, _)| i)
 }
@@ -425,7 +438,7 @@ fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<u
         .enumerate()
         .rev()
         .skip(rstart)
-        .filter(|&(_, c)| c as &str == ch.encode_utf8(&mut vec![0u8; 4][..]))
+        .filter(|&(_, c)| c as &str == ch.to_string())
         .nth(count - 1)
         .map(|(i, _)| i)
 }
@@ -480,9 +493,9 @@ where
         // close paren, then the close paren must be added to the stack and
         // popped only when another to_find char is found. An idx is returned
         // only when the to_find character is found and the stack is empty.
-        if &c[..] == to_find_opposite.encode_utf8(&mut vec![0u8; 4][..]) {
+        if c[..] == to_find_opposite.to_string() {
             balance += 1;
-        } else if &c[..] == to_find.encode_utf8(&mut vec![0u8; 4][..]) {
+        } else if c[..] == to_find.to_string() {
             if balance == 0 {
                 if count == 1 {
                     return Some(to_skip(i));
@@ -1111,23 +1124,7 @@ impl Vi {
 
                         self.set_mode(Tilde, ed)?;
                         for _ in 0..self.move_count_right(ed) {
-                            match ed.current_buffer().char_after(ed.cursor()) {
-                                Some(c) if c.is_lowercase() => {
-                                    ed.delete_after_cursor()?;
-                                    for c in c.to_uppercase() {
-                                        ed.insert_after_cursor(c)?;
-                                    }
-                                }
-                                Some(c) if c.is_uppercase() => {
-                                    ed.delete_after_cursor()?;
-                                    for c in c.to_lowercase() {
-                                        ed.insert_after_cursor(c)?;
-                                    }
-                                }
-                                _ => {
-                                    ed.move_cursor_right(1)?;
-                                }
-                            }
+                            ed.flip_case()?;
                         }
                         self.pop_mode(ed)?;
                         Ok(())
@@ -1508,7 +1505,7 @@ impl Vi {
             // cursor. For analogous reasons 'di(' does nothing to this string:
             //     "(aa|a|a(bbbb)cccc"
             // To ensure this behavior, balancing logic for beg, and end must be applied.
-            if curr_char == end {
+            if curr_char.eq(&end.to_string()) {
                 let is_behind;
                 if beg != end {
                     is_behind = find_char_rev_balance_delim(buf, start, beg, end, count);
@@ -1519,7 +1516,7 @@ impl Vi {
                     behind = is_behind;
                     ahead = Some(start);
                 }
-            } else if curr_char == beg {
+            } else if curr_char.eq(&beg.to_string()) {
                 let is_ahead;
                 if beg != end {
                     is_ahead = find_char_balance_delim(buf, start + 1, end, beg, count);

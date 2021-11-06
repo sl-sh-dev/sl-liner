@@ -215,11 +215,13 @@ impl Buffer {
         self.undone_actions.clear();
     }
 
-    pub fn last_arg(&self) -> Option<&[char]> {
+    pub fn last_arg(&self) -> Option<String> {
+        //TODO use unicode whitespace functions?
         self.data
             .split(|&c| c == ' ')
             .filter(|s| !s.is_empty())
             .last()
+            .map(|chars| chars.iter().collect())
     }
 
     pub fn num_chars(&self) -> usize {
@@ -231,16 +233,22 @@ impl Buffer {
         s.len()
     }
 
-    pub fn char_before(&self, cursor: usize) -> Option<char> {
-        if cursor == 0 {
-            None
-        } else {
-            self.data.get(cursor - 1).cloned()
+    fn to_str(c: Option<&char>) -> Option<String> {
+        let mut str = None;
+        if let Some(c) = c {
+            str = Some(c.to_string())
         }
+        str
     }
 
-    pub fn char_after(&self, cursor: usize) -> Option<char> {
-        self.data.get(cursor).cloned()
+    pub fn char_before(&self, cursor: usize) -> Option<String> {
+        let c = self.data.get(cursor - 1);
+        Self::to_str(c)
+    }
+
+    pub fn char_after(&self, cursor: usize) -> Option<String> {
+        let c = self.data.get(cursor);
+        Self::to_str(c)
     }
 
     /// Returns the graphemes removed. Does not register as an action in the undo/redo
@@ -464,13 +472,27 @@ impl Buffer {
     }
 
     /// Returns the first char of the buffer or None if empty.
-    pub fn first(&self) -> Option<&char> {
-        self.data.first()
+    pub fn first(&self) -> Option<String> {
+        let mut ret = None;
+        if !self.data.is_empty() {
+            let str = self.data.iter().collect::<String>();
+            if let Some(str) = str.graphemes(true).next() {
+                ret = Some(String::from(str))
+            }
+        }
+        ret
     }
 
     /// Returns the last char of the buffer or None if empty.
-    pub fn last(&self) -> Option<&char> {
-        self.data.last()
+    pub fn last(&self) -> Option<String> {
+        let mut ret = None;
+        if !self.data.is_empty() {
+            let str = self.data.iter().collect::<String>();
+            if let Some(str) = str.graphemes(true).rev().next() {
+                ret = Some(String::from(str))
+            }
+        }
+        ret
     }
 
     /// Push ch onto the endo of the buffer.

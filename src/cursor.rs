@@ -228,9 +228,9 @@ impl<'a> Cursor<'a> {
         let num_chars = buf.num_chars();
         let cursor_pos = self.char_vec_pos;
         if num_chars > 0 && cursor_pos != 0 {
-            let c = buf.char_before(cursor_pos);
-            if let Some(c) = c {
-                return c.is_whitespace();
+            let str = buf.char_before(cursor_pos);
+            if let Some(str) = str {
+                return str.trim().is_empty();
             }
         }
         true
