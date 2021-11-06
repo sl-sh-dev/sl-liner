@@ -216,12 +216,13 @@ impl Buffer {
     }
 
     pub fn last_arg(&self) -> Option<String> {
-        //TODO use unicode whitespace functions?
         self.data
-            .split(|&c| c == ' ')
-            .filter(|s| !s.is_empty())
+            .iter()
+            .collect::<String>()
+            .split_word_bounds()
+            .filter(|s| !s.trim().is_empty())
             .last()
-            .map(|chars| chars.iter().collect())
+            .map(String::from)
     }
 
     pub fn num_chars(&self) -> usize {
