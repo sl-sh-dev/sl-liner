@@ -354,7 +354,7 @@ impl Buffer {
 
     pub fn range_chars(&self, start: usize, end: usize) -> Vec<String> {
         let s = self.data[start..end].iter().collect::<String>();
-        Buffer::graphemes_to_vec(s)
+        Buffer::str_to_graphemes_vec(s)
     }
 
     pub fn width(&self) -> Vec<usize> {
@@ -423,22 +423,31 @@ impl Buffer {
         self.register = Some(slice.to_vec());
     }
 
-    fn graphemes_to_vec(str: String) -> Vec<String> {
+    fn chars_to_graphemes_vec(chars: &[char]) -> Vec<String> {
+        Buffer::str_to_graphemes_vec(chars.iter()
+            .collect::<String>())
+
+    }
+
+    fn str_to_graphemes_vec(str: String) -> Vec<String> {
         let graphemes = str.graphemes(true);
         graphemes.map(String::from).collect::<Vec<String>>()
+    }
+
+    fn graphemes_to_char_vec(strs: &Vec<String>) -> Vec<char> {
+        strs.iter()
+            .map(|s| s.chars().collect())
+            .collect::<Vec<Vec<char>>>()
+            .into_iter()
+            .flatten()
+            .collect::<Vec<char>>()
     }
 
     fn remove_raw(&mut self, start: usize, end: usize) -> Vec<String> {
         //TODO fixme
         if !self.data.is_empty() {
             //first turn underlying Vec<char> into  a vec of graphemes.
-            let mut graphemes = self
-                .data
-                .iter()
-                .collect::<String>()
-                .graphemes(true)
-                .map(String::from)
-                .collect::<Vec<String>>();
+            let mut graphemes = Buffer::chars_to_graphemes_vec(&self.data);
             // remove some graphemes
             let removed = graphemes.drain(start..end);
             // bind those graphemes to str so it can be returned
@@ -451,17 +460,9 @@ impl Buffer {
             drop(removed);
             // turn graphemes Vec<String> into Vec<char> as current
             // temporary concession storage mechanism.
-            let new_chars = graphemes
-                .iter()
-                .map(|s| s.chars().collect())
-                .collect::<Vec<Vec<char>>>()
-                .into_iter()
-                .flatten()
-                .collect::<Vec<char>>();
-            // truncate existing storage mechanism
-            self.data.truncate(0);
-            // insert new data into existing storage mechanism
-            self.insert_raw(0, &*new_chars);
+            let new_chars = Buffer::graphemes_to_char_vec(&graphemes);
+            // overwrite with new buffer
+            self.data = new_chars;
             str
         } else {
             vec![]
@@ -469,24 +470,20 @@ impl Buffer {
     }
 
     fn insert_raw(&mut self, start: usize, text: &[char]) {
-        let mut start_idx = 0;
-        if !self.data.is_empty() {
-            let indices = self.data.iter().collect::<String>();
-            {
-                let indices = indices
-                    .grapheme_indices(true)
-                    .into_iter()
-                    .collect::<Vec<(usize, &str)>>();
-                if let Some(idx) = indices.get(start) {
-                    start_idx = idx.0
-                } else {
-                    start_idx = self.data.len()
-                }
+            let graphemes = Buffer::chars_to_graphemes_vec(&self.data);
+            let mut new_graphemes = Buffer::chars_to_graphemes_vec(text);
+            let mut new_data: Vec<String> = Vec::with_capacity(graphemes.len() + new_graphemes.len());
+            let mut start_idx = start;
+            if start >= graphemes.len() {
+                start_idx = graphemes.len();
             }
-        }
-        for (i, &c) in text.iter().enumerate() {
-            self.data.insert(start_idx + i, c)
-        }
+            let (front, back) = graphemes.split_at(start_idx);
+            new_data.append(&mut front.iter().map(String::from).collect::<Vec<String>>());
+            new_data.append(&mut new_graphemes);
+            new_data.append(&mut back.iter().map(String::from).collect::<Vec<String>>());
+            let new_chars = Buffer::graphemes_to_char_vec(&new_data);
+            // overwrite with new buffer
+            self.data = new_chars;
     }
 
     /// Check if the other buffer starts with the same content as this one.

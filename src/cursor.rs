@@ -307,6 +307,39 @@ mod tests {
     }
 
     #[test]
+    fn test_insert_chars_between_graphemes() {
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+
+        let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
+        let useful_tools = "\u{1f5a5}\u{fe0f}\u{1d4e2}\u{2aff} \u{1d05e} \
+        \u{14ab}\u{1fd8}\u{2a4f}\u{2b31}\u{256d}\u{1f5a5}\u{fe0f}";
+        let expected = format!("{}{}{}", female_technologist, useful_tools, female_technologist);
+        let mut buf = Buffer::from(format!("{}{}", female_technologist, female_technologist));
+
+        let cs = useful_tools.chars().into_iter().collect::<Vec<char>>();
+        cur.move_cursor_right(&buf, 1);
+        cur.insert_chars_after_cursor(&mut buf, &cs[..]);
+        assert_eq!(expected, String::from(buf));
+    }
+
+    #[test]
+    fn test_insert_chars_before_cursor() {
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+
+        let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
+        let useful_tools = "\u{1f5a5}\u{fe0f}\u{1d4e2}\u{2aff} \u{1d05e} \
+        \u{14ab}\u{1fd8}\u{2a4f}\u{2b31}\u{256d}\u{1f5a5}\u{fe0f}";
+        let expected = format!("{}{}", useful_tools, female_technologist);
+        let mut buf = Buffer::from(female_technologist);
+
+        let cs = useful_tools.chars().into_iter().collect::<Vec<char>>();
+        cur.insert_chars_after_cursor(&mut buf, &cs[..]);
+        assert_eq!(expected, String::from(buf));
+    }
+
+    #[test]
     fn test_insert_chars_after_cursor() {
         let word_divider_fcn = &Box::new(get_buffer_words);
         let mut cur = Cursor::new(word_divider_fcn);
@@ -332,5 +365,17 @@ mod tests {
         cur.char_vec_pos = 8;
         cur.pre_display_adjustment(&buf);
         assert_eq!(5, cur.char_vec_pos)
+    }
+
+    #[test]
+    fn test_yank_and_paste() {
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+
+        let mut buf = Buffer::from("hello".to_owned());
+        cur.move_cursor_to(&buf, 0);
+        cur.yank_all_after_cursor(&mut buf);
+        cur.insert_around(&mut buf, true, 1);
+        assert_eq!(String::from("hhelloello"), String::from(buf));
     }
 }

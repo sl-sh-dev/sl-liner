@@ -122,8 +122,9 @@ impl<'a> Editor<'a> {
 
         if !ed.new_buf.is_empty() {
             ed.move_cursor_to_end_of_line()?;
+        } else {
+            ed.display_term()?;
         }
-        ed.display_term()?;
         Ok(ed)
     }
 
@@ -1012,11 +1013,32 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        println!("char vec pos: {}.", ed.cursor());
         ed.move_cursor_left(1).unwrap();
 
         ed.delete_until_inclusive(1).unwrap();
         assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "r");
+    }
+
+    #[test]
+    fn test_cursor_when_init_buffer_is_not_empty() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let buffer = Buffer::from("\u{1f469}\u{200d}\u{1f4bb} start here_".to_owned());
+        let mut ed = Editor::new_with_init_buffer(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+            buffer,
+        )
+            .unwrap();
+        ed.insert_str_after_cursor("right").unwrap();
+        assert_eq!(ed.cursor(), 18);
+        assert_eq!("\u{1f469}\u{200d}\u{1f4bb} start here_right", String::from(ed));
     }
 }
