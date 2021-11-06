@@ -226,7 +226,11 @@ impl Buffer {
     }
 
     pub fn num_chars(&self) -> usize {
-        self.data.len()
+        let s: String = self.clone().into();
+        s.graphemes(true)
+            .map(String::from)
+            .collect::<Vec<String>>()
+            .len()
     }
 
     pub fn num_bytes(&self) -> usize {
@@ -276,7 +280,10 @@ impl Buffer {
             text: chars.clone(),
         });
         self.register = Some(chars);
-        str.width()
+        str.graphemes(true)
+            .map(String::from)
+            .collect::<Vec<String>>()
+            .len()
     }
 
     /// Insert contents of register to the right or to the left of the provided start index in the

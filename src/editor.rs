@@ -403,7 +403,7 @@ impl<'a> Editor<'a> {
         ignore_space_before_cursor: bool,
     ) -> io::Result<()> {
         if let Some((start, _)) = self.get_word_before_cursor(ignore_space_before_cursor) {
-            self.cursor.remove(cur_buf_mut!(self), start);
+            self.cursor.delete_until_cursor(cur_buf_mut!(self), start);
         }
         self.display_term()
     }
@@ -962,7 +962,7 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor.set_char_vec_pos(0);
+        ed.move_cursor_to_start_of_line().unwrap();
 
         ed.delete_until(5).unwrap();
         assert_eq!(ed.cursor(), 0);
@@ -985,7 +985,7 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor.set_char_vec_pos(4);
+        ed.move_cursor_left(1).unwrap();
 
         ed.delete_until(1).unwrap();
         assert_eq!(ed.cursor(), 1);
@@ -1008,7 +1008,8 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor.set_char_vec_pos(4);
+        println!("char vec pos: {}.", ed.cursor());
+        ed.move_cursor_left(1).unwrap();
 
         ed.delete_until_inclusive(1).unwrap();
         assert_eq!(ed.cursor(), 1);

@@ -36,6 +36,7 @@ fn test_get_cursor_position() {
         ("abc  abc", 8, OnWordRightEdge(1)),
         (" a", 0, InSpace(None, Some(0))),
         ("a ", 2, InSpace(Some(0), None)),
+        ("", 0, InSpace(None, None)),
     ];
 
     for t in tests {
