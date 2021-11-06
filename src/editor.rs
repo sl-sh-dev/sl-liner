@@ -689,7 +689,7 @@ impl<'a> Editor<'a> {
                         buf.copy_buffer(x);
                     }
                     Some(ref x) => {
-                        buf.insert_from_buffer(x);
+                        buf.append_buffer(x);
                     }
                     None => (),
                 }

@@ -333,10 +333,9 @@ impl Buffer {
         self.push_action(act);
     }
 
-    // XXX rename, too confusing
-    pub fn insert_from_buffer(&mut self, other: &Buffer) -> usize {
+    pub fn append_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.data.len();
-        self.insert(start, &other.data[start..])
+        self.insert(start, &other.data[..])
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
@@ -582,6 +581,35 @@ mod tests {
     }
 
     #[test]
+    fn test_revert_undo_group() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.start_undo_group();
+        buf.remove(0, 1);
+        buf.remove(0, 1);
+        buf.remove(0, 1);
+        buf.end_undo_group();
+        assert_eq!(String::from(buf.clone()), "defg");
+        assert!(buf.revert());
+        assert_eq!(String::from(buf), "");
+    }
+
+    #[test]
+    fn test_clear_undo_group() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.start_undo_group();
+        buf.remove(0, 1);
+        buf.remove(0, 1);
+        buf.remove(0, 1);
+        buf.end_undo_group();
+        buf.clear_actions();
+        buf.revert();
+        assert!(buf.undo().is_none());
+        assert_eq!(String::from(buf), "defg");
+    }
+
+    #[test]
     fn test_undo_group() {
         let mut buf = Buffer::new();
         buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
@@ -667,6 +695,25 @@ mod tests {
     }
 
     #[test]
+    fn test_partial_eq() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        let mut buf2 = Buffer::new();
+        buf2.insert(0, &['x', 'y', 'z']);
+        assert_eq!(buf.eq(&buf2), false);
+        let mut buf3 = Buffer::new();
+        buf3.insert(0, &['x', 'y', 'z']);
+        assert_eq!(buf2.eq(&buf3), true);
+    }
+
+    #[test]
+    fn test_buffer_to_string_ignore_newline() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['h', 'e', '\\', '\n', 'l', 'l', 'o']);
+        assert_eq!("hello".to_owned(), String::from(buf));
+    }
+
+    #[test]
     fn test_contains() {
         let mut buf = Buffer::new();
         buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
@@ -679,6 +726,8 @@ mod tests {
         let mut buf2 = Buffer::new();
         buf2.insert(0, &['e', 'f', 'g']);
         assert_eq!(buf.contains(&buf2), true);
+        let empty_buf = Buffer::default();
+        assert_eq!(buf.contains(&empty_buf), false);
     }
 
     #[test]
@@ -694,6 +743,20 @@ mod tests {
     }
 
     #[test]
+    fn test_print() {
+        let mut buf = Buffer::new();
+        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        let mut out: Vec<u8> = vec![];
+        buf.print(&mut out).unwrap();
+        assert_eq!(out.len(), 7);
+        let mut str = String::new();
+        for x in out {
+            str.push(x as char);
+        }
+        assert_eq!(str, String::from("abcdefg"));
+    }
+
+    #[test]
     fn test_print_rest() {
         let mut buf = Buffer::new();
         buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
@@ -705,16 +768,47 @@ mod tests {
     }
 
     #[test]
-    fn test_unicode() {
-        use unicode_segmentation::UnicodeSegmentation;
+    fn test_append() {
+        let orig = String::from("hello string स्ते");
+        let mut buf0 = Buffer::from(orig.clone());
+        let append = "स्तेa";
+        let buf1 = Buffer::from(append);
+        buf0.append_buffer(&buf1);
+        assert_eq!(Buffer::from(orig + append), buf0);
+    }
 
-        let s = "नमस्ते";
-        let g = s.graphemes(true).collect::<Vec<&str>>();
-        println!("cool vec: {:?}.", g);
-        let b: &[_] = &["न", "म", "स\u{94d}", "त\u{947}"];
-        assert_eq!(g, b);
+    #[test]
+    fn test_first() {
+        let s = "स्ते hello string";
+        let buf = Buffer::from(s);
+        let first = buf.first();
+        assert!(first.is_some());
+        let s = "स्";
+        assert_eq!(String::from(s), first.unwrap());
+    }
 
-        println!("len charvec: {}.", "ते".chars().collect::<Vec<char>>().len());
-        println!("len charvec: {}.", "न".chars().collect::<Vec<char>>().len());
+    #[test]
+    fn test_push() {
+        let s = "hello string स्ते";
+        let mut buf = Buffer::from(s);
+        buf.push('a');
+        let last_arg = buf.last_arg();
+        assert!(last_arg.is_some());
+        let s = "स्तेa";
+        assert_eq!(String::from(s), last_arg.unwrap());
+        let buf = Buffer::from(s);
+        let v = buf.as_bytes();
+        assert_eq!(
+            vec![224, 164, 184, 224, 165, 141, 224, 164, 164, 224, 165, 135, 97],
+            v
+        );
+    }
+
+    #[test]
+    fn test_range_chars() {
+        let orig = "(“न” “म” “स्” “ते”)";
+        let buf = Buffer::from(orig);
+        let trim = "(“न” “म” “स्” “";
+        assert_eq!(Buffer::from(trim).graphemes(), buf.range_chars(0, 15));
     }
 }
