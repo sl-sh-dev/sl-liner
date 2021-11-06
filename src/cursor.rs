@@ -114,27 +114,30 @@ impl<'a> Cursor<'a> {
         buf.truncate(0);
     }
 
+    //TODO issue:
+    // because things can come in a character at a time, e.g. technologist
+    // emoji care needs to be taken as to when/how to get a valid
+    // char position.
     pub fn delete_until_cursor(&mut self, buf: &mut Buffer, start: usize) {
         let moved = buf.remove(start, self.char_vec_pos);
-        println!("NUM REMOVED: {}.", moved);
         self.char_vec_pos -= moved;
     }
 
     pub fn insert_char_after_cursor(&mut self, buf: &mut Buffer, c: char) {
-        let _len = buf.insert(self.char_vec_pos, &[c]);
-        self.char_vec_pos += 1;
+        let len = buf.insert(self.char_vec_pos, &[c]);
+        self.char_vec_pos += len;
     }
 
     pub fn insert_str_after_cursor(&mut self, buf: &mut Buffer, s: &str) {
         let cs = &s.chars().collect::<Vec<char>>()[..];
-        let _len = buf.insert(self.char_vec_pos, cs);
-        self.char_vec_pos += cs.len();
+        let len = buf.insert(self.char_vec_pos, cs);
+        self.char_vec_pos += len;
     }
 
     pub fn insert_chars_after_cursor(&mut self, buf: &mut Buffer, cs: &[char]) {
-        let _len = buf.insert(self.char_vec_pos, cs);
-        self.char_vec_pos += cs.len();
-    } //TODO testme
+        let len = buf.insert(self.char_vec_pos, cs);
+        self.char_vec_pos += len;
+    }
 
     pub fn delete_before_cursor(&mut self, buf: &mut Buffer) {
         if self.char_vec_pos > 0 {
@@ -250,7 +253,7 @@ impl<'a> Cursor<'a> {
         let buf_num_chars = buf.num_chars();
         // Don't let the cursor go over the end!
         if buf_num_chars < self.char_vec_pos {
-            self.char_vec_pos = buf_num_chars; //TODO testme
+            self.char_vec_pos = buf_num_chars;
         }
 
         // Can't move past the last character in vi normal mode
@@ -264,10 +267,9 @@ impl<'a> Cursor<'a> {
 mod tests {
     use super::*;
     use crate::get_buffer_words;
-    use unicode_segmentation::UnicodeSegmentation;
 
     #[test]
-    fn clamp_if_pos_is_past_move() {
+    fn test_clamp_if_pos_is_past_move() {
         let word_divider_fcn = &Box::new(get_buffer_words);
         let mut cur = Cursor::new(word_divider_fcn);
 
@@ -289,24 +291,46 @@ mod tests {
         let mut decluttered_room = String::new();
         decluttered_room.push_str(&female_scientist);
         decluttered_room.push_str(&male_scientist);
-        println!("decluttered room: {:?}.", decluttered_room);
 
         let mut full_room = String::new();
         full_room.push_str(&male_scientist);
         full_room.push_str(&male_scientist);
         full_room.push_str(&male_scientist);
         full_room.push_str(&decluttered_room);
-        let f = full_room
-            .graphemes(true)
-            .map(String::from)
-            .collect::<Vec<String>>();
-        println!("str_len: {}, and str: {:?}.", f.len(), f);
-
         let mut buf = Buffer::from(full_room.to_owned());
+
         cur.move_cursor_right(&buf, 1);
         cur.move_cursor_right(&buf, 1);
         cur.move_cursor_right(&buf, 1);
         cur.delete_until_cursor(&mut buf, 0);
         assert_eq!(decluttered_room.to_owned(), String::from(buf));
+    }
+
+    #[test]
+    fn test_insert_chars_after_cursor() {
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+
+        let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
+        let useful_tools = "\u{1f5a5}\u{fe0f}\u{1d4e2}\u{2aff} \u{1d05e} \
+        \u{14ab}\u{1fd8}\u{2a4f}\u{2b31}\u{256d}\u{1f5a5}\u{fe0f}";
+        let expected = format!("{}{}", female_technologist, useful_tools);
+        let mut buf = Buffer::from(female_technologist);
+
+        let cs = useful_tools.chars().into_iter().collect::<Vec<char>>();
+        cur.move_cursor_to_end_of_line(&buf);
+        cur.insert_chars_after_cursor(&mut buf, &cs[..]);
+        assert_eq!(expected, String::from(buf));
+    }
+
+    #[test]
+    fn test_clamp_pre_display_adjustments() {
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+
+        let buf = Buffer::from("hello".to_owned());
+        cur.char_vec_pos = 8;
+        cur.pre_display_adjustment(&buf);
+        assert_eq!(5, cur.char_vec_pos)
     }
 }

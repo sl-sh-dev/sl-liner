@@ -7647,6 +7647,41 @@ mod tests {
     }
 
     #[test]
+    fn test_yank_and_put_back() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("abc defg").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('$'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 7);
+        assert_eq!(String::from(ed), "abc defgabc defg");
+    }
+
+    #[test]
     fn test_delete_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();

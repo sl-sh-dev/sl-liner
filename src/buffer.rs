@@ -227,10 +227,7 @@ impl Buffer {
 
     pub fn num_chars(&self) -> usize {
         let s: String = self.clone().into();
-        s.graphemes(true)
-            .map(String::from)
-            .collect::<Vec<String>>()
-            .len()
+        s.graphemes(true).map(String::from).count()
     }
 
     pub fn num_bytes(&self) -> usize {
@@ -265,8 +262,7 @@ impl Buffer {
             .collect::<String>()
             .graphemes(true)
             .map(String::from)
-            .collect::<Vec<String>>()
-            .len();
+            .count();
         let end = if end >= len { len } else { end };
         self.remove_raw(start, end)
     }
@@ -284,10 +280,7 @@ impl Buffer {
             text: chars.clone(),
         });
         self.register = Some(chars);
-        str.graphemes(true)
-            .map(String::from)
-            .collect::<Vec<String>>()
-            .len()
+        str.graphemes(true).map(String::from).count()
     }
 
     /// Insert contents of register to the right or to the left of the provided start index in the
@@ -336,7 +329,7 @@ impl Buffer {
         };
         self.insert_action(act);
         let text: String = text.iter().collect();
-        text.width()
+        text.graphemes(true).count()
     }
 
     pub fn insert_action(&mut self, act: Action) {
@@ -437,40 +430,62 @@ impl Buffer {
 
     fn remove_raw(&mut self, start: usize, end: usize) -> Vec<String> {
         //TODO fixme
-        //first turn underlying Vec<char> into  a vec of graphemes.
-        let mut graphemes = self.data
-            .iter()
-            .collect::<String>()
-            .graphemes(true)
-            .map(String::from)
-            .collect::<Vec<String>>();
-        // remove some graphemes
-        let removed = graphemes.drain(start..end);
-        // bind those graphemes to str so it can be returned
-        let str = removed.as_ref().iter()
-            .map(String::from)
-            .collect::<Vec<String>>();
-        // force removal of graphemes in removed from graphemes Vec
-        drop(removed);
-        // turn graphemes Vec<String> into Vec<char> as current
-        // temporary concession storage mechanism.
-        let new_chars = graphemes
-            .iter()
-            .map(|s| s.chars().collect())
-            .collect::<Vec<Vec<char>>>()
-            .into_iter()
-            .flatten()
-            .collect::<Vec<char>>();
-        // truncate existing storage mechanism
-        self.data.truncate(0);
-        // insert new data into existing storage mechanism
-        self.insert_raw(0, &*new_chars);
-        str
+        if !self.data.is_empty() {
+            //first turn underlying Vec<char> into  a vec of graphemes.
+            let mut graphemes = self
+                .data
+                .iter()
+                .collect::<String>()
+                .graphemes(true)
+                .map(String::from)
+                .collect::<Vec<String>>();
+            // remove some graphemes
+            let removed = graphemes.drain(start..end);
+            // bind those graphemes to str so it can be returned
+            let str = removed
+                .as_ref()
+                .iter()
+                .map(String::from)
+                .collect::<Vec<String>>();
+            // force removal of graphemes in removed from graphemes Vec
+            drop(removed);
+            // turn graphemes Vec<String> into Vec<char> as current
+            // temporary concession storage mechanism.
+            let new_chars = graphemes
+                .iter()
+                .map(|s| s.chars().collect())
+                .collect::<Vec<Vec<char>>>()
+                .into_iter()
+                .flatten()
+                .collect::<Vec<char>>();
+            // truncate existing storage mechanism
+            self.data.truncate(0);
+            // insert new data into existing storage mechanism
+            self.insert_raw(0, &*new_chars);
+            str
+        } else {
+            vec![]
+        }
     }
 
     fn insert_raw(&mut self, start: usize, text: &[char]) {
+        let mut start_idx = 0;
+        if !self.data.is_empty() {
+            let indices = self.data.iter().collect::<String>();
+            {
+                let indices = indices
+                    .grapheme_indices(true)
+                    .into_iter()
+                    .collect::<Vec<(usize, &str)>>();
+                if let Some(idx) = indices.get(start) {
+                    start_idx = idx.0
+                } else {
+                    start_idx = self.data.len()
+                }
+            }
+        }
         for (i, &c) in text.iter().enumerate() {
-            self.data.insert(start + i, c)
+            self.data.insert(start_idx + i, c)
         }
     }
 
