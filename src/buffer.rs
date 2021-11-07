@@ -2,7 +2,6 @@ use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, Write};
 use std::iter::FromIterator;
 use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
 #[derive(Debug, Clone)]
@@ -21,7 +20,10 @@ impl Action {
                 Some(start)
             }
             Action::Remove { start, ref text } => {
-                let text_len = Buffer::chars_to_graphemes_vec(text).len();
+                let str = text.iter().collect::<String>();
+
+                //TODO fixme avoid char array
+                let text_len = Buffer::str_to_graphemes_vec(&str).len();
                 buf.remove_raw(start, start + text_len);
                 if text_len > start {
                     Some(0)
@@ -36,7 +38,10 @@ impl Action {
     pub fn undo(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
             Action::Insert { start, ref text } => {
-                let text_len = Buffer::chars_to_graphemes_vec(text).len();
+
+                //TODO fixme avoid char array
+                let str = text.iter().collect::<String>();
+                let text_len = Buffer::str_to_graphemes_vec(&str).len();
                 buf.remove_raw(start, start + text_len);
                 Some(start)
             }
@@ -54,7 +59,7 @@ impl Action {
 /// It keeps track of each action performed on it for use with undo/redo.
 #[derive(Debug, Clone)]
 pub struct Buffer {
-    data: Vec<char>,
+    data: String,
     actions: Vec<Action>,
     undone_actions: Vec<Action>,
     register: Option<Vec<char>>,
@@ -70,7 +75,9 @@ impl Eq for Buffer {}
 impl From<Buffer> for String {
     fn from(buf: Buffer) -> Self {
         let mut to = String::new();
-        let mut buf_iter = buf.data.iter().peekable();
+        //TODO fixme avoid char array
+        let chars = buf.to_char_vec();
+        let mut buf_iter = chars.iter().peekable();
         while let Some(ch) = buf_iter.next() {
             if ch == &'\\' && buf_iter.peek() == Some(&&'\n') {
                 // '\\' followed by newline, ignore both.
@@ -97,7 +104,9 @@ impl<'a> From<&'a str> for Buffer {
 
 impl fmt::Display for Buffer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for &c in &self.data {
+        //TODO fixme avoid char array
+        let chars = self.to_char_vec();
+        for &c in &chars {
             f.write_char(c)?;
         }
         Ok(())
@@ -107,7 +116,7 @@ impl fmt::Display for Buffer {
 impl FromIterator<char> for Buffer {
     fn from_iter<T: IntoIterator<Item = char>>(t: T) -> Self {
         Buffer {
-            data: t.into_iter().collect(),
+            data: t.into_iter().collect::<String>(),
             actions: Vec::new(),
             undone_actions: Vec::new(),
             register: None,
@@ -124,7 +133,7 @@ impl Default for Buffer {
 impl Buffer {
     pub fn new() -> Self {
         Buffer {
-            data: Vec::new(),
+            data: String::new(),
             actions: Vec::new(),
             undone_actions: Vec::new(),
             register: None,
@@ -218,8 +227,6 @@ impl Buffer {
 
     pub fn last_arg(&self) -> Option<String> {
         self.data
-            .iter()
-            .collect::<String>()
             .split_word_bounds()
             .filter(|s| !s.trim().is_empty())
             .last()
@@ -227,8 +234,7 @@ impl Buffer {
     }
 
     pub fn num_graphemes(&self) -> usize {
-        let s: String = self.clone().into();
-        s.graphemes(true).map(String::from).count()
+        self.get_all_graphemes().len()
     }
 
     pub fn num_bytes(&self) -> usize {
@@ -236,22 +242,28 @@ impl Buffer {
         s.len()
     }
 
-    fn to_str(c: Option<&char>) -> Option<String> {
-        let mut str = None;
-        if let Some(c) = c {
-            str = Some(c.to_string())
-        }
-        str
+    fn get_all_graphemes(&self) -> Vec<&str> {
+        self.to_graphemes_vec()
     }
 
-    pub fn grapheme_before(&self, cursor: usize) -> Option<String> {
-        let c = self.data.get(cursor - 1);
-        Self::to_str(c)
+    fn get_graphemes(&self, start: usize, end: usize) -> Vec<&str> {
+        let graphemes = self.to_graphemes_vec();
+        //TODO fixme mem copy
+        graphemes[start..end].to_owned()
     }
 
-    pub fn grapheme_after(&self, cursor: usize) -> Option<String> {
-        let c = self.data.get(cursor);
-        Self::to_str(c)
+    fn get_grapheme(&self, cursor: usize) -> Option<&str> {
+        let graphemes = self.to_graphemes_vec();
+        //TODO fixme mem copy
+        graphemes.get(cursor).map(|x| *x)
+    }
+
+    pub fn grapheme_before(&self, cursor: usize) -> Option<&str> {
+        self.get_grapheme(cursor)
+    }
+
+    pub fn grapheme_after(&self, cursor: usize) -> Option<&str> {
+        self.get_grapheme(cursor)
     }
 
     /// Returns the graphemes removed. Does not register as an action in the undo/redo
@@ -284,7 +296,7 @@ impl Buffer {
         let mut inserted = 0;
         if let Some(text) = self.register.as_ref() {
             let s = text.iter().collect::<String>();
-            inserted = Buffer::str_to_graphemes_vec(s).len();
+            inserted = Buffer::str_to_graphemes_vec(&s).len();
             if inserted > 0 {
                 if self.num_graphemes() > idx && right {
                     // insert to right of cursor
@@ -326,22 +338,26 @@ impl Buffer {
 
     pub fn append_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.data.len();
-        self.insert(start, &other.data[..])
+        //TODO fixme avoid char array
+        let chars = other.to_char_vec();
+        self.insert(start, &chars)
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
         let data_len = self.data.len();
         self.remove(0, data_len);
-        self.insert(0, &other.data[0..])
+        //TODO fixme avoid char array
+        let chars = other.to_char_vec();
+        self.insert(0, &chars)
     }
 
-    pub fn range(&self, start: usize, end: usize) -> String {
-        self.data[start..end].iter().cloned().collect()
+    pub fn range(&self, start: usize, end: usize) -> Vec<&str> {
+        //TODO fixme return reference.
+        self.get_graphemes(start, end)
     }
 
-    pub fn range_chars(&self, start: usize, end: usize) -> Vec<String> {
-        let s = self.data[start..end].iter().collect::<String>();
-        Buffer::str_to_graphemes_vec(s)
+    pub fn range_graphemes(&self, start: usize, end: usize) -> Vec<&str> {
+        self.get_graphemes(start, end)
     }
 
     pub fn width(&self) -> Vec<usize> {
@@ -350,22 +366,20 @@ impl Buffer {
 
     pub fn range_width(&self, start: usize, end: usize) -> Vec<usize> {
         self.range(start, end)
-            .split('\n')
-            .map(|s| s.width())
+            .split(|&c| c == "\n")
+            .map(|s| s.len())
             .collect()
     }
 
     pub fn lines(&self) -> Vec<String> {
-        self.data
-            .split(|&c| c == '\n')
+        self.get_all_graphemes()
+            .split(|&c| c == "\n")
             .map(|s| s.iter().cloned().collect())
             .collect()
     }
 
-    pub fn graphemes(&self) -> Vec<String> {
-        let s = self.data.iter().collect::<String>();
-        let graphemes = s.graphemes(true);
-        graphemes.map(String::from).collect::<Vec<String>>()
+    pub fn graphemes(&self) -> Vec<&str> {
+        self.get_all_graphemes()
     }
 
     pub fn truncate(&mut self, num: usize) {
@@ -377,8 +391,7 @@ impl Buffer {
     where
         W: Write,
     {
-        let string: String = self.data.iter().cloned().collect();
-        out.write_all(string.as_bytes())
+        out.write_all(self.data.as_bytes())
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
@@ -394,30 +407,51 @@ impl Buffer {
     where
         W: Write,
     {
-        let string: String = self.data.iter().skip(after).cloned().collect();
+        let graphemes = self.to_graphemes_vec();
+        let string: String = graphemes.iter().skip(after).cloned().collect();
         out.write_all(string.as_bytes())?;
 
         Ok(string.len())
     }
 
     pub fn yank(&mut self, start: usize, end: usize) {
-        let graphemes = Buffer::chars_to_graphemes_vec(&self.data);
+        let graphemes = self.to_graphemes_vec();
         let slice;
         if end >= graphemes.len() {
             slice = &graphemes[start..graphemes.len()];
         } else {
             slice = &graphemes[start..end];
         }
-        self.register = Some(Buffer::graphemes_to_char_vec(&slice.to_vec()));
+        //TODO fixme avoid mem cpy
+        let slice = slice.iter().map(|x| String::from(*x)).collect::<Vec<String>>();
+        self.register = Some(Buffer::graphemes_to_char_vec(&slice));
     }
 
-    fn chars_to_graphemes_vec(chars: &[char]) -> Vec<String> {
-        Buffer::str_to_graphemes_vec(chars.iter().collect::<String>())
+    fn to_graphemes_vec(&self) -> Vec<&str> {
+        Self::str_to_graphemes_vec(&self.data)
     }
 
-    fn str_to_graphemes_vec(str: String) -> Vec<String> {
-        let graphemes = str.graphemes(true);
-        graphemes.map(String::from).collect::<Vec<String>>()
+    fn str_to_graphemes_vec(str: &String) -> Vec<&str> {
+        str.graphemes(true).collect::<Vec<&str>>()
+    }
+
+    fn graphemes_to_string(strs: Vec<&str>) -> String {
+        strs.iter().map(|x| String::from(*x)).collect::<String>()
+    }
+
+    fn to_char_vec(&self) -> Vec<char> {
+        Self::str_to_char_vec(&self.data)
+    }
+
+    fn str_to_char_vec(str: &str) -> Vec<char> {
+        //TODO fixme mem cpy
+        str.graphemes(true).collect::<Vec<&str>>()
+            .iter()
+            .map(|s| s.chars().collect())
+            .collect::<Vec<Vec<char>>>()
+            .into_iter()
+            .flatten()
+            .collect::<Vec<char>>()
     }
 
     fn graphemes_to_char_vec(strs: &[String]) -> Vec<char> {
@@ -433,7 +467,8 @@ impl Buffer {
         //TODO fixme
         if !self.data.is_empty() {
             //first turn underlying Vec<char> into  a vec of graphemes.
-            let mut graphemes = Buffer::chars_to_graphemes_vec(&self.data);
+
+            let mut graphemes = self.to_graphemes_vec();
             let len = graphemes.len();
             let end = if end >= len { len } else { end };
             // remove some graphemes
@@ -442,15 +477,12 @@ impl Buffer {
             let str = removed
                 .as_ref()
                 .iter()
-                .map(String::from)
+                .map(|x| String::from(*x))
                 .collect::<Vec<String>>();
             // force removal of graphemes in removed from graphemes Vec
             drop(removed);
-            // turn graphemes Vec<String> into Vec<char> as current
-            // temporary concession storage mechanism.
-            let new_chars = Buffer::graphemes_to_char_vec(&graphemes);
             // overwrite with new buffer
-            self.data = new_chars;
+            self.data = Buffer::graphemes_to_string(graphemes);
             str
         } else {
             vec![]
@@ -458,27 +490,32 @@ impl Buffer {
     }
 
     fn insert_raw(&mut self, start: usize, text: &[char]) {
-        let graphemes = Buffer::chars_to_graphemes_vec(&self.data);
-        let mut new_graphemes = Buffer::chars_to_graphemes_vec(text);
-        let mut new_data: Vec<String> = Vec::with_capacity(graphemes.len() + new_graphemes.len());
+        let graphemes = self.to_graphemes_vec();
+
+        //TODO fixme avoid char array
+        let str = text.iter().collect::<String>();
+        let mut new_graphemes = Buffer::str_to_graphemes_vec(&str);
+        let mut new_data: Vec<&str> = Vec::with_capacity(graphemes.len() + new_graphemes.len());
         let mut start_idx = start;
         if start >= graphemes.len() {
             start_idx = graphemes.len();
         }
         let (front, back) = graphemes.split_at(start_idx);
-        new_data.append(&mut front.iter().map(String::from).collect::<Vec<String>>());
+        let mut front = front.iter().map(|s| &**s).collect();
+        let mut back = back.iter().map(|s| &**s).collect();
+        new_data.append(&mut front);
+        //TODO fixme avoid mem cpy
         new_data.append(&mut new_graphemes);
-        new_data.append(&mut back.iter().map(String::from).collect::<Vec<String>>());
-        let new_chars = Buffer::graphemes_to_char_vec(&new_data);
+        new_data.append(&mut back);
         // overwrite with new buffer
-        self.data = new_chars;
+        self.data = Buffer::graphemes_to_string(new_data);
     }
 
     /// Check if the other buffer starts with the same content as this one.
     /// Used to implement autosuggestions.
     pub fn starts_with(&self, other: &Buffer) -> bool {
-        let other_graphemes = Buffer::chars_to_graphemes_vec(&other.data);
-        let self_graphemes = Buffer::chars_to_graphemes_vec(&self.data);
+        let other_graphemes = other.to_graphemes_vec();
+        let self_graphemes = self.to_graphemes_vec();
         let other_len = other_graphemes.len();
         let self_len = self_graphemes.len();
         if !other_graphemes.is_empty() && self_len != other_len {
@@ -496,11 +533,11 @@ impl Buffer {
     /// Check if the buffer contains pattern.
     /// Used to implement history search.
     pub fn contains(&self, pattern: &Buffer) -> bool {
-        let search_term = Buffer::chars_to_graphemes_vec(&pattern.data);
+        let search_term = pattern.to_graphemes_vec();
         if search_term.is_empty() {
             return false;
         }
-        Buffer::chars_to_graphemes_vec(&self.data)
+        self.to_graphemes_vec()
             .windows(search_term.len())
             .any(|window| window == search_term)
     }
@@ -514,8 +551,7 @@ impl Buffer {
     pub fn first(&self) -> Option<String> {
         let mut ret = None;
         if !self.data.is_empty() {
-            let str = self.data.iter().collect::<String>();
-            if let Some(str) = str.graphemes(true).next() {
+            if let Some(str) = self.data.graphemes(true).next() {
                 ret = Some(String::from(str))
             }
         }
@@ -526,8 +562,7 @@ impl Buffer {
     pub fn last(&self) -> Option<String> {
         let mut ret = None;
         if !self.data.is_empty() {
-            let str = self.data.iter().collect::<String>();
-            if let Some(str) = str.graphemes(true).rev().next() {
+            if let Some(str) = self.data.graphemes(true).rev().next() {
                 ret = Some(String::from(str))
             }
         }
@@ -848,6 +883,6 @@ mod tests {
         let orig = "(“न” “म” “स्” “ते”)";
         let buf = Buffer::from(orig);
         let trim = "(“न” “म” “स्” “";
-        assert_eq!(Buffer::from(trim).graphemes(), buf.range_chars(0, 15));
+        assert_eq!(Buffer::from(trim).graphemes(), buf.range_graphemes(0, 15));
     }
 }

@@ -329,8 +329,12 @@ impl<'a> Editor<'a> {
             let buf = cur_buf_mut!(self);
 
             let word = match word_range {
-                Some((start, end)) => buf.range(start, end),
-                None => "".into(),
+                Some((start, end)) => buf
+                    .range(start, end)
+                    .iter()
+                    .map(|x| String::from(*x))
+                    .collect::<String>(),
+                None => String::new(),
             };
 
             let mut completions = handler.completions(word.as_ref());
@@ -514,18 +518,20 @@ impl<'a> Editor<'a> {
     }
 
     pub fn flip_case(&mut self) -> io::Result<()> {
-        let str = cur_buf!(self).grapheme_after(self.cursor());
+        let cursor = self.cursor();
+        let buf_mut = cur_buf_mut!(self);
+        let str = buf_mut.grapheme_after(cursor).map(String::from);
         if let Some(str) = str {
             let mut c = str.chars();
             match c.next() {
                 Some(f) if f.is_lowercase() => {
-                    self.cursor.delete_after_cursor(cur_buf_mut!(self));
+                    self.cursor.delete_after_cursor(buf_mut);
                     self.insert_str_after_cursor(
                         &*(f.to_uppercase().collect::<String>() + c.as_str()),
                     )
                 }
                 Some(f) if f.is_uppercase() => {
-                    self.cursor.delete_after_cursor(cur_buf_mut!(self));
+                    self.cursor.delete_after_cursor(buf_mut);
                     self.insert_str_after_cursor(
                         &*(f.to_lowercase().collect::<String>() + c.as_str()),
                     )
@@ -656,7 +662,7 @@ impl<'a> Editor<'a> {
         self.display_term()
     }
 
-    pub fn curr_char(&self) -> Option<String> {
+    pub fn curr_char(&self) -> Option<&str> {
         let buf = cur_buf!(self);
         //TODO extract into cursor, maybe hand cursor buffer?
         buf.grapheme_after(self.cursor.char_vec_pos())

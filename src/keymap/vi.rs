@@ -483,7 +483,7 @@ fn find_balance_delim<'a, F, I>(
 ) -> Option<usize>
 where
     F: Fn(usize) -> usize,
-    I: Iterator<Item = (usize, &'a String)>,
+    I: Iterator<Item = (usize, &'a &'a str)>,
 {
     let mut count = count;
     let mut balance = 0;
