@@ -35,7 +35,7 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
     }
 
     if let Some(start) = word_start {
-        res.push((start, buf.num_chars()));
+        res.push((start, buf.num_graphemes()));
     }
 
     res

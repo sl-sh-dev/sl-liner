@@ -34,7 +34,7 @@ impl Metrics {
         // Width of the current buffer lines (including autosuggestion) from the start to the cursor
         let buf_widths_to_cursor = match autosuggestion {
             // Cursor might overrun autosuggestion with history search.
-            Some(suggestion) if cursor.char_vec_pos() < suggestion.num_chars() => {
+            Some(suggestion) if cursor.char_vec_pos() < suggestion.num_graphemes() => {
                 suggestion.range_width(0, cursor.char_vec_pos())
             }
             _ => buf.range_width(0, cursor.char_vec_pos()),

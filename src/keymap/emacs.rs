@@ -91,7 +91,7 @@ impl Emacs {
         // If did a last arg fetch just before this, we need to delete it so it can be replaced by
         // this last arg fetch.
         if self.last_arg_fetch_index.is_some() {
-            let buffer_len = ed.current_buffer().num_chars();
+            let buffer_len = ed.current_buffer().num_graphemes();
             if let Some(last_arg) = ed.current_buffer().last_arg() {
                 ed.delete_until(buffer_len - last_arg.width())?;
             }

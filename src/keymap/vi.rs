@@ -279,7 +279,7 @@ fn vi_move_word(
     let mut cursor = ed.cursor();
     'repeat: for _ in 0..count {
         let buf = ed.current_buffer();
-        let mut state = match buf.char_after(cursor) {
+        let mut state = match buf.grapheme_after(cursor) {
             None => break,
             Some(str) => match str {
                 str if str.trim().is_empty() => State::Whitespace,
@@ -288,8 +288,8 @@ fn vi_move_word(
             },
         };
 
-        while direction.advance(&mut cursor, buf.num_chars()) {
-            let str = match buf.char_after(cursor) {
+        while direction.advance(&mut cursor, buf.num_graphemes()) {
+            let str = match buf.grapheme_after(cursor) {
                 Some(str) => str,
                 _ => break 'repeat,
             };
@@ -376,8 +376,8 @@ fn vi_move_word_end(
         let buf = ed.current_buffer();
         let mut state = State::Whitespace;
 
-        while direction.advance(&mut cursor, buf.num_chars()) {
-            let str = match buf.char_after(cursor) {
+        while direction.advance(&mut cursor, buf.num_graphemes()) {
+            let str = match buf.grapheme_after(cursor) {
                 Some(c) => c,
                 _ => break 'repeat,
             };
@@ -400,15 +400,15 @@ fn vi_move_word_end(
                     }
                 },
                 State::EndOnWord if !is_vi_keyword(&str) => {
-                    direction.go_back(&mut cursor, buf.num_chars());
+                    direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
                 State::EndOnWhitespace if str.trim().is_empty() => {
-                    direction.go_back(&mut cursor, buf.num_chars());
+                    direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
                 State::EndOnOther if str.trim().is_empty() || is_vi_keyword(&str) => {
-                    direction.go_back(&mut cursor, buf.num_chars());
+                    direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
                 _ => {}
@@ -432,7 +432,7 @@ fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize
 
 fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
-    let rstart = buf.num_chars() - start;
+    let rstart = buf.num_graphemes() - start;
     buf.graphemes()
         .iter()
         .enumerate()
@@ -465,10 +465,10 @@ fn find_char_rev_balance_delim(
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
-    let rstart = buf.num_chars() - start;
+    let rstart = buf.num_graphemes() - start;
     let buf_vec = buf.graphemes();
     let iter = buf_vec.iter().enumerate().rev().skip(rstart);
-    let to_skip = |i| buf.num_chars() - rstart - i - 1;
+    let to_skip = |i| buf.num_graphemes() - rstart - i - 1;
     find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
 }
 
@@ -757,7 +757,7 @@ impl Vi {
     /// Get the current count or the number of remaining chars in the buffer.
     fn move_count_right<'a>(&self, ed: &Editor<'a>) -> usize {
         cmp::min(
-            ed.current_buffer().num_chars() - ed.cursor(),
+            ed.current_buffer().num_graphemes() - ed.cursor(),
             self.move_count(),
         )
     }

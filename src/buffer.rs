@@ -226,7 +226,7 @@ impl Buffer {
             .map(String::from)
     }
 
-    pub fn num_chars(&self) -> usize {
+    pub fn num_graphemes(&self) -> usize {
         let s: String = self.clone().into();
         s.graphemes(true).map(String::from).count()
     }
@@ -244,25 +244,25 @@ impl Buffer {
         str
     }
 
-    pub fn char_before(&self, cursor: usize) -> Option<String> {
+    pub fn grapheme_before(&self, cursor: usize) -> Option<String> {
         let c = self.data.get(cursor - 1);
         Self::to_str(c)
     }
 
-    pub fn char_after(&self, cursor: usize) -> Option<String> {
+    pub fn grapheme_after(&self, cursor: usize) -> Option<String> {
         let c = self.data.get(cursor);
         Self::to_str(c)
     }
 
     /// Returns the graphemes removed. Does not register as an action in the undo/redo
     /// buffer or in the buffer's register.
-    pub fn remove_silent(&mut self, start: usize, end: usize) -> Vec<String> {
+    pub fn remove_unrecorded(&mut self, start: usize, end: usize) -> Vec<String> {
         self.remove_raw(start, end)
     }
 
     /// Returns the number of graphemes removed.
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
-        let removed = self.remove_silent(start, end);
+        let removed = self.remove_raw(start, end);
         let chars = Buffer::graphemes_to_char_vec(&removed);
         self.push_action(Action::Remove {
             start,
@@ -286,7 +286,7 @@ impl Buffer {
             let s = text.iter().collect::<String>();
             inserted = Buffer::str_to_graphemes_vec(s).len();
             if inserted > 0 {
-                if self.num_chars() > idx && right {
+                if self.num_graphemes() > idx && right {
                     // insert to right of cursor
                     idx += 1;
                 }
@@ -345,7 +345,7 @@ impl Buffer {
     }
 
     pub fn width(&self) -> Vec<usize> {
-        self.range_width(0, self.num_chars())
+        self.range_width(0, self.num_graphemes())
     }
 
     pub fn range_width(&self, start: usize, end: usize) -> Vec<usize> {
@@ -477,13 +477,14 @@ impl Buffer {
     /// Check if the other buffer starts with the same content as this one.
     /// Used to implement autosuggestions.
     pub fn starts_with(&self, other: &Buffer) -> bool {
-        let other_len = other.data.len();
-        let self_len = self.data.len();
-        if !other.data.is_empty() && self_len != other_len {
-            let match_let = self
-                .data
+        let other_graphemes = Buffer::chars_to_graphemes_vec(&other.data);
+        let self_graphemes = Buffer::chars_to_graphemes_vec(&self.data);
+        let other_len = other_graphemes.len();
+        let self_len = self_graphemes.len();
+        if !other_graphemes.is_empty() && self_len != other_len {
+            let match_let = self_graphemes
                 .iter()
-                .zip(&other.data)
+                .zip(&other_graphemes)
                 .take_while(|&(s, o)| *s == *o)
                 .count();
             match_let == other_len
@@ -495,11 +496,11 @@ impl Buffer {
     /// Check if the buffer contains pattern.
     /// Used to implement history search.
     pub fn contains(&self, pattern: &Buffer) -> bool {
-        let search_term: &[char] = &pattern.data;
+        let search_term = Buffer::chars_to_graphemes_vec(&pattern.data);
         if search_term.is_empty() {
             return false;
         }
-        self.data
+        Buffer::chars_to_graphemes_vec(&self.data)
             .windows(search_term.len())
             .any(|window| window == search_term)
     }
@@ -509,7 +510,7 @@ impl Buffer {
         self.data.is_empty()
     }
 
-    /// Returns the first char of the buffer or None if empty.
+    /// Returns the first grapheme of the buffer or None if empty.
     pub fn first(&self) -> Option<String> {
         let mut ret = None;
         if !self.data.is_empty() {
@@ -521,7 +522,7 @@ impl Buffer {
         ret
     }
 
-    /// Returns the last char of the buffer or None if empty.
+    /// Returns the last grapheme of the buffer or None if empty.
     pub fn last(&self) -> Option<String> {
         let mut ret = None;
         if !self.data.is_empty() {
@@ -533,7 +534,7 @@ impl Buffer {
         ret
     }
 
-    /// Push ch onto the endo of the buffer.
+    /// Push ch onto the end of the buffer.
     pub fn push(&mut self, ch: char) {
         self.data.push(ch);
     }
@@ -569,7 +570,7 @@ mod tests {
     fn test_truncate_end() {
         let mut buf = Buffer::new();
         buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
-        let end = buf.num_chars();
+        let end = buf.num_graphemes();
         buf.truncate(end);
         assert_eq!(String::from(buf), "abcdefg");
     }
@@ -603,7 +604,7 @@ mod tests {
     fn test_truncate_end_then_undo() {
         let mut buf = Buffer::new();
         buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
-        let end = buf.num_chars();
+        let end = buf.num_graphemes();
         buf.truncate(end);
         buf.undo();
         assert_eq!(String::from(buf), "abcdefg");

@@ -423,7 +423,7 @@ impl<'a> Editor<'a> {
         } else {
             self.hist_buf_valid = false;
             self.freshen_history();
-            if self.new_buf.num_chars() > 0 {
+            if self.new_buf.num_graphemes() > 0 {
                 match self.history_subset_loc {
                     Some(i) if i > 0 => {
                         self.history_subset_loc = Some(i - 1);
@@ -462,7 +462,7 @@ impl<'a> Editor<'a> {
             self.search(true)
         } else {
             self.hist_buf_valid = false;
-            if self.new_buf.num_chars() > 0 {
+            if self.new_buf.num_graphemes() > 0 {
                 if let Some(i) = self.history_subset_loc {
                     if i < self.history_subset_index.len() - 1 {
                         self.history_subset_loc = Some(i + 1);
@@ -514,7 +514,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn flip_case(&mut self) -> io::Result<()> {
-        let str = cur_buf!(self).char_after(self.cursor());
+        let str = cur_buf!(self).grapheme_after(self.cursor());
         if let Some(str) = str {
             let mut c = str.chars();
             match c.next() {
@@ -659,7 +659,7 @@ impl<'a> Editor<'a> {
     pub fn curr_char(&self) -> Option<String> {
         let buf = cur_buf!(self);
         //TODO extract into cursor, maybe hand cursor buffer?
-        buf.char_after(self.cursor.char_vec_pos())
+        buf.grapheme_after(self.cursor.char_vec_pos())
     }
 
     pub fn is_cursor_at_beginning_of_word_or_line(&self) -> bool {
@@ -709,7 +709,7 @@ impl<'a> Editor<'a> {
     /// Return None if nothing found.
     fn current_autosuggestion(&mut self) -> Option<Buffer> {
         // If we are editing a previous history item no autosuggestion.
-        if self.hist_buf_valid || self.new_buf.num_chars() == 0 {
+        if self.hist_buf_valid || self.new_buf.num_graphemes() == 0 {
             return None;
         }
         let context_history = &self.history;

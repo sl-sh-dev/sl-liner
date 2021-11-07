@@ -93,7 +93,7 @@ impl<'a> Cursor<'a> {
     /// Moves the cursor to `pos`. If `pos` is past the end of the buffer, it will be clamped.
     pub fn move_cursor_to(&mut self, buf: &Buffer, pos: usize) {
         self.char_vec_pos = pos;
-        let buf_len = buf.num_chars();
+        let buf_len = buf.num_graphemes();
         if self.char_vec_pos > buf_len {
             self.char_vec_pos = buf_len;
         }
@@ -147,7 +147,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn delete_after_cursor(&mut self, buf: &mut Buffer) {
-        if self.char_vec_pos < buf.num_chars() {
+        if self.char_vec_pos < buf.num_graphemes() {
             buf.remove(self.char_vec_pos, self.char_vec_pos + 1);
         }
     }
@@ -158,7 +158,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn yank_all_after_cursor(&mut self, buf: &mut Buffer) {
-        buf.yank(self.char_vec_pos, buf.num_chars());
+        buf.yank(self.char_vec_pos, buf.num_graphemes());
     }
 
     pub fn delete_all_after_cursor(&mut self, buf: &mut Buffer) {
@@ -173,7 +173,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn delete_until_silent(&mut self, buf: &mut Buffer, position: usize) {
-        buf.remove_silent(
+        buf.remove_unrecorded(
             cmp::min(self.char_vec_pos, position),
             cmp::max(self.char_vec_pos, position),
         );
@@ -213,22 +213,22 @@ impl<'a> Cursor<'a> {
 
     pub fn move_cursor_right(&mut self, buf: &Buffer, count: usize) {
         let mut inc = count;
-        if count > buf.num_chars() - self.char_vec_pos {
-            inc = buf.num_chars() - self.char_vec_pos;
+        if count > buf.num_graphemes() - self.char_vec_pos {
+            inc = buf.num_graphemes() - self.char_vec_pos;
         }
 
         self.char_vec_pos += inc;
     }
 
     pub fn move_cursor_to_end_of_line(&mut self, buf: &Buffer) {
-        self.char_vec_pos = buf.num_chars();
+        self.char_vec_pos = buf.num_graphemes();
     }
 
     pub fn is_at_beginning_of_word_or_line(&self, buf: &Buffer) -> bool {
-        let num_chars = buf.num_chars();
+        let num_chars = buf.num_graphemes();
         let cursor_pos = self.char_vec_pos;
         if num_chars > 0 && cursor_pos != 0 {
-            let str = buf.char_before(cursor_pos);
+            let str = buf.grapheme_before(cursor_pos);
             if let Some(str) = str {
                 return str.trim().is_empty();
             }
@@ -241,7 +241,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn is_at_end_of_line(&self, buf: &Buffer) -> bool {
-        let num_chars = buf.num_chars();
+        let num_chars = buf.num_graphemes();
         if self.no_eol {
             self.char_vec_pos == num_chars - 1
         } else {
@@ -250,7 +250,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn pre_display_adjustment(&mut self, buf: &Buffer) {
-        let buf_num_chars = buf.num_chars();
+        let buf_num_chars = buf.num_graphemes();
         // Don't let the cursor go over the end!
         if buf_num_chars < self.char_vec_pos {
             self.char_vec_pos = buf_num_chars;
