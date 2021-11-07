@@ -81,7 +81,7 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn insert_around(&mut self, buf: &mut Buffer, right: bool, count: usize) {
-        let delta = buf.insert_register_around_start(self.char_vec_pos, count, right);
+        let delta = buf.insert_register_around_idx(self.char_vec_pos, count, right);
         if delta > 0 {
             // if moving to the left we move one less than the number of chars inserted because
             // the cursor rests on the last character inserted.
@@ -116,7 +116,7 @@ impl<'a> Cursor<'a> {
 
     //TODO issue:
     // because things can come in a character at a time, e.g. technologist
-    // emoji care needs to be taken as to when/how to get a valid
+    // emoji, care needs to be taken as to when/how to get a valid
     // char position.
     pub fn delete_until_cursor(&mut self, buf: &mut Buffer, start: usize) {
         let moved = buf.remove(start, self.char_vec_pos);
@@ -159,7 +159,7 @@ impl<'a> Cursor<'a> {
 
     pub fn yank_all_after_cursor(&mut self, buf: &mut Buffer) {
         buf.yank(self.char_vec_pos, buf.num_chars());
-    } //TODO testme
+    }
 
     pub fn delete_all_after_cursor(&mut self, buf: &mut Buffer) {
         buf.truncate(self.char_vec_pos);
@@ -314,13 +314,29 @@ mod tests {
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
         let useful_tools = "\u{1f5a5}\u{fe0f}\u{1d4e2}\u{2aff} \u{1d05e} \
         \u{14ab}\u{1fd8}\u{2a4f}\u{2b31}\u{256d}\u{1f5a5}\u{fe0f}";
-        let expected = format!("{}{}{}", female_technologist, useful_tools, female_technologist);
+        let expected = format!(
+            "{}{}{}",
+            female_technologist, useful_tools, female_technologist
+        );
         let mut buf = Buffer::from(format!("{}{}", female_technologist, female_technologist));
 
         let cs = useful_tools.chars().into_iter().collect::<Vec<char>>();
         cur.move_cursor_right(&buf, 1);
         cur.insert_chars_after_cursor(&mut buf, &cs[..]);
         assert_eq!(expected, String::from(buf));
+    }
+
+    #[test]
+    fn test_move_cursor() {
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+
+        let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
+        let str = format!("{}{}", female_technologist, female_technologist);
+        let mut buf = Buffer::from(str);
+        cur.move_cursor_right(&buf, 1);
+        cur.delete_before_cursor(&mut buf);
+        assert_eq!(female_technologist, String::from(buf));
     }
 
     #[test]

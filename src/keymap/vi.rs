@@ -7268,7 +7268,10 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("replace some words").unwrap();
+        ed.insert_str_after_cursor(
+            "replace so\u{1f469}\u{200d}\u{1f4bb}\u{1f469}\u{200d}\u{1f4bb}me words",
+        )
+        .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7285,7 +7288,10 @@ mod tests {
             ]
             .iter(),
         );
-        assert_eq!(String::from(ed), "replace some words");
+        assert_eq!(
+            String::from(ed),
+            "replace so\u{1f469}\u{200d}\u{1f4bb}\u{1f469}\u{200d}\u{1f4bb}me words"
+        );
     }
 
     #[test]
@@ -7647,6 +7653,41 @@ mod tests {
     }
 
     #[test]
+    fn test_yank_and_put_back() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("abc defg").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('$'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 7);
+        assert_eq!(String::from(ed), "abc defgabc defg");
+    }
+
+    #[test]
     fn test_delete_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
@@ -7663,7 +7704,8 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("(abc defg)").unwrap();
+        ed.insert_str_after_cursor("(ab\u{1f469}\u{200d}\u{1f4bb} \u{1f469}\u{200d}\u{1f4bb}efg)")
+            .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7843,7 +7885,8 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("echo \"hello world\"").unwrap();
+        ed.insert_str_after_cursor("echo \"hello world\u{1f469}\u{200d}\u{1f52c}\"")
+            .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7857,8 +7900,11 @@ mod tests {
             ]
             .iter(),
         );
-        assert_eq!(ed.cursor(), 16);
-        assert_eq!(String::from(ed), "echo \"hello worldhello world\"");
+        assert_eq!(ed.cursor(), 17);
+        assert_eq!(
+            String::from(ed),
+            "echo \"hello world\u{1f469}\u{200d}\u{1f52c}hello world\u{1f469}\u{200d}\u{1f52c}\""
+        );
     }
 
     #[test]
@@ -7913,7 +7959,10 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("echo [hello world]").unwrap();
+        ed.insert_str_after_cursor(
+            "echo [hello \u{1f469}\u{200d}\u{1f52c}\u{1f469}\u{200d}\u{1f52c} world]",
+        )
+        .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7953,8 +8002,10 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("<div id='foo'>content</p>")
-            .unwrap();
+        ed.insert_str_after_cursor(
+            "<div id='foo'>\u{1f468}\u{200d}\u{1f52c}content\u{1f468}\u{200d}\u{1f52c}</p>",
+        )
+        .unwrap();
 
         simulate_key_codes(
             &mut map,

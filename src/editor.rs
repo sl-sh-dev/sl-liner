@@ -1036,9 +1036,12 @@ mod tests {
             &mut buf,
             buffer,
         )
-            .unwrap();
+        .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
         assert_eq!(ed.cursor(), 18);
-        assert_eq!("\u{1f469}\u{200d}\u{1f4bb} start here_right", String::from(ed));
+        assert_eq!(
+            "\u{1f469}\u{200d}\u{1f4bb} start here_right",
+            String::from(ed)
+        );
     }
 }
