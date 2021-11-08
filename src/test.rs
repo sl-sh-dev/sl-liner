@@ -61,11 +61,11 @@ fn test_buffer_actions() {
         &[
             Action::Insert {
                 start: 0,
-                text: vec!["hi".to_owned()],
+                text: "hi".to_owned(),
             },
             Action::Remove {
                 start: 1,
-                text: vec![".".to_owned()],
+                text: ".".to_owned(),
             },
         ],
     );

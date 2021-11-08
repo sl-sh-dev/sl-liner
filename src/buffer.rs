@@ -6,8 +6,8 @@ use unicode_segmentation::UnicodeSegmentation;
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
 #[derive(Debug, Clone)]
 pub enum Action {
-    Insert { start: usize, text: Vec<String> },
-    Remove { start: usize, text: Vec<String> },
+    Insert { start: usize, text: String },
+    Remove { start: usize, text: String },
     StartGroup,
     EndGroup,
 }
@@ -16,8 +16,6 @@ impl Action {
     pub fn do_on(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
             Action::Insert { start, ref text } => {
-                //TODO fixme weird?
-                let text = text.iter().map(|x| &**x).collect::<Vec<&str>>();
                 buf.insert_raw(start, text);
                 Some(start)
             }
@@ -41,8 +39,6 @@ impl Action {
                 Some(start)
             }
             Action::Remove { start, ref text } => {
-                //TODO fixme weird?
-                let text = text.iter().map(|x| &**x).collect::<Vec<&str>>();
                 buf.insert_raw(start, text);
                 Some(start)
             }
@@ -72,7 +68,6 @@ impl Eq for Buffer {}
 impl From<Buffer> for String {
     fn from(buf: Buffer) -> Self {
         let mut to = String::new();
-        //TODO fixme avoid char array
         let chars = buf.to_char_vec();
         let mut buf_iter = chars.iter().peekable();
         while let Some(ch) = buf_iter.next() {
@@ -103,7 +98,7 @@ impl fmt::Display for Buffer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         //TODO fixme avoid char array
         let chars = self.to_char_vec();
-        for &c in &chars {
+        for c in chars {
             f.write_char(c)?;
         }
         Ok(())
@@ -245,6 +240,8 @@ impl Buffer {
 
     fn get_graphemes(&self, start: usize, end: usize) -> Vec<&str> {
         let graphemes = self.to_graphemes_vec();
+        let len = graphemes.len();
+        let end = if end >= len { len } else { end };
         //TODO fixme mem copy
         graphemes[start..end].to_owned()
     }
@@ -274,6 +271,7 @@ impl Buffer {
         let text = self.remove_raw(start, end);
         let len = text.len();
         self.register = Some(text.clone());
+        let text = Buffer::graphemes_to_string(text.iter().map(|x| &**x).collect());
         self.push_action(Action::Remove { start, text });
         len
     }
@@ -308,6 +306,7 @@ impl Buffer {
                 } else {
                     text.to_vec()
                 };
+                let text = Buffer::graphemes_to_string(text.iter().map(|x| &**x).collect());
                 self.insert_action(Action::Insert { start: idx, text });
             }
         }
@@ -315,17 +314,15 @@ impl Buffer {
     }
 
     pub fn insert<'a, I>(&mut self, start: usize, text: I) -> usize
-    where I: Iterator<Item = &'a char>,
+    where
+        I: Iterator<Item = &'a char>,
     {
-        let text: Vec<String> = text
-            .collect::<String>()
-            .graphemes(true)
-            .map(String::from)
-            .collect::<Vec<String>>();
-        let len = text.len();
+        let text: String = text.collect::<String>();
+        let len = self.num_graphemes();
         let act = Action::Insert { start, text };
         self.insert_action(act);
-        len
+        let new_len = self.num_graphemes();
+        new_len - len
     }
 
     pub fn insert_action(&mut self, act: Action) {
@@ -335,20 +332,15 @@ impl Buffer {
 
     pub fn append_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.data.len();
-        //TODO fixme avoid char array
         self.insert(start, other.to_char_vec().iter())
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
-        let data_len = self.data.len();
-        self.remove(0, data_len);
-        //TODO fixme avoid char array
-        let chars = other.to_char_vec();
-        self.insert(0, chars.iter())
+        self.truncate(0);
+        self.insert(0, other.to_char_vec().iter())
     }
 
     pub fn range(&self, start: usize, end: usize) -> Vec<&str> {
-        //TODO fixme return reference.
         self.get_graphemes(start, end)
     }
 
@@ -379,8 +371,7 @@ impl Buffer {
     }
 
     pub fn truncate(&mut self, num: usize) {
-        let end = self.data.len();
-        self.remove(num, end);
+        self.remove(num, self.num_graphemes());
     }
 
     pub fn print<W>(&self, out: &mut W) -> io::Result<()>
@@ -439,19 +430,7 @@ impl Buffer {
     }
 
     fn to_char_vec(&self) -> Vec<char> {
-        Self::str_to_char_vec(&self.data)
-    }
-
-    fn str_to_char_vec(str: &str) -> Vec<char> {
-        //TODO fixme mem cpy
-        str.graphemes(true)
-            .collect::<Vec<&str>>()
-            .iter()
-            .map(|s| s.chars().collect())
-            .collect::<Vec<Vec<char>>>()
-            .into_iter()
-            .flatten()
-            .collect::<Vec<char>>()
+        self.data.chars().map(|x| x as char).collect::<Vec<char>>()
     }
 
     fn remove_raw(&mut self, start: usize, end: usize) -> Vec<String> {
@@ -480,14 +459,14 @@ impl Buffer {
         }
     }
 
-    fn insert_raw(&mut self, start: usize, new_graphemes: Vec<&str>) {
+    fn insert_raw(&mut self, start: usize, new_graphemes: &str) {
         let mut graphemes = self.data.graphemes(true).collect::<Vec<&str>>();
 
         let mut start_idx = start;
         if start >= graphemes.len() {
             start_idx = graphemes.len();
         }
-        graphemes.splice(start_idx..start_idx, new_graphemes);
+        graphemes.splice(start_idx..start_idx, vec![new_graphemes]);
 
         self.data = Buffer::graphemes_to_string(graphemes);
     }
