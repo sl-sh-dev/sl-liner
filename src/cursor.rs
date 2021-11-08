@@ -388,10 +388,11 @@ mod tests {
         let word_divider_fcn = &Box::new(get_buffer_words);
         let mut cur = Cursor::new(word_divider_fcn);
 
-        let mut buf = Buffer::from("hello".to_owned());
-        cur.move_cursor_to(&buf, 0);
+        let mut buf = Buffer::from("hello hello".to_owned());
+        cur.move_cursor_to(&buf, 6);
         cur.yank_all_after_cursor(&mut buf);
         cur.insert_around(&mut buf, true, 1);
-        assert_eq!(String::from("hhelloello"), String::from(buf));
+        assert_eq!(String::from("hello hhelloello"), String::from(buf));
+        assert_eq!(11, cur.char_vec_pos)
     }
 }

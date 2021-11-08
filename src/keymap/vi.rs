@@ -283,7 +283,7 @@ fn vi_move_word(
             None => break,
             Some(str) => match str {
                 str if str.trim().is_empty() => State::Whitespace,
-                str if is_vi_keyword(&str) => State::Keyword,
+                str if is_vi_keyword(str) => State::Keyword,
                 _ => State::NonKeyword,
             },
         };
@@ -315,7 +315,7 @@ fn vi_move_word(
                             state = State::Whitespace
                         }
                     }
-                    str if move_mode == ViMoveMode::Keyword && !is_vi_keyword(&str) => break,
+                    str if move_mode == ViMoveMode::Keyword && !is_vi_keyword(str) => break,
                     _ => {}
                 },
                 State::NonKeyword => match str {
@@ -326,7 +326,7 @@ fn vi_move_word(
                             state = State::Whitespace
                         }
                     }
-                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(&str) => break,
+                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => break,
                     _ => {}
                 },
             }
@@ -387,7 +387,7 @@ fn vi_move_word_end(
                     // skip initial whitespace
                     str if str.trim().is_empty() => {}
                     // if we are in keyword mode and found a keyword, stop on word
-                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(&str) => {
+                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => {
                         state = State::EndOnWord;
                     }
                     // not in keyword mode, stop on whitespace
@@ -399,7 +399,7 @@ fn vi_move_word_end(
                         state = State::EndOnOther;
                     }
                 },
-                State::EndOnWord if !is_vi_keyword(&str) => {
+                State::EndOnWord if !is_vi_keyword(str) => {
                     direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
@@ -407,7 +407,7 @@ fn vi_move_word_end(
                     direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
-                State::EndOnOther if str.trim().is_empty() || is_vi_keyword(&str) => {
+                State::EndOnOther if str.trim().is_empty() || is_vi_keyword(str) => {
                     direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
