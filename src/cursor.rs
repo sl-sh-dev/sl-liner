@@ -57,7 +57,7 @@ pub struct Cursor<'a> {
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
     // and if `cursor == 1` ten the cursor is after the first char and before the second char.
-    char_vec_pos: usize,
+    curr_grapheme: usize,
     // function to determine how to split words, returns vector of tuples representing index
     // and length of word.
     word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
@@ -70,32 +70,32 @@ pub struct Cursor<'a> {
 impl<'a> Cursor<'a> {
     pub fn new(word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>) -> Self {
         Cursor {
-            char_vec_pos: 0,
+            curr_grapheme: 0,
             word_divider_fn,
             no_eol: false,
         }
     }
 
     pub fn char_vec_pos(&self) -> usize {
-        self.char_vec_pos
+        self.curr_grapheme
     }
 
     pub fn insert_around(&mut self, buf: &mut Buffer, right: bool, count: usize) {
-        let delta = buf.insert_register_around_idx(self.char_vec_pos, count, right);
+        let delta = buf.insert_register_around_idx(self.curr_grapheme, count, right);
         if delta > 0 {
             // if moving to the left we move one less than the number of chars inserted because
             // the cursor rests on the last character inserted.
             let adjustment = if right { delta } else { delta - 1 };
-            self.move_cursor_to(buf, self.char_vec_pos + adjustment)
+            self.move_cursor_to(buf, self.curr_grapheme + adjustment)
         }
     }
 
     /// Moves the cursor to `pos`. If `pos` is past the end of the buffer, it will be clamped.
     pub fn move_cursor_to(&mut self, buf: &Buffer, pos: usize) {
-        self.char_vec_pos = pos;
+        self.curr_grapheme = pos;
         let buf_len = buf.num_graphemes();
-        if self.char_vec_pos > buf_len {
-            self.char_vec_pos = buf_len;
+        if self.curr_grapheme > buf_len {
+            self.curr_grapheme = buf_len;
         }
     }
 
@@ -105,12 +105,12 @@ impl<'a> Cursor<'a> {
     ) -> (Vec<(usize, usize)>, CursorPosition) {
         let word_fn = &self.word_divider_fn;
         let words = word_fn(buf);
-        let pos = CursorPosition::get(self.char_vec_pos, &words);
+        let pos = CursorPosition::get(self.curr_grapheme, &words);
         (words, pos)
     }
 
     pub fn reset(&mut self, buf: &mut Buffer) {
-        self.char_vec_pos = 0;
+        self.curr_grapheme = 0;
         buf.truncate(0);
     }
 
@@ -119,114 +119,114 @@ impl<'a> Cursor<'a> {
     // emoji, care needs to be taken as to when/how to get a valid
     // char position.
     pub fn delete_until_cursor(&mut self, buf: &mut Buffer, start: usize) {
-        let moved = buf.remove(start, self.char_vec_pos);
-        self.char_vec_pos -= moved;
+        let moved = buf.remove(start, self.curr_grapheme);
+        self.curr_grapheme -= moved;
     }
 
     pub fn insert_char_after_cursor(&mut self, buf: &mut Buffer, c: char) {
-        let len = buf.insert(self.char_vec_pos, [c].iter());
-        self.char_vec_pos += len;
+        let len = buf.insert(self.curr_grapheme, [c].iter());
+        self.curr_grapheme += len;
     }
 
     pub fn insert_str_after_cursor(&mut self, buf: &mut Buffer, s: &str) {
         let cs = &s.chars().collect::<Vec<char>>()[..];
-        let len = buf.insert(self.char_vec_pos, cs.iter());
-        self.char_vec_pos += len;
+        let len = buf.insert(self.curr_grapheme, cs.iter());
+        self.curr_grapheme += len;
     }
 
     pub fn insert_chars_after_cursor(&mut self, buf: &mut Buffer, cs: &[char]) {
-        let len = buf.insert(self.char_vec_pos, cs.iter());
-        self.char_vec_pos += len;
+        let len = buf.insert(self.curr_grapheme, cs.iter());
+        self.curr_grapheme += len;
     }
 
     pub fn delete_before_cursor(&mut self, buf: &mut Buffer) {
-        if self.char_vec_pos > 0 {
-            buf.remove(self.char_vec_pos - 1, self.char_vec_pos);
-            self.char_vec_pos -= 1;
+        if self.curr_grapheme > 0 {
+            buf.remove(self.curr_grapheme - 1, self.curr_grapheme);
+            self.curr_grapheme -= 1;
         }
     }
 
     pub fn delete_after_cursor(&mut self, buf: &mut Buffer) {
-        if self.char_vec_pos < buf.num_graphemes() {
-            buf.remove(self.char_vec_pos, self.char_vec_pos + 1);
+        if self.curr_grapheme < buf.num_graphemes() {
+            buf.remove(self.curr_grapheme, self.curr_grapheme + 1);
         }
     }
 
     pub fn delete_all_before_cursor(&mut self, buf: &mut Buffer) {
-        buf.remove(0, self.char_vec_pos);
-        self.char_vec_pos = 0;
+        buf.remove(0, self.curr_grapheme);
+        self.curr_grapheme = 0;
     }
 
     pub fn yank_all_after_cursor(&mut self, buf: &mut Buffer) {
-        buf.yank(self.char_vec_pos, buf.num_graphemes());
+        buf.yank(self.curr_grapheme, buf.num_graphemes());
     }
 
     pub fn delete_all_after_cursor(&mut self, buf: &mut Buffer) {
-        buf.truncate(self.char_vec_pos);
+        buf.truncate(self.curr_grapheme);
     }
 
     pub fn yank_until(&mut self, buf: &mut Buffer, position: usize) {
         buf.yank(
-            cmp::min(self.char_vec_pos, position),
-            cmp::max(self.char_vec_pos, position),
+            cmp::min(self.curr_grapheme, position),
+            cmp::max(self.curr_grapheme, position),
         );
     }
 
     pub fn delete_until_silent(&mut self, buf: &mut Buffer, position: usize) {
         buf.remove_unrecorded(
-            cmp::min(self.char_vec_pos, position),
-            cmp::max(self.char_vec_pos, position),
+            cmp::min(self.curr_grapheme, position),
+            cmp::max(self.curr_grapheme, position),
         );
-        self.char_vec_pos = cmp::min(self.char_vec_pos, position);
+        self.curr_grapheme = cmp::min(self.curr_grapheme, position);
     }
 
     pub fn delete_until(&mut self, buf: &mut Buffer, position: usize) {
         buf.remove(
-            cmp::min(self.char_vec_pos, position),
-            cmp::max(self.char_vec_pos, position),
+            cmp::min(self.curr_grapheme, position),
+            cmp::max(self.curr_grapheme, position),
         );
-        self.char_vec_pos = cmp::min(self.char_vec_pos, position);
+        self.curr_grapheme = cmp::min(self.curr_grapheme, position);
     }
 
     pub fn yank_until_inclusive(&mut self, buf: &mut Buffer, position: usize) {
         buf.yank(
-            cmp::min(self.char_vec_pos, position),
-            cmp::max(self.char_vec_pos + 1, position + 1),
+            cmp::min(self.curr_grapheme, position),
+            cmp::max(self.curr_grapheme + 1, position + 1),
         );
     }
 
     pub fn delete_until_inclusive(&mut self, buf: &mut Buffer, position: usize) {
         buf.remove(
-            cmp::min(self.char_vec_pos, position),
-            cmp::max(self.char_vec_pos + 1, position + 1),
+            cmp::min(self.curr_grapheme, position),
+            cmp::max(self.curr_grapheme + 1, position + 1),
         );
-        self.char_vec_pos = cmp::min(self.char_vec_pos, position);
+        self.curr_grapheme = cmp::min(self.curr_grapheme, position);
     }
 
     pub fn move_cursor_left(&mut self, count: usize) {
         let mut inc = count;
-        if count > self.char_vec_pos {
-            inc = self.char_vec_pos;
+        if count > self.curr_grapheme {
+            inc = self.curr_grapheme;
         }
-        self.char_vec_pos -= inc;
+        self.curr_grapheme -= inc;
     }
 
     pub fn move_cursor_right(&mut self, buf: &Buffer, count: usize) {
         let mut inc = count;
-        if count > buf.num_graphemes() - self.char_vec_pos {
-            inc = buf.num_graphemes() - self.char_vec_pos;
+        if count > buf.num_graphemes() - self.curr_grapheme {
+            inc = buf.num_graphemes() - self.curr_grapheme;
         }
 
-        self.char_vec_pos += inc;
+        self.curr_grapheme += inc;
     }
 
     pub fn move_cursor_to_end_of_line(&mut self, buf: &Buffer) {
-        self.char_vec_pos = buf.num_graphemes();
+        self.curr_grapheme = buf.num_graphemes();
     }
 
     pub fn is_at_beginning_of_word_or_line(&self, buf: &Buffer) -> bool {
         let num_chars = buf.num_graphemes();
-        let cursor_pos = self.char_vec_pos;
+        let cursor_pos = self.curr_grapheme;
         if num_chars > 0 && cursor_pos != 0 {
             let str = buf.grapheme_before(cursor_pos);
             if let Some(str) = str {
@@ -243,22 +243,22 @@ impl<'a> Cursor<'a> {
     pub fn is_at_end_of_line(&self, buf: &Buffer) -> bool {
         let num_chars = buf.num_graphemes();
         if self.no_eol {
-            self.char_vec_pos == num_chars - 1
+            self.curr_grapheme == num_chars - 1
         } else {
-            self.char_vec_pos == num_chars
+            self.curr_grapheme == num_chars
         }
     }
 
     pub fn pre_display_adjustment(&mut self, buf: &Buffer) {
         let buf_num_chars = buf.num_graphemes();
         // Don't let the cursor go over the end!
-        if buf_num_chars < self.char_vec_pos {
-            self.char_vec_pos = buf_num_chars;
+        if buf_num_chars < self.curr_grapheme {
+            self.curr_grapheme = buf_num_chars;
         }
 
         // Can't move past the last character in vi normal mode
-        if self.no_eol && self.char_vec_pos != 0 && self.char_vec_pos == buf_num_chars {
-            self.char_vec_pos -= 1;
+        if self.no_eol && self.curr_grapheme != 0 && self.curr_grapheme == buf_num_chars {
+            self.curr_grapheme -= 1;
         }
     }
 }
@@ -275,9 +275,9 @@ mod tests {
 
         let mut buf = Buffer::from("01234".to_owned());
         cur.move_cursor_to(&buf, 100);
-        assert_eq!(5, cur.char_vec_pos);
+        assert_eq!(5, cur.curr_grapheme);
         cur.reset(&mut buf);
-        assert_eq!(0, cur.char_vec_pos);
+        assert_eq!(0, cur.curr_grapheme);
     }
 
     #[test]
@@ -378,9 +378,9 @@ mod tests {
         let mut cur = Cursor::new(word_divider_fcn);
 
         let buf = Buffer::from("hello".to_owned());
-        cur.char_vec_pos = 8;
+        cur.curr_grapheme = 8;
         cur.pre_display_adjustment(&buf);
-        assert_eq!(5, cur.char_vec_pos)
+        assert_eq!(5, cur.curr_grapheme)
     }
 
     #[test]
@@ -393,6 +393,6 @@ mod tests {
         cur.yank_all_after_cursor(&mut buf);
         cur.insert_around(&mut buf, true, 1);
         assert_eq!(String::from("hello hhelloello"), String::from(buf));
-        assert_eq!(11, cur.char_vec_pos)
+        assert_eq!(11, cur.curr_grapheme)
     }
 }
