@@ -314,9 +314,10 @@ impl Buffer {
         inserted
     }
 
-    pub fn insert(&mut self, start: usize, text: &[char]) -> usize {
+    pub fn insert<'a, I>(&mut self, start: usize, text: I) -> usize
+    where I: Iterator<Item = &'a char>,
+    {
         let text: Vec<String> = text
-            .iter()
             .collect::<String>()
             .graphemes(true)
             .map(String::from)
@@ -335,8 +336,7 @@ impl Buffer {
     pub fn append_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.data.len();
         //TODO fixme avoid char array
-        let chars = other.to_char_vec();
-        self.insert(start, &chars)
+        self.insert(start, other.to_char_vec().iter())
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
@@ -344,7 +344,7 @@ impl Buffer {
         self.remove(0, data_len);
         //TODO fixme avoid char array
         let chars = other.to_char_vec();
-        self.insert(0, &chars)
+        self.insert(0, chars.iter())
     }
 
     pub fn range(&self, start: usize, end: usize) -> Vec<&str> {
@@ -563,7 +563,7 @@ mod tests {
     #[test]
     fn test_insert() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         assert_eq!(String::from(buf), "abcdefg");
     }
 
@@ -577,7 +577,7 @@ mod tests {
     #[test]
     fn test_truncate_all() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.truncate(0);
         assert_eq!(String::from(buf), "");
     }
@@ -585,7 +585,7 @@ mod tests {
     #[test]
     fn test_truncate_end() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let end = buf.num_graphemes();
         buf.truncate(end);
         assert_eq!(String::from(buf), "abcdefg");
@@ -594,7 +594,7 @@ mod tests {
     #[test]
     fn test_truncate_part() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.truncate(3);
         assert_eq!(String::from(buf), "abc");
     }
@@ -610,7 +610,7 @@ mod tests {
     #[test]
     fn test_truncate_all_then_undo() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.truncate(0);
         buf.undo();
         assert_eq!(String::from(buf), "abcdefg");
@@ -619,7 +619,7 @@ mod tests {
     #[test]
     fn test_truncate_end_then_undo() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let end = buf.num_graphemes();
         buf.truncate(end);
         buf.undo();
@@ -629,7 +629,7 @@ mod tests {
     #[test]
     fn test_truncate_part_then_undo() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.truncate(3);
         buf.undo();
         assert_eq!(String::from(buf), "abcdefg");
@@ -638,7 +638,7 @@ mod tests {
     #[test]
     fn test_revert_undo_group() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.start_undo_group();
         buf.remove(0, 1);
         buf.remove(0, 1);
@@ -652,7 +652,7 @@ mod tests {
     #[test]
     fn test_clear_undo_group() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.start_undo_group();
         buf.remove(0, 1);
         buf.remove(0, 1);
@@ -667,7 +667,7 @@ mod tests {
     #[test]
     fn test_undo_group() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.start_undo_group();
         buf.remove(0, 1);
         buf.remove(0, 1);
@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn test_redo_group() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.start_undo_group();
         buf.remove(0, 1);
         buf.remove(0, 1);
@@ -694,7 +694,7 @@ mod tests {
     #[test]
     fn test_nested_undo_group() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.start_undo_group();
         buf.remove(0, 1);
         buf.start_undo_group();
@@ -709,7 +709,7 @@ mod tests {
     #[test]
     fn test_nested_redo_group() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         buf.start_undo_group();
         buf.remove(0, 1);
         buf.start_undo_group();
@@ -725,61 +725,61 @@ mod tests {
     #[test]
     fn test_starts_with() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['a', 'b', 'c']);
+        buf2.insert(0, ['a', 'b', 'c'].iter());
         assert_eq!(buf.starts_with(&buf2), true);
     }
 
     #[test]
     fn test_does_not_start_with() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c']);
+        buf.insert(0, ['a', 'b', 'c'].iter());
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['a', 'b', 'c']);
+        buf2.insert(0, ['a', 'b', 'c'].iter());
         assert_eq!(buf.starts_with(&buf2), false);
     }
 
     #[test]
     fn test_is_not_match2() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['x', 'y', 'z']);
+        buf2.insert(0, ['x', 'y', 'z'].iter());
         assert_eq!(buf.starts_with(&buf2), false);
     }
 
     #[test]
     fn test_partial_eq() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['x', 'y', 'z']);
+        buf2.insert(0, ['x', 'y', 'z'].iter());
         assert_eq!(buf.eq(&buf2), false);
         let mut buf3 = Buffer::new();
-        buf3.insert(0, &['x', 'y', 'z']);
+        buf3.insert(0, ['x', 'y', 'z'].iter());
         assert_eq!(buf2.eq(&buf3), true);
     }
 
     #[test]
     fn test_buffer_to_string_ignore_newline() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['h', 'e', '\\', '\n', 'l', 'l', 'o']);
+        buf.insert(0, ['h', 'e', '\\', '\n', 'l', 'l', 'o'].iter());
         assert_eq!("hello".to_owned(), String::from(buf));
     }
 
     #[test]
     fn test_contains() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['a', 'b', 'c']);
+        buf2.insert(0, ['a', 'b', 'c'].iter());
         assert_eq!(buf.contains(&buf2), true);
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['c', 'd', 'e']);
+        buf2.insert(0, ['c', 'd', 'e'].iter());
         assert_eq!(buf.contains(&buf2), true);
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['e', 'f', 'g']);
+        buf2.insert(0, ['e', 'f', 'g'].iter());
         assert_eq!(buf.contains(&buf2), true);
         let empty_buf = Buffer::default();
         assert_eq!(buf.contains(&empty_buf), false);
@@ -788,19 +788,19 @@ mod tests {
     #[test]
     fn test_does_not_contain() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['x', 'b', 'c']);
+        buf2.insert(0, ['x', 'b', 'c'].iter());
         assert_eq!(buf.contains(&buf2), false);
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['a', 'b', 'd']);
+        buf2.insert(0, ['a', 'b', 'd'].iter());
         assert_eq!(buf.contains(&buf2), false);
     }
 
     #[test]
     fn test_print() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let mut out: Vec<u8> = vec![];
         buf.print(&mut out).unwrap();
         assert_eq!(out.len(), 7);
@@ -814,9 +814,9 @@ mod tests {
     #[test]
     fn test_print_rest() {
         let mut buf = Buffer::new();
-        buf.insert(0, &['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+        buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
         let mut buf2 = Buffer::new();
-        buf2.insert(0, &['a', 'b', 'c']);
+        buf2.insert(0, ['a', 'b', 'c'].iter());
         let mut out: Vec<u8> = vec![];
         buf.print_rest(&mut out, buf2.data.len()).unwrap();
         assert_eq!(out.len(), 4);

@@ -124,18 +124,18 @@ impl<'a> Cursor<'a> {
     }
 
     pub fn insert_char_after_cursor(&mut self, buf: &mut Buffer, c: char) {
-        let len = buf.insert(self.char_vec_pos, &[c]);
+        let len = buf.insert(self.char_vec_pos, [c].iter());
         self.char_vec_pos += len;
     }
 
     pub fn insert_str_after_cursor(&mut self, buf: &mut Buffer, s: &str) {
         let cs = &s.chars().collect::<Vec<char>>()[..];
-        let len = buf.insert(self.char_vec_pos, cs);
+        let len = buf.insert(self.char_vec_pos, cs.iter());
         self.char_vec_pos += len;
     }
 
     pub fn insert_chars_after_cursor(&mut self, buf: &mut Buffer, cs: &[char]) {
-        let len = buf.insert(self.char_vec_pos, cs);
+        let len = buf.insert(self.char_vec_pos, cs.iter());
         self.char_vec_pos += len;
     }
 
