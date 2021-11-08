@@ -55,7 +55,7 @@ pub struct Buffer {
     data: String,
     actions: Vec<Action>,
     undone_actions: Vec<Action>,
-    register: Option<Vec<String>>,
+    register: Option<String>,
 }
 
 impl PartialEq for Buffer {
@@ -262,18 +262,20 @@ impl Buffer {
 
     /// Returns the graphemes removed. Does not register as an action in the undo/redo
     /// buffer or in the buffer's register.
-    pub fn remove_unrecorded(&mut self, start: usize, end: usize) -> Vec<String> {
+    pub fn remove_unrecorded(&mut self, start: usize, end: usize) -> Option<String> {
         self.remove_raw(start, end)
     }
 
     /// Returns the number of graphemes removed.
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
+        let orig_len = self.num_graphemes();
         let text = self.remove_raw(start, end);
-        let len = text.len();
-        self.register = Some(text.clone());
-        let text = Buffer::graphemes_to_string(text.iter().map(|x| &**x).collect());
-        self.push_action(Action::Remove { start, text });
-        len
+        let new_len = self.num_graphemes();
+        self.register = text.to_owned();
+        if let Some(text) = text {
+            self.push_action(Action::Remove { start, text });
+        }
+        orig_len - new_len
     }
 
     /// Insert contents of register to the right or to the left of the provided start index in the
@@ -287,7 +289,7 @@ impl Buffer {
     ) -> usize {
         let mut inserted = 0;
         if let Some(text) = self.register.as_ref() {
-            inserted = text.len();
+            inserted = Buffer::string_to_graphemes_vec(text).len();
             if inserted > 0 {
                 if self.num_graphemes() > idx && right {
                     // insert to right of cursor
@@ -295,18 +297,15 @@ impl Buffer {
                 }
 
                 let text = if count > 1 {
-                    let mut full_text = Vec::with_capacity(text.len() * count);
+                    let mut full_text = String::with_capacity(text.len() * count);
                     for _i in 0..count {
-                        for c in text.iter() {
-                            full_text.push(String::from(c));
-                        }
+                        full_text.push_str(text);
                     }
                     inserted *= count;
                     full_text
                 } else {
-                    text.to_vec()
+                    text.to_owned()
                 };
-                let text = Buffer::graphemes_to_string(text.iter().map(|x| &**x).collect());
                 self.insert_action(Action::Insert { start: idx, text });
             }
         }
@@ -318,11 +317,11 @@ impl Buffer {
         I: Iterator<Item = &'a char>,
     {
         let text: String = text.collect::<String>();
-        let len = self.num_graphemes();
+        let orig_len = self.num_graphemes();
         let act = Action::Insert { start, text };
         self.insert_action(act);
         let new_len = self.num_graphemes();
-        new_len - len
+        new_len - orig_len
     }
 
     pub fn insert_action(&mut self, act: Action) {
@@ -413,16 +412,16 @@ impl Buffer {
         let slice = slice
             .iter()
             .map(|x| String::from(*x))
-            .collect::<Vec<String>>();
+            .collect::<String>();
         self.register = Some(slice);
-    }
-
-    fn to_graphemes_vec(&self) -> Vec<&str> {
-        Self::string_to_graphemes_vec(&self.data)
     }
 
     fn string_to_graphemes_vec(str: &str) -> Vec<&str> {
         str.graphemes(true).collect::<Vec<&str>>()
+    }
+
+    fn to_graphemes_vec(&self) -> Vec<&str> {
+        Self::string_to_graphemes_vec(&self.data)
     }
 
     fn graphemes_to_string(strs: Vec<&str>) -> String {
@@ -433,7 +432,7 @@ impl Buffer {
         self.data.chars().map(|x| x as char).collect::<Vec<char>>()
     }
 
-    fn remove_raw(&mut self, start: usize, end: usize) -> Vec<String> {
+    fn remove_raw(&mut self, start: usize, end: usize) -> Option<String> {
         //TODO fixme
         if !self.data.is_empty() {
             //first turn underlying Vec<char> into  a vec of graphemes.
@@ -448,14 +447,14 @@ impl Buffer {
                 .as_ref()
                 .iter()
                 .map(|x| String::from(*x))
-                .collect::<Vec<String>>();
+                .collect::<String>();
             // force removal of graphemes in removed from graphemes Vec
             drop(removed);
             // overwrite with new buffer
             self.data = Buffer::graphemes_to_string(graphemes);
-            str
+            Some(str)
         } else {
-            vec![]
+            None
         }
     }
 
