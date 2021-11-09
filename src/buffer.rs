@@ -314,6 +314,7 @@ impl Buffer {
         inserted
     }
 
+    //TODO consider making this private
     pub fn insert<'a, I>(&mut self, start: usize, text: I) -> usize
     where
         I: Iterator<Item = &'a char>,
@@ -410,11 +411,7 @@ impl Buffer {
         } else {
             slice = &graphemes[start..end];
         }
-        //TODO fixme avoid mem cpy
-        let slice = slice
-            .iter()
-            .map(|x| String::from(*x))
-            .collect::<String>();
+        let slice = slice.iter().map(|x| String::from(*x)).collect::<String>();
         self.register = Some(slice);
     }
 
@@ -426,12 +423,8 @@ impl Buffer {
         Self::string_to_graphemes_vec(&self.data)
     }
 
-    fn graphemes_to_string(strs: Vec<&str>) -> String {
-        strs.iter().map(|x| String::from(*x)).collect::<String>()
-    }
-
     fn to_char_vec(&self) -> Vec<char> {
-        self.data.chars().map(|x| x as char).collect::<Vec<char>>()
+        self.data.chars().map(char::from).collect::<Vec<char>>()
     }
 
     /// done after an insert/remove for two reasons:
@@ -439,7 +432,11 @@ impl Buffer {
     /// 2. knowing the length of the buffer in graphemes is an important
     /// constant for callers to reference.
     fn recompute_size(&mut self) {
-        self.curr_num_graphemes = self.to_graphemes_vec().len();
+        if self.data.is_empty() {
+            self.curr_num_graphemes = 0;
+        } else {
+            self.curr_num_graphemes = self.to_graphemes_vec().len();
+        }
     }
 
     /// Push ch onto the end of the buffer.
@@ -449,41 +446,41 @@ impl Buffer {
     }
 
     fn remove_raw(&mut self, start: usize, end: usize) -> Option<String> {
-        if !self.data.is_empty() {
-            //first turn underlying Vec<char> into  a vec of graphemes.
+        let mut ret = Some("".to_owned());
+        if !self.data.is_empty() && start != end {
+            let mut gs = self.data.grapheme_indices(true);
+            if end >= self.num_graphemes() {
+                // get the byte offset of the grapheme currently under the cursor and...
+                if let Some((start, _)) = gs.nth(start) {
+                    let str = self.data.drain(start..).collect::<String>();
+                    self.recompute_size();
+                    ret = Some(str)
+                }
+            } else {
+                let offset_start = gs.nth(start);
+                let offset_end = gs.nth(end - start - 1);
 
-            let mut graphemes = self.to_graphemes_vec();
-            let len = graphemes.len();
-            let end = if end >= len { len } else { end };
-            // remove some graphemes
-            let removed = graphemes.drain(start..end);
-            // bind those graphemes to str so it can be returned and saved
-            // as an Action::Remove by the buffer
-            let str = removed
-                .as_ref()
-                .iter()
-                .map(|x| String::from(*x))
-                .collect::<String>();
-            // force removal of graphemes from graphemes Vec
-            drop(removed);
-            // overwrite with new buffer
-            self.data = Buffer::graphemes_to_string(graphemes);
-            self.recompute_size();
-            Some(str)
-        } else {
-            None
+                if let (Some((start, _)), Some((end, _))) = (offset_start, offset_end) {
+                    let str = self.data.drain(start..end).collect::<String>();
+                    self.recompute_size();
+                    ret = Some(str)
+                }
+            }
         }
+        ret
     }
 
     fn insert_raw(&mut self, start: usize, new_graphemes: &str) {
-        let mut graphemes = self.data.graphemes(true).collect::<Vec<&str>>();
-
-        let mut start_idx = start;
-        if start >= graphemes.len() {
-            start_idx = graphemes.len();
+        if start >= self.num_graphemes() {
+            let len = self.data.len();
+            self.data.insert_str(len, new_graphemes);
+        } else {
+            // get the byte offset of the grapheme currently under the cursor and...
+            if let Some((offset, _)) = self.data.grapheme_indices(true).nth(start) {
+                // put our new data there.
+                self.data.insert_str(offset, new_graphemes);
+            }
         }
-        graphemes.splice(start_idx..start_idx, vec![new_graphemes]);
-        self.data = Buffer::graphemes_to_string(graphemes);
         self.recompute_size();
     }
 
