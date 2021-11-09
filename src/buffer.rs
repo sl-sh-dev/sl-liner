@@ -56,6 +56,7 @@ pub struct Buffer {
     actions: Vec<Action>,
     undone_actions: Vec<Action>,
     register: Option<String>,
+    curr_num_graphemes: usize,
 }
 
 impl PartialEq for Buffer {
@@ -96,7 +97,6 @@ impl<'a> From<&'a str> for Buffer {
 
 impl fmt::Display for Buffer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        //TODO fixme avoid char array
         let chars = self.to_char_vec();
         for c in chars {
             f.write_char(c)?;
@@ -107,11 +107,14 @@ impl fmt::Display for Buffer {
 
 impl FromIterator<char> for Buffer {
     fn from_iter<T: IntoIterator<Item = char>>(t: T) -> Self {
+        let str = t.into_iter().collect::<String>();
+        let len = Buffer::string_to_graphemes_vec(&str).len();
         Buffer {
-            data: t.into_iter().collect::<String>(),
+            data: str,
             actions: Vec::new(),
             undone_actions: Vec::new(),
             register: None,
+            curr_num_graphemes: len,
         }
     }
 }
@@ -129,6 +132,7 @@ impl Buffer {
             actions: Vec::new(),
             undone_actions: Vec::new(),
             register: None,
+            curr_num_graphemes: 0,
         }
     }
 
@@ -226,7 +230,7 @@ impl Buffer {
     }
 
     pub fn num_graphemes(&self) -> usize {
-        self.get_all_graphemes().len()
+        self.curr_num_graphemes
     }
 
     pub fn num_bytes(&self) -> usize {
@@ -242,13 +246,11 @@ impl Buffer {
         let graphemes = self.to_graphemes_vec();
         let len = graphemes.len();
         let end = if end >= len { len } else { end };
-        //TODO fixme mem copy
         graphemes[start..end].to_owned()
     }
 
     fn get_grapheme(&self, cursor: usize) -> Option<&str> {
         let graphemes = self.to_graphemes_vec();
-        //TODO fixme mem copy
         graphemes.get(cursor).copied()
     }
 
@@ -262,8 +264,8 @@ impl Buffer {
 
     /// Returns the graphemes removed. Does not register as an action in the undo/redo
     /// buffer or in the buffer's register.
-    pub fn remove_unrecorded(&mut self, start: usize, end: usize) -> Option<String> {
-        self.remove_raw(start, end)
+    pub fn remove_unrecorded(&mut self, start: usize, end: usize) {
+        self.remove_raw(start, end);
     }
 
     /// Returns the number of graphemes removed.
@@ -330,7 +332,7 @@ impl Buffer {
     }
 
     pub fn append_buffer(&mut self, other: &Buffer) -> usize {
-        let start = self.data.len();
+        let start = self.num_graphemes();
         self.insert(start, other.to_char_vec().iter())
     }
 
@@ -432,8 +434,21 @@ impl Buffer {
         self.data.chars().map(|x| x as char).collect::<Vec<char>>()
     }
 
+    /// done after an insert/remove for two reasons:
+    /// 1. the number of graphemes may change
+    /// 2. knowing the length of the buffer in graphemes is an important
+    /// constant for callers to reference.
+    fn recompute_size(&mut self) {
+        self.curr_num_graphemes = self.to_graphemes_vec().len();
+    }
+
+    /// Push ch onto the end of the buffer.
+    pub fn push(&mut self, ch: char) {
+        self.data.push(ch);
+        self.recompute_size();
+    }
+
     fn remove_raw(&mut self, start: usize, end: usize) -> Option<String> {
-        //TODO fixme
         if !self.data.is_empty() {
             //first turn underlying Vec<char> into  a vec of graphemes.
 
@@ -442,16 +457,18 @@ impl Buffer {
             let end = if end >= len { len } else { end };
             // remove some graphemes
             let removed = graphemes.drain(start..end);
-            // bind those graphemes to str so it can be returned
+            // bind those graphemes to str so it can be returned and saved
+            // as an Action::Remove by the buffer
             let str = removed
                 .as_ref()
                 .iter()
                 .map(|x| String::from(*x))
                 .collect::<String>();
-            // force removal of graphemes in removed from graphemes Vec
+            // force removal of graphemes from graphemes Vec
             drop(removed);
             // overwrite with new buffer
             self.data = Buffer::graphemes_to_string(graphemes);
+            self.recompute_size();
             Some(str)
         } else {
             None
@@ -466,8 +483,8 @@ impl Buffer {
             start_idx = graphemes.len();
         }
         graphemes.splice(start_idx..start_idx, vec![new_graphemes]);
-
         self.data = Buffer::graphemes_to_string(graphemes);
+        self.recompute_size();
     }
 
     /// Check if the other buffer starts with the same content as this one.
@@ -526,11 +543,6 @@ impl Buffer {
             }
         }
         ret
-    }
-
-    /// Push ch onto the end of the buffer.
-    pub fn push(&mut self, ch: char) {
-        self.data.push(ch);
     }
 }
 
