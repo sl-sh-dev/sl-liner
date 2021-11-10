@@ -291,9 +291,9 @@ impl Buffer {
     ) -> usize {
         let mut inserted = 0;
         if let Some(text) = self.register.as_ref() {
-            inserted = Buffer::string_to_graphemes_vec(text).len();
-            if inserted > 0 {
-                if self.num_graphemes() > idx && right {
+            if !text.is_empty() {
+                let orig_len = self.num_graphemes();
+                if orig_len > idx && right {
                     // insert to right of cursor
                     idx += 1;
                 }
@@ -303,18 +303,18 @@ impl Buffer {
                     for _i in 0..count {
                         full_text.push_str(text);
                     }
-                    inserted *= count;
                     full_text
                 } else {
                     text.to_owned()
                 };
                 self.insert_action(Action::Insert { start: idx, text });
+                let new_len = self.num_graphemes();
+                inserted = new_len - orig_len;
             }
         }
         inserted
     }
 
-    //TODO consider making this private
     pub fn insert<'a, I>(&mut self, start: usize, text: I) -> usize
     where
         I: Iterator<Item = &'a char>,
@@ -487,17 +487,12 @@ impl Buffer {
     /// Check if the other buffer starts with the same content as this one.
     /// Used to implement autosuggestions.
     pub fn starts_with(&self, other: &Buffer) -> bool {
-        let other_graphemes = other.to_graphemes_vec();
-        let self_graphemes = self.to_graphemes_vec();
-        let other_len = other_graphemes.len();
-        let self_len = self_graphemes.len();
-        if !other_graphemes.is_empty() && self_len != other_len {
-            let match_let = self_graphemes
-                .iter()
-                .zip(&other_graphemes)
-                .take_while(|&(s, o)| *s == *o)
-                .count();
-            match_let == other_len
+        let other = &other.data;
+        let this = &self.data;
+        let other_len = other.len();
+        let self_len = this.len();
+        if !other.is_empty() && self_len != other_len {
+            this.starts_with(other)
         } else {
             false
         }
@@ -505,14 +500,13 @@ impl Buffer {
 
     /// Check if the buffer contains pattern.
     /// Used to implement history search.
-    pub fn contains(&self, pattern: &Buffer) -> bool {
-        let search_term = pattern.to_graphemes_vec();
-        if search_term.is_empty() {
+    pub fn contains(&self, other: &Buffer) -> bool {
+        let other = &other.data;
+        if other.is_empty() {
             return false;
+        } else {
+            self.data.contains(other)
         }
-        self.to_graphemes_vec()
-            .windows(search_term.len())
-            .any(|window| window == search_term)
     }
 
     /// Return true if the buffer is empty.
