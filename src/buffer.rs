@@ -244,7 +244,7 @@ impl Buffer {
     }
 
     fn get_grapheme(&self, cursor: usize) -> Option<&str> {
-        GraphemeIter::new(&self.data, &self.grapheme_indices).get(cursor)
+        GraphemeIter::new(&self.data, &self.grapheme_indices, 0, self.num_graphemes()).get(cursor)
     }
 
     pub fn grapheme_before(&self, cursor: usize) -> Option<&str> {
@@ -337,23 +337,18 @@ impl Buffer {
     }
 
     pub fn range_graphemes_all(&self) -> GraphemeIter {
-        GraphemeIter::new(&self.data, &self.grapheme_indices)
+        GraphemeIter::new(&self.data, &self.grapheme_indices, 0, self.num_graphemes())
     }
 
     pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
         if start == 0 && end >= self.curr_num_graphemes {
             self.range_graphemes_all()
         } else {
-            let start_idx = self.grapheme_indices.get(start);
-            let end_idx = self.grapheme_indices.get(end);
-            if let (Some(start_idx), Some(end_idx)) = (start_idx, end_idx) {
-                GraphemeIter::new_bytes(
-                    &self.data.as_bytes()[*start_idx..*end_idx],
-                    &self.grapheme_indices[start..end],
-                )
-            } else {
-                GraphemeIter::default()
-            }
+            println!("thing: {:?}.",
+                     GraphemeIter::new(&self.data,
+                                       &self.grapheme_indices, start, end)
+                         .collect::<String>());
+            GraphemeIter::new(&self.data, &self.grapheme_indices, start, end)
         }
     }
 
@@ -367,6 +362,7 @@ impl Buffer {
         self.data.split('\n').map(|s| s.graphemes(true).count())
     }
 
+    //TODO why not return reference or iterator?
     pub fn lines(&self) -> Vec<String> {
         self.data.split('\n').map(|x| x.to_owned()).collect()
     }
@@ -411,14 +407,12 @@ impl Buffer {
     }
 
     pub fn yank(&mut self, start: usize, end: usize) {
-        let graphemes = self.to_graphemes_vec();
-        let slice;
-        if end >= graphemes.len() {
-            slice = &graphemes[start..];
-        } else {
-            slice = &graphemes[start..end];
-        }
-        let slice = slice.iter().map(|x| String::from(*x)).collect::<String>();
+        println!(
+            "meow:curr {}, topos {}, len: {}.",
+            start, end, self.curr_num_graphemes
+        );
+        let slice = self.range_graphemes(start, end).collect::<String>();
+        println!("slice: {}", slice);
         self.register = Some(slice);
     }
 

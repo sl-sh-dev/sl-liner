@@ -1,5 +1,4 @@
 use std::io::{BufRead, Read, Result};
-use std::str::from_utf8;
 
 #[derive(Debug)]
 pub struct GraphemeIter<'a> {
@@ -7,7 +6,9 @@ pub struct GraphemeIter<'a> {
     offsets: &'a [usize],
     curr_grapheme: usize,
     curr_grapheme_back: usize,
-    curr_offset: usize,
+    curr_offset: Option<usize>,
+    min_grapheme: usize,
+    max_grapheme: usize,
 }
 
 impl<'a> Default for GraphemeIter<'a> {
@@ -17,49 +18,38 @@ impl<'a> Default for GraphemeIter<'a> {
             offsets: &[],
             curr_grapheme: 0,
             curr_grapheme_back: 0,
-            curr_offset: 0,
+            curr_offset: Some(0),
+            min_grapheme: 0,
+            max_grapheme: 0,
         }
     }
 }
 
 //TODO why not just use their iterator and keep the cool get() logic.
 impl<'a> GraphemeIter<'a> {
-    pub fn new(data: &'a str, offsets: &'a [usize]) -> Self {
+    pub fn new(
+        data: &'a str,
+        offsets: &'a [usize],
+        curr_grapheme: usize,
+        max_grapheme: usize,
+    ) -> Self {
         GraphemeIter {
             data,
             offsets,
-            curr_grapheme: 0,
-            curr_grapheme_back: offsets.len(),
-            curr_offset: 0,
-        }
-    }
-
-    pub fn new_bytes(bytes: &'a [u8], offsets: &'a [usize]) -> Self {
-        if let Ok(data) = from_utf8(bytes) {
-            GraphemeIter {
-                data,
-                offsets,
-                curr_grapheme: 0,
-                curr_grapheme_back: offsets.len(),
-                curr_offset: 0,
-            }
-        } else {
-            GraphemeIter {
-                data: "",
-                offsets,
-                curr_grapheme: 0,
-                curr_grapheme_back: 0,
-                curr_offset: 0,
-            }
+            curr_grapheme,
+            curr_grapheme_back: max_grapheme - 1,
+            curr_offset: offsets.get(curr_grapheme).copied(),
+            min_grapheme: curr_grapheme,
+            max_grapheme,
         }
     }
 
     pub fn get(&self, idx: usize) -> Option<&'a str> {
         let mut str = None;
-        if idx < self.offsets.len() {
+        if idx < self.max_grapheme {
             let start = self.offsets[idx];
             let end;
-            if idx + 1 == self.offsets.len() {
+            if idx + 1 == self.max_grapheme {
                 str = Some(&self.data[start..]);
             } else {
                 end = self.offsets[idx + 1];
@@ -81,11 +71,17 @@ impl<'a> Read for GraphemeIter<'a> {
 
 impl<'a> BufRead for GraphemeIter<'a> {
     fn fill_buf(&mut self) -> Result<&[u8]> {
-        Ok(&self.data.as_bytes()[self.curr_offset..])
+        if let Some(curr_offset) = self.curr_offset {
+            Ok(&self.data.as_bytes()[curr_offset..])
+        } else {
+            Ok(&[])
+        }
     }
 
     fn consume(&mut self, amt: usize) {
-        self.curr_offset += amt;
+        if let Some(curr_offset) = self.curr_offset {
+            self.curr_offset = Some(curr_offset + amt);
+        }
     }
 }
 
@@ -104,16 +100,29 @@ impl<'a> Iterator for GraphemeIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let str;
-        if self.curr_grapheme >= self.offsets.len() {
+        if self.curr_grapheme >= self.max_grapheme {
             str = None
+        } else if self.max_grapheme - self.min_grapheme == 1 {
+            let start = self.offsets[self.min_grapheme];
+            if self.max_grapheme == self.offsets.len() {
+                str = Some(&self.data[start..]);
+            } else {
+                let end = self.offsets[self.max_grapheme];
+                str = Some(&self.data[start..end]);
+            }
+            self.curr_grapheme = self.max_grapheme + 1;
         } else {
             let start = self.offsets[self.curr_grapheme];
             self.curr_grapheme += 1;
-            let end;
-            if self.curr_grapheme == self.offsets.len() {
-                str = Some(&self.data[start..]);
+            if self.curr_grapheme == self.max_grapheme {
+                if self.curr_grapheme  == self.offsets.len() {
+                    str = Some(&self.data[start..]);
+                } else {
+                    let end = self.offsets[self.max_grapheme];
+                    str = Some(&self.data[start..end]);
+                }
             } else {
-                end = self.offsets[self.curr_grapheme];
+                let end = self.offsets[self.curr_grapheme];
                 str = Some(&self.data[start..end]);
             }
         }
@@ -126,18 +135,38 @@ impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
         let str;
         if self.curr_grapheme_back == 0 {
             str = None
-        } else {
-            let start = self.offsets[self.curr_grapheme_back - 1];
-            if self.curr_grapheme_back == self.offsets.len() {
-                self.curr_grapheme_back -= 1;
+        } else if self.max_grapheme - self.min_grapheme == 1 {
+            let start = self.offsets[self.min_grapheme];
+            if self.max_grapheme == self.offsets.len() {
                 str = Some(&self.data[start..]);
-            } else if self.curr_grapheme_back == 1 {
-                let end = self.offsets[self.curr_grapheme_back];
-                self.curr_grapheme_back -= 1;
-                str = Some(&self.data[..end]);
             } else {
+                let end = self.offsets[self.max_grapheme];
+                str = Some(&self.data[start..end]);
+            }
+            self.curr_grapheme_back = 0;
+        } else {
+            let start = self.offsets[self.curr_grapheme_back];
+            if self.curr_grapheme_back == self.max_grapheme - 1 {
+                if self.max_grapheme == self.offsets.len() {
+                    str = Some(&self.data[start..]);
+                } else {
+                    let max_char = self.offsets[self.curr_grapheme_back + 1];
+                    str = Some(&self.data[start..max_char]);
+                }
                 self.curr_grapheme_back -= 1;
+            } else if self.curr_grapheme_back == self.min_grapheme {
+                if self.min_grapheme == 0 {
+                    let end = self.offsets[self.curr_grapheme_back + 1];
+                    self.curr_grapheme_back -= 1;
+                    str = Some(&self.data[..end]);
+                } else {
+                    let end = self.offsets[self.curr_grapheme_back + 1];
+                    self.curr_grapheme_back -= 1;
+                    str = Some(&self.data[start..end]);
+                }
+            } else {
                 let end = self.offsets[self.curr_grapheme_back + 1];
+                self.curr_grapheme_back -= 1;
                 str = Some(&self.data[start..end]);
             }
         }
@@ -153,8 +182,21 @@ mod tests {
     fn test_iterate() {
         let expected_str = String::from("012ते345");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
-        let gs = GraphemeIter::new(&expected_str, &offsets);
+        let gs = GraphemeIter::new(&expected_str, &offsets, 0, 7);
         let mut actual_str = String::with_capacity(12);
+        for f in gs {
+            actual_str.push_str(f);
+        }
+        assert_eq!(expected_str, actual_str);
+    }
+
+    #[test]
+    fn test_iterate_forward_slice() {
+        let base = String::from("012ते345");
+        let expected_str = String::from("ते34");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let gs = GraphemeIter::new(&base, &offsets, 3, 6);
+        let mut actual_str = String::with_capacity(8);
         for f in gs {
             actual_str.push_str(f);
         }
@@ -166,8 +208,21 @@ mod tests {
         let expected_str = String::from("012ते345");
         let expected_rev_str = String::from("543ते210");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
-        let gs = GraphemeIter::new(&expected_str, &offsets);
+        let gs = GraphemeIter::new(&expected_str, &offsets, 0, 7);
         let mut actual_rev_str = String::with_capacity(12);
+        for x in gs.rev() {
+            actual_rev_str.push_str(x);
+        }
+        assert_eq!(expected_rev_str, actual_rev_str);
+    }
+
+    #[test]
+    fn test_iterate_backwards_slice() {
+        let expected_str = String::from("012ते345");
+        let expected_rev_str = String::from("43ते");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let gs = GraphemeIter::new(&expected_str, &offsets, 3, 6);
+        let mut actual_rev_str = String::with_capacity(8);
         for x in gs.rev() {
             actual_rev_str.push_str(x);
         }
