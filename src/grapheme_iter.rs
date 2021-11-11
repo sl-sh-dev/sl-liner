@@ -22,6 +22,7 @@ impl<'a> Default for GraphemeIter<'a> {
     }
 }
 
+//TODO why not just use their iterator and keep the cool get() logic.
 impl<'a> GraphemeIter<'a> {
     pub fn new(data: &'a str, offsets: &'a [usize]) -> Self {
         GraphemeIter {
@@ -51,6 +52,21 @@ impl<'a> GraphemeIter<'a> {
                 curr_offset: 0,
             }
         }
+    }
+
+    pub fn get(&self, idx: usize) -> Option<&'a str> {
+        let mut str = None;
+        if idx < self.offsets.len() {
+            let start = self.offsets[idx];
+            let end;
+            if idx + 1 == self.offsets.len() {
+                str = Some(&self.data[start..]);
+            } else {
+                end = self.offsets[idx + 1];
+                str = Some(&self.data[start..end]);
+            }
+        }
+        str
     }
 }
 

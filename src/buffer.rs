@@ -244,8 +244,7 @@ impl Buffer {
     }
 
     fn get_grapheme(&self, cursor: usize) -> Option<&str> {
-        let graphemes = self.to_graphemes_vec();
-        graphemes.get(cursor).copied()
+        GraphemeIter::new(&self.data, &self.grapheme_indices).get(cursor)
     }
 
     pub fn grapheme_before(&self, cursor: usize) -> Option<&str> {
@@ -342,7 +341,7 @@ impl Buffer {
     }
 
     pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
-        if start == 0 && end == self.curr_num_graphemes {
+        if start == 0 && end >= self.curr_num_graphemes {
             self.range_graphemes_all()
         } else {
             let start_idx = self.grapheme_indices.get(start);
@@ -448,6 +447,7 @@ impl Buffer {
     fn recompute_size(&mut self) {
         if self.data.is_empty() {
             self.curr_num_graphemes = 0;
+            self.grapheme_indices.clear();
         } else {
             self.grapheme_indices = self.to_graphemes_indices();
             self.curr_num_graphemes = self.grapheme_indices.len();
