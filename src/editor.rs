@@ -1,132 +1,25 @@
-use sl_console::{self, clear, color, cursor};
-use std::cmp;
-use std::cmp::Ordering;
-use std::fmt::{self, Write};
 use std::io;
 
-use super::complete::Completer;
+use sl_console::{self, color};
+
 use crate::context::ColorClosure;
+use crate::cursor::CursorPosition;
 use crate::event::*;
-use crate::util;
-use crate::Buffer;
-use crate::History;
+use crate::prompt::Prompt;
+use crate::{util, Terminal};
+use crate::{Buffer, Cursor};
+use crate::{History, Metrics};
 
-/// User-defined prompt.
-///
-/// # Examples
-///
-/// You simply define a static prompt that holds a string.
-/// The prefix and suffix fields are intended for keybinds to change the
-/// prompt (ie the mode in vi).
-/// ```
-/// # use sl_liner::Prompt;
-/// let prompt = Prompt::from("prompt$ ");
-/// assert_eq!(&prompt.to_string(), "prompt$ ");
-/// ```
-pub struct Prompt {
-    pub prefix: Option<String>,
-    pub prompt: String,
-    pub suffix: Option<String>,
-}
-
-impl Prompt {
-    /// Constructs a static prompt.
-    pub fn from<P: Into<String>>(prompt: P) -> Self {
-        Prompt {
-            prefix: None,
-            prompt: prompt.into(),
-            suffix: None,
-        }
-    }
-
-    pub fn prefix(&self) -> &str {
-        match &self.prefix {
-            Some(prefix) => prefix,
-            None => "",
-        }
-    }
-
-    pub fn suffix(&self) -> &str {
-        match &self.suffix {
-            Some(suffix) => suffix,
-            None => "",
-        }
-    }
-}
-
-impl fmt::Display for Prompt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}{}", self.prefix(), self.prompt, self.suffix())
-    }
-}
-
-/// Represents the position of the cursor relative to words in the buffer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CursorPosition {
-    /// The cursor is in the word with the specified index.
-    InWord(usize),
-
-    /// The cursor is on the left edge of the word with the specified index.
-    /// For example: `abc |hi`, where `|` is the cursor.
-    OnWordLeftEdge(usize),
-
-    /// The cursor is on the right edge of the word with the specified index.
-    /// For example: `abc| hi`, where `|` is the cursor.
-    OnWordRightEdge(usize),
-
-    /// The cursor is not in contact with any word. Each `Option<usize>` specifies the index of the
-    /// closest word to the left and right, respectively, or `None` if there is no word on that side.
-    InSpace(Option<usize>, Option<usize>),
-}
-
-impl CursorPosition {
-    pub fn get(cursor: usize, words: &[(usize, usize)]) -> CursorPosition {
-        use CursorPosition::*;
-
-        if words.is_empty() {
-            return InSpace(None, None);
-        } else if cursor == words[0].0 {
-            return OnWordLeftEdge(0);
-        } else if cursor < words[0].0 {
-            return InSpace(None, Some(0));
-        }
-
-        for (i, &(start, end)) in words.iter().enumerate() {
-            if start == cursor {
-                return OnWordLeftEdge(i);
-            } else if end == cursor {
-                return OnWordRightEdge(i);
-            } else if start < cursor && cursor < end {
-                return InWord(i);
-            } else if cursor < start {
-                return InSpace(Some(i - 1), Some(i));
-            }
-        }
-
-        InSpace(Some(words.len() - 1), None)
-    }
-}
+use super::complete::Completer;
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a> {
     prompt: Prompt,
-    out: &'a mut dyn io::Write,
     history: &'a mut History,
-    word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
-    buf: &'a mut String,
 
-    // A closure that is evaluated just before we write to out.
-    // This allows us to do custom syntax highlighting and other fun stuff.
-    closure: Option<ColorClosure>,
-    // Use the closure if it is set.
-    use_closure: bool,
-    // Last string that was colorized and last colorized version.
-    color_lines: Option<(String, String)>,
-
-    // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
-    // So, if `cursor == 0` then the cursor is before the first char,
-    // and if `cursor == 1` ten the cursor is after the first char and before the second char.
-    cursor: usize,
+    // w/ buffer and pos/count directives maintain the location of the terminal's
+    // cursor
+    cursor: Cursor<'a>,
 
     // Buffer for the new line (ie. not from editing history)
     new_buf: Buffer,
@@ -138,20 +31,14 @@ pub struct Editor<'a> {
     // None if we're on the new buffer, else the index of history
     cur_history_loc: Option<usize>,
 
-    // The line of the cursor relative to the prompt. 1-indexed.
-    // So if the cursor is on the same line as the prompt, `term_cursor_line == 1`.
-    // If the cursor is on the line below the prompt, `term_cursor_line == 2`.
-    term_cursor_line: usize,
+    // Terminal is the interface editor uses to write to the actual terminal.
+    term: Terminal<'a>,
 
     // The next completion to suggest, or none
     show_completions_hint: Option<(Vec<String>, Option<usize>)>,
 
     // Show autosuggestions based on history
     show_autosuggestions: bool,
-
-    // if set, the cursor will not be allow to move one past the end of the line, this is necessary
-    // for Vi's normal mode.
-    pub no_eol: bool,
 
     reverse_search: bool,
     forward_search: bool,
@@ -185,15 +72,9 @@ macro_rules! cur_buf {
     ($s:expr) => {
         match $s.cur_history_loc {
             Some(_) if $s.hist_buf_valid => &$s.hist_buf,
-            //Some(i) => &$s.history[i],
             _ => &$s.new_buf,
         }
     };
-}
-
-fn fmt_io_err(err: std::fmt::Error) -> io::Error {
-    let msg = format!("{}", err);
-    io::Error::new(io::ErrorKind::Other, msg)
 }
 
 impl<'a> Editor<'a> {
@@ -217,48 +98,19 @@ impl<'a> Editor<'a> {
         buf: &'a mut String,
         buffer: B,
     ) -> io::Result<Self> {
-        out.write_all("⏎".as_bytes())?;
-        for _ in 0..(util::terminal_width().unwrap_or(80) - 1) {
-            out.write_all(b" ")?; // if the line is not empty, overflow on next line
-        }
-        out.write_all("\r \r".as_bytes())?; // Erase the "⏎" if nothing overwrites it
-        let Prompt {
-            prefix,
-            mut prompt,
-            suffix,
-        } = prompt;
-        for (i, pline) in prompt.split('\n').enumerate() {
-            if i > 0 {
-                out.write_all(b"\r\n")?;
-            }
-            out.write_all(pline.as_bytes())?;
-        }
-        if let Some(index) = prompt.rfind('\n') {
-            prompt = prompt.split_at(index + 1).1.into()
-        }
-        let prompt = Prompt {
-            prefix,
-            prompt,
-            suffix,
-        };
+        let mut term = Terminal::new(f, buf, out);
+        let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
-            cursor: 0,
-            out,
-            closure: f,
-            use_closure: true,
-            color_lines: None,
+            cursor: Cursor::new(word_divider_fn),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
             cur_history_loc: None,
             history,
-            word_divider_fn,
-            buf,
             show_completions_hint: None,
             show_autosuggestions: true,
-            term_cursor_line: 1,
-            no_eol: false,
+            term,
             reverse_search: false,
             forward_search: false,
             buffer_changed: false,
@@ -271,17 +123,17 @@ impl<'a> Editor<'a> {
         if !ed.new_buf.is_empty() {
             ed.move_cursor_to_end_of_line()?;
         }
-        ed.display()?;
+        ed.display_term()?;
         Ok(ed)
     }
 
     pub fn set_closure(&mut self, closure: ColorClosure) -> &mut Self {
-        self.closure = Some(closure);
+        self.term.set_closure(closure);
         self
     }
 
     pub fn use_closure(&mut self, use_closure: bool) {
-        self.use_closure = use_closure;
+        self.term.use_closure(use_closure)
     }
 
     fn is_search(&self) -> bool {
@@ -301,10 +153,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn get_words_and_cursor_position(&self) -> (Vec<(usize, usize)>, CursorPosition) {
-        let word_fn = &self.word_divider_fn;
-        let words = word_fn(cur_buf!(self));
-        let pos = CursorPosition::get(self.cursor, &words);
-        (words, pos)
+        self.cursor.get_words_and_cursor_position(cur_buf!(self))
     }
 
     pub fn history(&mut self) -> &mut History {
@@ -312,7 +161,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn cursor(&self) -> usize {
-        self.cursor
+        self.cursor.char_vec_pos()
     }
 
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
@@ -331,13 +180,13 @@ impl<'a> Editor<'a> {
         if last_char == Some(&'\\') {
             let buf = cur_buf_mut!(self);
             buf.push('\n');
-            self.cursor = buf.num_chars();
-            self.display()?;
+            self.cursor.move_cursor_to_end_of_line(buf);
+            self.display_term()?;
             Ok(false)
         } else {
-            self.cursor = cur_buf!(self).num_chars();
-            self._display(false)?;
-            self.out.write_all(b"\r\n")?;
+            self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
+            self.display_term_with_autosuggest(false)?;
+            self.term.write_newline()?;
             self.show_completions_hint = None;
             Ok(true)
         }
@@ -412,12 +261,12 @@ impl<'a> Editor<'a> {
                 None
             };
         }
-        self.display()?;
+        self.display_term()?;
         Ok(())
     }
 
     pub fn flush(&mut self) -> io::Result<()> {
-        self.out.flush()
+        self.term.flush()
     }
 
     /// Attempts to undo an action on the current buffer.
@@ -432,11 +281,11 @@ impl<'a> Editor<'a> {
         cur_buf_mut!(self).redo()
     }
 
-    /// Inserts characters to the right or the left of the cursor, moving the cursor to the last
-    /// character inserted.
-    pub fn paste(&mut self, right: bool, count: usize) -> usize {
-        let buf = cur_buf_mut!(self);
-        buf.insert_register_around_cursor(self.cursor, count, right)
+    /// Inserts characters from internal register to the right or the left of the cursor, moving the
+    /// cursor to the last character inserted.
+    pub fn paste(&mut self, right: bool, count: usize) -> io::Result<()> {
+        self.cursor.insert_around(cur_buf_mut!(self), right, count);
+        self.display_term()
     }
 
     pub fn revert(&mut self) -> io::Result<bool> {
@@ -444,63 +293,9 @@ impl<'a> Editor<'a> {
         if did {
             self.move_cursor_to_end_of_line()?;
         } else {
-            self.display()?;
+            self.display_term()?;
         }
         Ok(did)
-    }
-
-    fn print_completion_list(
-        completions: &[String],
-        highlighted: Option<usize>,
-        output_buf: &mut String,
-    ) -> io::Result<usize> {
-        use std::cmp::max;
-
-        let (w, _) = sl_console::terminal_size()?;
-
-        // XXX wide character support
-        let max_word_size = completions.iter().fold(1, |m, x| max(m, x.chars().count()));
-        let cols = max(1, w as usize / (max_word_size));
-        let col_width = 2 + w as usize / cols;
-        let cols = max(1, w as usize / col_width);
-
-        let lines = completions.len() / cols;
-
-        let mut i = 0;
-        for (index, com) in completions.iter().enumerate() {
-            match i.cmp(&cols) {
-                Ordering::Greater => unreachable!(),
-                Ordering::Less => {}
-                Ordering::Equal => {
-                    output_buf.push_str("\r\n");
-                    i = 0;
-                }
-            }
-
-            if Some(index) == highlighted {
-                write!(
-                    output_buf,
-                    "{}{}",
-                    color::Black.fg_str(),
-                    color::White.bg_str()
-                )
-                .map_err(fmt_io_err)?;
-            }
-            write!(output_buf, "{:<1$}", com, col_width).map_err(fmt_io_err)?;
-            if Some(index) == highlighted {
-                write!(
-                    output_buf,
-                    "{}{}",
-                    color::Reset.bg_str(),
-                    color::Reset.fg_str()
-                )
-                .map_err(fmt_io_err)?;
-            }
-
-            i += 1;
-        }
-
-        Ok(lines)
     }
 
     pub fn skip_completions_hint(&mut self) {
@@ -515,8 +310,7 @@ impl<'a> Editor<'a> {
 
             match i_in {
                 Some(x) if cur_buf!(self) == &Buffer::from(&completions[x][..]) => {
-                    cur_buf_mut!(self).truncate(0);
-                    self.cursor = 0;
+                    self.cursor.reset(cur_buf_mut!(self));
                 }
                 _ => self.delete_word_before_cursor(false)?,
             }
@@ -525,7 +319,7 @@ impl<'a> Editor<'a> {
             self.show_completions_hint = Some((completions, Some(i)));
         }
         if self.show_completions_hint.is_some() {
-            self.display()?;
+            self.display_term()?;
             return Ok(());
         }
 
@@ -570,7 +364,7 @@ impl<'a> Editor<'a> {
             }
 
             self.show_completions_hint = Some((completions, None));
-            self.display()?;
+            self.display_term()?;
 
             Ok(())
         }
@@ -609,19 +403,16 @@ impl<'a> Editor<'a> {
         ignore_space_before_cursor: bool,
     ) -> io::Result<()> {
         if let Some((start, _)) = self.get_word_before_cursor(ignore_space_before_cursor) {
-            let moved = cur_buf_mut!(self).remove(start, self.cursor);
-            self.cursor -= moved;
+            self.cursor.remove(cur_buf_mut!(self), start);
         }
-        self.display()
+        self.display_term()
     }
 
     /// Clears the screen then prints the prompt and current buffer.
     pub fn clear(&mut self) -> io::Result<()> {
-        write!(&mut self.buf, "{}{}", clear::All, cursor::Goto(1, 1)).map_err(fmt_io_err)?;
-
-        self.term_cursor_line = 1;
+        self.term.clear()?;
         self.clear_search();
-        self.display()
+        self.display_term()
     }
 
     /// Move up (backwards) in history.
@@ -700,7 +491,7 @@ impl<'a> Editor<'a> {
         if self.history.is_empty() {
             self.cur_history_loc = None;
             self.hist_buf_valid = false;
-            self.display()
+            self.display_term()
         } else {
             self.cur_history_loc = Some(0);
             self.hist_buf_valid = false;
@@ -717,7 +508,7 @@ impl<'a> Editor<'a> {
             self.hist_buf_valid = false;
             self.move_cursor_to_end_of_line()
         } else {
-            self.display()
+            self.display_term()
         }
     }
 
@@ -725,214 +516,132 @@ impl<'a> Editor<'a> {
     ///
     /// Note: it is more efficient to call `insert_chars_after_cursor()` directly.
     pub fn insert_str_after_cursor(&mut self, s: &str) -> io::Result<()> {
-        self.insert_chars_after_cursor(&s.chars().collect::<Vec<char>>()[..])
+        self.cursor.insert_str_after_cursor(cur_buf_mut!(self), s);
+        self.display_term()
     }
 
     /// Inserts a character directly after the cursor, moving the cursor to the right.
     pub fn insert_after_cursor(&mut self, c: char) -> io::Result<()> {
-        self.insert_chars_after_cursor(&[c])
+        self.cursor.insert_char_after_cursor(cur_buf_mut!(self), c);
+        self.display_term()
     }
 
     /// Inserts characters directly after the cursor, moving the cursor to the right.
     pub fn insert_chars_after_cursor(&mut self, cs: &[char]) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.insert(self.cursor, cs);
-        }
-
-        self.cursor += cs.len();
-        self.display()
+        self.cursor
+            .insert_chars_after_cursor(cur_buf_mut!(self), cs);
+        self.display_term()
     }
 
     /// Deletes the character directly before the cursor, moving the cursor to the left.
     /// If the cursor is at the start of the line, nothing happens.
     pub fn delete_before_cursor(&mut self) -> io::Result<()> {
-        if self.cursor > 0 {
-            let buf = cur_buf_mut!(self);
-            buf.remove(self.cursor - 1, self.cursor);
-            self.cursor -= 1;
-        }
-
-        self.display()
+        self.cursor.delete_before_cursor(cur_buf_mut!(self));
+        self.display_term()
     }
 
     /// Deletes the character directly after the cursor. The cursor does not move.
     /// If the cursor is at the end of the line, nothing happens.
     pub fn delete_after_cursor(&mut self) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-
-            if self.cursor < buf.num_chars() {
-                buf.remove(self.cursor, self.cursor + 1);
-            }
-        }
-        self.display()
+        self.cursor.delete_after_cursor(cur_buf_mut!(self));
+        self.display_term()
     }
 
     /// Deletes every character preceding the cursor until the beginning of the line.
     pub fn delete_all_before_cursor(&mut self) -> io::Result<()> {
-        cur_buf_mut!(self).remove(0, self.cursor);
-        self.cursor = 0;
-        self.display()
+        self.cursor.delete_all_before_cursor(cur_buf_mut!(self));
+        self.display_term()
     }
 
     /// Yanks every character after the cursor until the end of the line.
     pub fn yank_all_after_cursor(&mut self) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.yank(self.cursor, buf.num_chars());
-        }
-        self.display()
+        self.cursor.yank_all_after_cursor(cur_buf_mut!(self));
+        self.display_term()
     }
 
     /// Deletes every character after the cursor until the end of the line.
     pub fn delete_all_after_cursor(&mut self) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.truncate(self.cursor);
-        }
-        self.display()
+        self.cursor.delete_all_after_cursor(cur_buf_mut!(self));
+        self.display_term()
     }
 
     /// Yanks every character from the cursor until the given position.
     pub fn yank_until(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.yank(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor, position),
-            );
-        }
-        self.display()
+        self.cursor.yank_until(cur_buf_mut!(self), position);
+        self.display_term()
     }
 
     /// Deletes every character from the cursor until the given position. Does not register as an
     /// action in the undo/redo buffer or in the buffer's register.
     pub fn delete_until_silent(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.remove_silent(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor, position),
-            );
-            self.cursor = cmp::min(self.cursor, position);
-        }
-        self.display()
+        self.cursor
+            .delete_until_silent(cur_buf_mut!(self), position);
+        self.display_term()
     }
 
     /// Deletes every character from the cursor until the given position.
     pub fn delete_until(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.remove(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor, position),
-            );
-            self.cursor = cmp::min(self.cursor, position);
-        }
-        self.display()
+        self.cursor.delete_until(cur_buf_mut!(self), position);
+        self.display_term()
     }
 
     /// Yanks every character from the cursor until the given position, inclusive.
     pub fn yank_until_inclusive(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.yank(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor + 1, position + 1),
-            );
-        }
-        self.display()
+        self.cursor
+            .yank_until_inclusive(cur_buf_mut!(self), position);
+        self.display_term()
     }
 
     /// Deletes every character from the cursor until the given position, inclusive.
     pub fn delete_until_inclusive(&mut self, position: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf_mut!(self);
-            buf.remove(
-                cmp::min(self.cursor, position),
-                cmp::max(self.cursor + 1, position + 1),
-            );
-            self.cursor = cmp::min(self.cursor, position);
-        }
-        self.display()
+        self.cursor
+            .delete_until_inclusive(cur_buf_mut!(self), position);
+        self.display_term()
     }
 
     /// Moves the cursor to the left by `count` characters.
     /// The cursor will not go past the start of the buffer.
-    pub fn move_cursor_left(&mut self, mut count: usize) -> io::Result<()> {
-        if count > self.cursor {
-            count = self.cursor;
-        }
-
-        self.cursor -= count;
-
-        self.display()
+    pub fn move_cursor_left(&mut self, count: usize) -> io::Result<()> {
+        self.cursor.move_cursor_left(count);
+        self.display_term()
     }
 
     /// Moves the cursor to the right by `count` characters.
     /// The cursor will not go past the end of the buffer.
-    pub fn move_cursor_right(&mut self, mut count: usize) -> io::Result<()> {
-        {
-            let buf = cur_buf!(self);
-
-            if count > buf.num_chars() - self.cursor {
-                count = buf.num_chars() - self.cursor;
-            }
-
-            self.cursor += count;
-        }
-
-        self.display()
+    pub fn move_cursor_right(&mut self, count: usize) -> io::Result<()> {
+        self.cursor.move_cursor_right(cur_buf!(self), count);
+        self.display_term()
     }
 
     /// Moves the cursor to `pos`. If `pos` is past the end of the buffer, it will be clamped.
     pub fn move_cursor_to(&mut self, pos: usize) -> io::Result<()> {
-        self.cursor = pos;
-        let buf_len = cur_buf!(self).num_chars();
-        if self.cursor > buf_len {
-            self.cursor = buf_len;
-        }
-        self.display()
+        self.cursor.move_cursor_to(cur_buf!(self), pos);
+        self.display_term()
     }
 
     /// Moves the cursor to the start of the line.
     pub fn move_cursor_to_start_of_line(&mut self) -> io::Result<()> {
-        self.cursor = 0;
-        self.display()
+        self.cursor.move_cursor_to(cur_buf!(self), 0);
+        self.display_term()
     }
 
     /// Moves the cursor to the end of the line.
     pub fn move_cursor_to_end_of_line(&mut self) -> io::Result<()> {
-        self.cursor = cur_buf!(self).num_chars();
-        self.display()
+        self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
+        self.display_term()
     }
 
     pub fn curr_char(&self) -> Option<char> {
         let buf = cur_buf!(self);
-        buf.char_after(self.cursor)
+        buf.char_after(self.cursor.char_vec_pos())
     }
 
-    pub fn cursor_at_beginning_of_word_or_line(&self) -> bool {
-        let buf = cur_buf!(self);
-        let num_chars = buf.num_chars();
-        let cursor_pos = self.cursor;
-        if num_chars > 0 && cursor_pos != 0 {
-            let c = buf.char_before(cursor_pos);
-            if let Some(c) = c {
-                return c.is_whitespace();
-            }
-        }
-        true
+    pub fn is_cursor_at_beginning_of_word_or_line(&self) -> bool {
+        self.cursor.is_at_beginning_of_word_or_line(cur_buf!(self))
     }
 
-    pub fn cursor_is_at_end_of_line(&self) -> bool {
-        let num_chars = cur_buf!(self).num_chars();
-        if self.no_eol {
-            self.cursor == num_chars - 1
-        } else {
-            self.cursor == num_chars
-        }
+    pub fn is_cursor_at_end_of_line(&self) -> bool {
+        self.cursor.is_at_end_of_line(cur_buf!(self))
     }
 
     ///  Returns a reference to the current buffer being edited.
@@ -955,8 +664,12 @@ impl<'a> Editor<'a> {
                 let search = self.is_search();
                 let buf = self.current_buffer_mut();
                 match autosuggestion {
-                    Some(ref x) if search => buf.copy_buffer(x),
-                    Some(ref x) => buf.insert_from_buffer(x),
+                    Some(ref x) if search => {
+                        buf.copy_buffer(x);
+                    }
+                    Some(ref x) => {
+                        buf.insert_from_buffer(x);
+                    }
                     None => (),
                 }
             }
@@ -995,7 +708,7 @@ impl<'a> Editor<'a> {
     }
 
     /// Override the prompt for incremental search if needed.
-    fn search_prompt(&mut self) -> String {
+    fn get_prompt(&self) -> String {
         if self.is_search() {
             // If we are searching override prompt to search prompt.
             let (hplace, color) = if self.history_subset_index.is_empty() {
@@ -1023,221 +736,40 @@ impl<'a> Editor<'a> {
         }
     }
 
-    fn colorize(&mut self, line: &str) -> String {
-        match self.closure {
-            Some(ref mut f) if self.use_closure => {
-                let color = f(line);
-                self.color_lines = Some((line.to_string(), color.clone()));
-                color
-            }
-            Some(_) => {
-                if let Some((old_line, colorized)) = &self.color_lines {
-                    if line.starts_with(old_line) {
-                        let mut new_line = colorized.clone();
-                        new_line.push_str(&line[old_line.len()..]);
-                        new_line
-                    } else {
-                        line.to_owned()
-                    }
-                } else {
-                    line.to_owned()
-                }
-            }
-            _ => line.to_owned(),
-        }
+    pub fn set_no_eol(&mut self, no_eol: bool) {
+        self.cursor.set_no_eol(no_eol);
     }
 
-    fn display_with_suggest(
-        &mut self,
-        line: &str,
-        buf_num_remaining_bytes: usize,
-    ) -> io::Result<()> {
-        let start = self.colorize(&line[..buf_num_remaining_bytes]);
-        if self.is_search() {
-            write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
-        }
-        write!(&mut self.buf, "{}", start).map_err(fmt_io_err)?;
-        if !self.is_search() {
-            write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
-        }
-        self.buf.push_str(&line[buf_num_remaining_bytes..]);
-        Ok(())
-    }
-
-    fn show_lines(&mut self, show_autosuggest: bool, prompt_width: usize) -> io::Result<()> {
+    fn display_term_with_autosuggest(&mut self, show_autosuggest: bool) -> io::Result<()> {
+        let prompt = self.get_prompt();
         let buf = cur_buf!(self);
-        // If we have an autosuggestion, we make the autosuggestion the buffer we print out.
-        // We get the number of bytes in the buffer (but NOT the autosuggestion).
-        // Then, we loop and subtract from that number until it's 0, in which case we are printing
-        // the autosuggestion from here on (in a different color).
-        let lines = match self.autosuggestion {
-            Some(ref suggestion) if show_autosuggest => suggestion.lines(),
-            _ => buf.lines(),
-        };
-        let mut buf_num_remaining_bytes = buf.num_bytes();
+        let is_search = self.is_search();
 
-        let lines_len = lines.len();
-        for (i, line) in lines.into_iter().enumerate() {
-            if i > 0 {
-                write!(&mut self.buf, "{}", cursor::Right(prompt_width as u16))
-                    .map_err(fmt_io_err)?;
-            }
-
-            if buf_num_remaining_bytes == 0 {
-                self.buf.push_str(&line);
-            } else if line.len() > buf_num_remaining_bytes {
-                self.display_with_suggest(&line, buf_num_remaining_bytes)?;
-                buf_num_remaining_bytes = 0;
-            } else {
-                buf_num_remaining_bytes -= line.len();
-                let written_line = self.colorize(&line);
-                if self.is_search() {
-                    write!(&mut self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
-                }
-                self.buf.push_str(&written_line);
-            }
-
-            if i + 1 < lines_len {
-                self.buf.push_str("\r\n");
-            }
-        }
-        Ok(())
-    }
-
-    fn _display(&mut self, show_autosuggest: bool) -> io::Result<()> {
-        fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
-            let mut total = 0;
-
-            for line in buf_widths {
-                if total % terminal_width != 0 {
-                    total = ((total / terminal_width) + 1) * terminal_width;
-                }
-
-                total += prompt_width + line;
-            }
-
-            total
-        }
-
-        let prompt = self.search_prompt();
-
-        let terminal_width = util::terminal_width()?;
-        let prompt_width = util::last_prompt_line_width(&prompt);
-
-        let buf = cur_buf!(self);
-        let buf_width = buf.width();
-
-        // Don't let the cursor go over the end!
-        let buf_num_chars = buf.num_chars();
-        if buf_num_chars < self.cursor {
-            self.cursor = buf_num_chars;
-        }
-
-        // Can't move past the last character in vi normal mode
-        if self.no_eol && self.cursor != 0 && self.cursor == buf_num_chars {
-            self.cursor -= 1;
-        }
-
-        let buf_widths = match self.autosuggestion {
-            Some(ref suggestion) => suggestion.width(),
-            None => buf_width,
-        };
-        // Width of the current buffer lines (including autosuggestion) from the start to the cursor
-        let buf_widths_to_cursor = match self.autosuggestion {
-            // Cursor might overrun autosuggestion with history search.
-            Some(ref suggestion) if self.cursor < suggestion.num_chars() => {
-                suggestion.range_width(0, self.cursor)
-            }
-            _ => buf.range_width(0, self.cursor),
-        };
-
-        // Total number of terminal spaces taken up by prompt and buffer
-        let new_total_width = calc_width(prompt_width, &buf_widths, terminal_width);
-        let new_total_width_to_cursor =
-            calc_width(prompt_width, &buf_widths_to_cursor, terminal_width);
-
-        let new_num_lines = (new_total_width + terminal_width) / terminal_width;
-
-        self.buf.push_str("\x1B[?1000l\x1B[?1l");
-
-        // Move the term cursor to the same line as the prompt.
-        if self.term_cursor_line > 1 {
-            write!(
-                &mut self.buf,
-                "{}",
-                cursor::Up(self.term_cursor_line as u16 - 1)
-            )
-            .map_err(fmt_io_err)?;
-        }
-
-        write!(&mut self.buf, "\r{}", clear::AfterCursor).map_err(fmt_io_err)?;
-
-        // If we're cycling through completions, show those
-        let mut completion_lines = 0;
-        if let Some((completions, i)) = self.show_completions_hint.as_ref() {
-            completion_lines = 1 + Self::print_completion_list(completions, *i, &mut self.buf)?;
-            self.buf.push_str("\r\n");
-        }
+        let metrics = Metrics::new(&prompt, buf, &self.cursor, self.autosuggestion.as_ref())?;
+        self.cursor.pre_display_adjustment(buf);
+        self.term.clear_after_cursor()?;
+        let completion_lines = self
+            .term
+            .maybe_write_completions(self.show_completions_hint.as_ref())?;
 
         // Write the prompt
-        write!(&mut self.buf, "{}", prompt).map_err(fmt_io_err)?;
+        self.term.write_prompt(&prompt)?;
 
-        self.show_lines(show_autosuggest, prompt_width)?;
+        self.term.show_lines(
+            buf,
+            self.autosuggestion.as_ref(),
+            show_autosuggest,
+            metrics,
+            is_search,
+        )?;
 
-        // at the end of the line, move the cursor down a line
-        if new_total_width % terminal_width == 0 {
-            self.buf.push_str("\r\n");
-        }
+        self.term.display(metrics, completion_lines)?;
 
-        self.term_cursor_line = (new_total_width_to_cursor + terminal_width) / terminal_width;
-
-        // The term cursor is now on the bottom line. We may need to move the term cursor up
-        // to the line where the true cursor is.
-        let cursor_line_diff = new_num_lines as isize - self.term_cursor_line as isize;
-        match cursor_line_diff.cmp(&0) {
-            Ordering::Greater => write!(&mut self.buf, "{}", cursor::Up(cursor_line_diff as u16))
-                .map_err(fmt_io_err)?,
-            Ordering::Less => unreachable!(),
-            Ordering::Equal => {}
-        }
-
-        // Now that we are on the right line, we must move the term cursor left or right
-        // to match the true cursor.
-        let cursor_col_diff = new_total_width as isize
-            - new_total_width_to_cursor as isize
-            - cursor_line_diff * terminal_width as isize;
-        match cursor_col_diff.cmp(&0) {
-            Ordering::Greater => write!(&mut self.buf, "{}", cursor::Left(cursor_col_diff as u16))
-                .map_err(fmt_io_err)?,
-            Ordering::Less => {
-                write!(
-                    &mut self.buf,
-                    "{}",
-                    cursor::Right((-cursor_col_diff) as u16)
-                )
-                .map_err(fmt_io_err)?;
-            }
-            Ordering::Equal => {}
-        }
-        self.term_cursor_line += completion_lines;
-
-        {
-            let out = &mut self.out;
-            write!(
-                &mut self.buf,
-                "{}{}",
-                color::Reset.fg_str(),
-                color::Reset.bg_str()
-            )
-            .map_err(fmt_io_err)?;
-            out.write_all(self.buf.as_bytes())?;
-            self.buf.clear();
-            out.flush()
-        }
+        Ok(())
     }
 
     /// Deletes the displayed prompt and buffer, replacing them with the current prompt and buffer
-    pub fn display(&mut self) -> io::Result<()> {
+    pub fn display_term(&mut self) -> io::Result<()> {
         if self.is_search() && self.buffer_changed {
             // Refresh incremental search.
             let forward = self.forward_search;
@@ -1245,7 +777,7 @@ impl<'a> Editor<'a> {
         }
         self.autosuggestion = self.current_autosuggestion();
 
-        self._display(true)
+        self.display_term_with_autosuggest(true)
     }
 
     /// Modifies the prompt prefix.
@@ -1291,9 +823,11 @@ impl<'a> From<Editor<'a>> for String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::context::get_buffer_words;
+    use crate::prompt::Prompt;
     use crate::History;
+
+    use super::*;
 
     #[test]
     /// test undoing delete_all_after_cursor
@@ -1335,13 +869,13 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("let").unwrap();
-        assert_eq!(ed.cursor, 3);
+        assert_eq!(ed.cursor(), 3);
 
         ed.move_cursor_left(1).unwrap();
-        assert_eq!(ed.cursor, 2);
+        assert_eq!(ed.cursor(), 2);
 
         ed.insert_after_cursor('f').unwrap();
-        assert_eq!(ed.cursor, 3);
+        assert_eq!(ed.cursor(), 3);
         assert_eq!(String::from(ed), "left");
     }
 
@@ -1361,11 +895,11 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        assert_eq!(ed.cursor, 5);
+        assert_eq!(ed.cursor(), 5);
 
         ed.move_cursor_left(2).unwrap();
         ed.move_cursor_right(1).unwrap();
-        assert_eq!(ed.cursor, 4);
+        assert_eq!(ed.cursor(), 4);
     }
 
     #[test]
@@ -1384,10 +918,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        assert_eq!(ed.cursor, 5);
+        assert_eq!(ed.cursor(), 5);
 
         ed.delete_until(0).unwrap();
-        assert_eq!(ed.cursor, 0);
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
 
@@ -1407,10 +941,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor = 0;
+        ed.cursor.set_char_vec_pos(0);
 
         ed.delete_until(5).unwrap();
-        assert_eq!(ed.cursor, 0);
+        assert_eq!(ed.cursor(), 0);
         assert_eq!(String::from(ed), "");
     }
 
@@ -1430,10 +964,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor = 4;
+        ed.cursor.set_char_vec_pos(4);
 
         ed.delete_until(1).unwrap();
-        assert_eq!(ed.cursor, 1);
+        assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "rt");
     }
 
@@ -1453,10 +987,10 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor = 4;
+        ed.cursor.set_char_vec_pos(4);
 
         ed.delete_until_inclusive(1).unwrap();
-        assert_eq!(ed.cursor, 1);
+        assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "r");
     }
 }

@@ -624,7 +624,7 @@ impl Vi {
             }
             _ => {} // Leave the last one
         }
-        ed.display()
+        ed.display_term()
     }
 
     fn set_mode_preserve_last<'a>(
@@ -634,7 +634,7 @@ impl Vi {
     ) -> io::Result<()> {
         use self::Mode::*;
 
-        ed.no_eol = mode == Normal;
+        ed.set_no_eol(mode == Normal);
         self.movement_reset = mode != Insert;
         self.mode_stack.push(mode);
         self.set_editor_mode(&mut ed)?;
@@ -663,7 +663,7 @@ impl Vi {
             }
         };
 
-        ed.no_eol = self.mode() == Mode::Normal;
+        ed.set_no_eol(self.mode() == Normal);
         self.movement_reset = self.mode() != Mode::Insert;
 
         if let Delete(_) | Yank(_) = last_mode {
@@ -702,7 +702,7 @@ impl Vi {
         use self::Mode::*;
 
         let last_mode = self.mode_stack.pop();
-        ed.no_eol = self.mode() == Normal;
+        ed.set_no_eol(self.mode() == Normal);
         self.movement_reset = self.mode() != Insert;
 
         if last_mode == Insert || last_mode == Tilde {
@@ -710,7 +710,7 @@ impl Vi {
         }
 
         if last_mode == Tilde {
-            ed.display()
+            ed.display_term()
         } else {
             self.set_editor_mode(&mut ed)
         }
@@ -719,7 +719,7 @@ impl Vi {
     /// Return to normal mode.
     fn normal_mode_abort<'a>(&mut self, mut ed: &mut Editor<'a>) -> io::Result<()> {
         self.mode_stack.clear();
-        ed.no_eol = true;
+        ed.set_no_eol(true);
         self.count = 0;
         self.set_editor_mode(&mut ed)
     }
@@ -1143,22 +1143,12 @@ impl Vi {
                     KeyCode::Char('p') => {
                         let count = self.move_count();
                         self.count = 0;
-                        let delta = ed.paste(true, count);
-                        if delta > 0 {
-                            ed.move_cursor_to(ed.cursor() + delta)
-                        } else {
-                            Ok(())
-                        }
+                        ed.paste(true, count)
                     }
                     KeyCode::Char('P') => {
                         let count = self.move_count();
                         self.count = 0;
-                        let delta = ed.paste(false, count);
-                        if delta > 0 {
-                            ed.move_cursor_to(ed.cursor() + delta - 1)
-                        } else {
-                            Ok(())
-                        }
+                        ed.paste(false, count)
                     }
                     _ => self.handle_key_common(key, ed),
                 }
@@ -1582,7 +1572,7 @@ impl Vi {
         ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         let count = self.move_count();
-        if !ed.cursor_at_beginning_of_word_or_line() {
+        if !ed.is_cursor_at_beginning_of_word_or_line() {
             match text_object {
                 TextObjectMode::Whole => move_word_ws_back(ed, 1)?,
                 TextObjectMode::Inner => move_word_back(ed, 1)?,
@@ -1654,8 +1644,7 @@ impl KeyMap for Vi {
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
-    use crate::editor::Prompt;
-    use crate::{Buffer, Completer, Editor, History, KeyMap};
+    use crate::{Buffer, Completer, Editor, History, KeyMap, Prompt};
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
         keymap: &mut M,

@@ -1,9 +1,12 @@
-use super::*;
-use context;
-
 use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
+
+use context;
+
+use crate::cursor::CursorPosition;
+
+use super::*;
 
 fn assert_cursor_pos(s: &str, cursor: usize, expected_pos: CursorPosition) {
     let buf = Buffer::from(s.to_owned());
@@ -21,7 +24,7 @@ fn assert_cursor_pos(s: &str, cursor: usize, expected_pos: CursorPosition) {
 
 #[test]
 fn test_get_cursor_position() {
-    use CursorPosition::*;
+    use crate::cursor::CursorPosition::*;
 
     let tests = &[
         ("hi", 0, OnWordLeftEdge(0)),

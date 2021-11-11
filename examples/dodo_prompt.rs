@@ -8,13 +8,19 @@ use std::mem::replace;
 
 use regex::Regex;
 use sl_console::color;
+
+use sl_liner::cursor::CursorPosition;
 use sl_liner::keymap;
-use sl_liner::{Completer, Context, CursorPosition, Event, EventKind, FilenameCompleter, Prompt};
+use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen
 fn highlight_dodo(s: &str) -> String {
     let reg_exp = Regex::new("(?P<k>dodo)").unwrap();
-    let format = format!("{}$k{}", color::Fg(color::Red), color::Fg(color::Reset));
+    let format = format!(
+        "{}$k{}",
+        color::Fg(color::LightYellow),
+        color::Fg(color::Reset)
+    );
     reg_exp.replace_all(s, format.as_str()).to_string()
 }
 
@@ -136,7 +142,6 @@ fn main() {
                     _ => {
                         // Ensure that all writes to the history file
                         // are written before exiting due to error.
-                        //panic!("error: {:?}", e)
                         println!("error: {:?}", e)
                     }
                 }

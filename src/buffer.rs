@@ -265,21 +265,22 @@ impl Buffer {
         num_removed
     }
 
-    /// Insert contents of register to the right or to the left of start in the current buffer
+    /// Insert contents of register to the right or to the left of the provided start index in the
+    /// current buffer
     /// and return length of text inserted.
-    pub fn insert_register_around_cursor(
+    pub fn insert_register_around_start(
         &mut self,
-        mut start: usize,
+        mut start_idx: usize,
         count: usize,
         right: bool,
     ) -> usize {
         let mut inserted = 0;
         if let Some(text) = self.register.as_ref() {
-            inserted = text.len();
+            inserted = text.iter().cloned().collect::<String>().width();
             if inserted > 0 {
-                if self.num_chars() > start && right {
+                if self.num_chars() > start_idx && right {
                     // insert to right of cursor
-                    start += 1;
+                    start_idx += 1;
                 }
 
                 let text = if count > 1 {
@@ -289,23 +290,28 @@ impl Buffer {
                             full_text.push(*c);
                         }
                     }
-                    inserted = full_text.len();
+                    inserted *= count;
                     full_text
                 } else {
                     text.to_vec()
                 };
-                self.insert_action(Action::Insert { start, text });
+                self.insert_action(Action::Insert {
+                    start: start_idx,
+                    text,
+                });
             }
         }
         inserted
     }
 
-    pub fn insert(&mut self, start: usize, text: &[char]) {
+    pub fn insert(&mut self, start: usize, text: &[char]) -> usize {
         let act = Action::Insert {
             start,
             text: text.into(),
         };
         self.insert_action(act);
+        let text: String = text.iter().collect();
+        text.width()
     }
 
     pub fn insert_action(&mut self, act: Action) {
@@ -314,12 +320,12 @@ impl Buffer {
     }
 
     // XXX rename, too confusing
-    pub fn insert_from_buffer(&mut self, other: &Buffer) {
+    pub fn insert_from_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.data.len();
         self.insert(start, &other.data[start..])
     }
 
-    pub fn copy_buffer(&mut self, other: &Buffer) {
+    pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
         let data_len = self.data.len();
         self.remove(0, data_len);
         self.insert(0, &other.data[0..])

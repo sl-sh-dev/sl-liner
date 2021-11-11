@@ -53,7 +53,7 @@ pub trait KeyMap {
             }
             (KeyCode::Right, None)
                 if editor.is_currently_showing_autosuggestion()
-                    && editor.cursor_is_at_end_of_line() =>
+                    && editor.is_cursor_at_end_of_line() =>
             {
                 editor.accept_autosuggestion()?;
             }
@@ -81,8 +81,7 @@ pub use emacs::Emacs;
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
-    use crate::editor::Prompt;
-    use crate::History;
+    use crate::{History, Prompt};
     use sl_console::event::Key;
     use std::io::ErrorKind;
 

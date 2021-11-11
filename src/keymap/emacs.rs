@@ -2,7 +2,7 @@ use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io;
 
 use crate::buffer::Buffer;
-use crate::CursorPosition;
+use crate::cursor::CursorPosition;
 use crate::Editor;
 use crate::KeyMap;
 
@@ -50,7 +50,7 @@ impl Emacs {
                 if ed.undo().is_some() {
                     ed.move_cursor_to_end_of_line()
                 } else {
-                    ed.display()
+                    ed.display_term()
                 }
             }
             _ => Ok(()),
@@ -192,8 +192,7 @@ fn emacs_move_word(ed: &mut Editor, direction: EmacsMoveDir) -> io::Result<()> {
 mod tests {
     use super::*;
     use crate::context::get_buffer_words;
-    use crate::editor::Prompt;
-    use crate::{Completer, Editor, History, KeyMap};
+    use crate::{Completer, Editor, History, KeyMap, Prompt};
     use sl_console::event::Key;
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(

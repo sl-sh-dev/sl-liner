@@ -105,7 +105,7 @@ impl Completer for FilenameCompleter {
         let mut start_name = None;
         let completing_dir;
         match full_path.parent() {
-            // XXX non-unix separaor
+            // XXX non-unix separator
             Some(parent)
                 if !start.is_empty()
                     && !start_owned.ends_with('/')
