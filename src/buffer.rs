@@ -57,6 +57,7 @@ pub struct Buffer {
     undone_actions: Vec<Action>,
     register: Option<String>,
     curr_num_graphemes: usize,
+    grapheme_indices: Vec<usize>,
 }
 
 impl PartialEq for Buffer {
@@ -108,13 +109,14 @@ impl fmt::Display for Buffer {
 impl FromIterator<char> for Buffer {
     fn from_iter<T: IntoIterator<Item = char>>(t: T) -> Self {
         let str = t.into_iter().collect::<String>();
-        let len = Buffer::string_to_graphemes_vec(&str).len();
+        let g_idxs = Buffer::string_to_grapheme_indices(&str);
         Buffer {
             data: str,
             actions: Vec::new(),
             undone_actions: Vec::new(),
             register: None,
-            curr_num_graphemes: len,
+            curr_num_graphemes: g_idxs.len(),
+            grapheme_indices: g_idxs,
         }
     }
 }
@@ -133,6 +135,7 @@ impl Buffer {
             undone_actions: Vec::new(),
             register: None,
             curr_num_graphemes: 0,
+            grapheme_indices: Vec::new(),
         }
     }
 
@@ -423,6 +426,16 @@ impl Buffer {
         Self::string_to_graphemes_vec(&self.data)
     }
 
+    fn string_to_grapheme_indices(str: &str) -> Vec<usize> {
+        str.grapheme_indices(true)
+            .map(|o| o.0)
+            .collect::<Vec<usize>>()
+    }
+
+    fn to_graphemes_indices(&self) -> Vec<usize> {
+        Self::string_to_grapheme_indices(&self.data)
+    }
+
     fn to_char_vec(&self) -> Vec<char> {
         self.data.chars().map(char::from).collect::<Vec<char>>()
     }
@@ -435,7 +448,8 @@ impl Buffer {
         if self.data.is_empty() {
             self.curr_num_graphemes = 0;
         } else {
-            self.curr_num_graphemes = self.to_graphemes_vec().len();
+            self.grapheme_indices = self.to_graphemes_indices();
+            self.curr_num_graphemes = self.grapheme_indices.len();
         }
     }
 
@@ -448,19 +462,16 @@ impl Buffer {
     fn remove_raw(&mut self, start: usize, end: usize) -> Option<String> {
         let mut ret = Some("".to_owned());
         if !self.data.is_empty() && start != end {
-            let mut gs = self.data.grapheme_indices(true);
+            let start = self.grapheme_indices.get(start);
             if end >= self.num_graphemes() {
-                // get the byte offset of the grapheme currently under the cursor and...
-                if let Some((start, _)) = gs.nth(start) {
+                if let Some(start) = start {
                     let str = self.data.drain(start..).collect::<String>();
                     self.recompute_size();
                     ret = Some(str)
                 }
             } else {
-                let offset_start = gs.nth(start);
-                let offset_end = gs.nth(end - start - 1);
-
-                if let (Some((start, _)), Some((end, _))) = (offset_start, offset_end) {
+                let end = self.grapheme_indices.get(end);
+                if let (Some(start), Some(end)) = (start, end) {
                     let str = self.data.drain(start..end).collect::<String>();
                     self.recompute_size();
                     ret = Some(str)
@@ -475,10 +486,9 @@ impl Buffer {
             let len = self.data.len();
             self.data.insert_str(len, new_graphemes);
         } else {
-            // get the byte offset of the grapheme currently under the cursor and...
-            if let Some((offset, _)) = self.data.grapheme_indices(true).nth(start) {
-                // put our new data there.
-                self.data.insert_str(offset, new_graphemes);
+            let offset = self.grapheme_indices.get(start);
+            if let Some(offset) = offset {
+                self.data.insert_str(*offset, new_graphemes);
             }
         }
         self.recompute_size();

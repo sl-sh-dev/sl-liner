@@ -14,6 +14,16 @@ impl<'a> GraphemeIter<'a> {
     }
 }
 
+impl From<GraphemeIter<'_>> for String {
+    fn from(g_iter: GraphemeIter) -> Self {
+        let mut str = String::with_capacity(g_iter.data.len());
+        for g in g_iter {
+            str.push_str(g);
+        }
+        str
+    }
+}
+
 impl<'a> Iterator for GraphemeIter<'a> {
     type Item = &'a str;
 
