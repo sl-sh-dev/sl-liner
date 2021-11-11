@@ -24,10 +24,10 @@ impl Metrics {
     ) -> io::Result<Self> {
         let width = util::terminal_width()?;
         let prompt_width = util::last_prompt_line_width(prompt);
-        let buf_width = buf.width();
+        let buf_width = buf.line_widths();
 
         let buf_widths = match autosuggestion {
-            Some(suggestion) => suggestion.width(),
+            Some(suggestion) => suggestion.line_widths(),
             None => buf_width,
         };
 
@@ -35,9 +35,9 @@ impl Metrics {
         let buf_widths_to_cursor = match autosuggestion {
             // Cursor might overrun autosuggestion with history search.
             Some(suggestion) if cursor.char_vec_pos() < suggestion.num_graphemes() => {
-                suggestion.range_width(0, cursor.char_vec_pos())
+                suggestion.line_widths()
             }
-            _ => buf.range_width(0, cursor.char_vec_pos()),
+            _ => buf.line_widths(),
         };
         // Total number of terminal spaces taken up by prompt and buffer
         let new_total_width = Metrics::calc_width(prompt_width, &buf_widths, width);

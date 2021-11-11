@@ -1,3 +1,4 @@
+use crate::grapheme_iter::GraphemeIter;
 use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, Write};
 use std::iter::FromIterator;
@@ -349,19 +350,21 @@ impl Buffer {
         self.get_graphemes(start, end)
     }
 
-    pub fn range_graphemes(&self, start: usize, end: usize) -> Vec<&str> {
-        self.get_graphemes(start, end)
+    pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
+        let start_idx = self.grapheme_indices.get(start);
+        let end_idx = self.grapheme_indices.get(end);
+        if let (Some(start_idx), Some(end_idx)) = (start_idx, end_idx) {
+            GraphemeIter::new_bytes(
+                &self.data.as_bytes()[*start_idx..*end_idx],
+                &self.grapheme_indices[start..end],
+            )
+        } else {
+            GraphemeIter::default()
+        }
     }
 
-    pub fn width(&self) -> Vec<usize> {
-        self.range_width(0, self.num_graphemes())
-    }
-
-    pub fn range_width(&self, start: usize, end: usize) -> Vec<usize> {
-        self.range(start, end)
-            .split(|&c| c == "\n")
-            .map(|s| s.len())
-            .collect()
+    pub fn line_widths(&self) -> Vec<usize> {
+        self.data.split('\n').map(|s| s.graphemes(true).count()).collect()
     }
 
     pub fn lines(&self) -> Vec<String> {
@@ -855,6 +858,7 @@ mod tests {
         let orig = "(“न” “म” “स्” “ते”)";
         let buf = Buffer::from(orig);
         let trim = "(“न” “म” “स्” “";
-        assert_eq!(Buffer::from(trim).graphemes(), buf.range_graphemes(0, 14));
+        let str: String = buf.range_graphemes(0, 14).into();
+        assert_eq!(trim, str);
     }
 }

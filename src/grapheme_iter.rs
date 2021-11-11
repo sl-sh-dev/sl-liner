@@ -1,8 +1,21 @@
+use std::str::from_utf8;
+
 pub struct GraphemeIter<'a> {
     data: &'a str,
     offsets: &'a [usize],
     curr_grapheme: usize,
     curr_grapheme_back: usize,
+}
+
+impl<'a> Default for GraphemeIter<'a> {
+    fn default() -> Self {
+        GraphemeIter {
+            data: "",
+            offsets: &[],
+            curr_grapheme: 0,
+            curr_grapheme_back: 0,
+        }
+    }
 }
 
 impl<'a> GraphemeIter<'a> {
@@ -14,9 +27,27 @@ impl<'a> GraphemeIter<'a> {
             curr_grapheme_back: offsets.len(),
         }
     }
+
+    pub fn new_bytes(bytes: &'a [u8], offsets: &'a [usize]) -> Self {
+        if let Ok(data) = from_utf8(bytes) {
+            GraphemeIter {
+                data,
+                offsets,
+                curr_grapheme: 0,
+                curr_grapheme_back: offsets.len(),
+            }
+        } else {
+            GraphemeIter {
+                data: "",
+                offsets,
+                curr_grapheme: 0,
+                curr_grapheme_back: 0,
+            }
+        }
+    }
 }
 
-impl From<GraphemeIter<'_>> for String {
+impl<'a> From<GraphemeIter<'a>> for String {
     fn from(g_iter: GraphemeIter) -> Self {
         let mut str = String::with_capacity(g_iter.data.len());
         for g in g_iter {
