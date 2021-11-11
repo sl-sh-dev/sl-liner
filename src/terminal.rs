@@ -35,14 +35,14 @@ impl Metrics {
         let buf_widths_to_cursor = match autosuggestion {
             // Cursor might overrun autosuggestion with history search.
             Some(suggestion) if cursor.char_vec_pos() < suggestion.num_graphemes() => {
-                suggestion.line_widths()
+                suggestion.line_width_until(cursor.char_vec_pos())
             }
-            _ => buf.line_widths(),
+            _ => buf.line_width_until(cursor.char_vec_pos()),
         };
         // Total number of terminal spaces taken up by prompt and buffer
-        let new_total_width = Metrics::calc_width(prompt_width, &buf_widths, width);
+        let new_total_width = Metrics::calc_width(prompt_width, buf_widths, width);
         let new_total_width_to_cursor =
-            Metrics::calc_width(prompt_width, &buf_widths_to_cursor, width);
+            Metrics::calc_width(prompt_width, buf_widths_to_cursor, width);
 
         let new_num_lines = (new_total_width + width) / width;
 
@@ -60,7 +60,10 @@ impl Metrics {
     }
 
     /// Move the term cursor to the same line as the prompt.
-    fn calc_width(prompt_width: usize, buf_widths: &[usize], terminal_width: usize) -> usize {
+    fn calc_width<I>(prompt_width: usize, buf_widths: I, terminal_width: usize) -> usize
+    where
+        I: Iterator<Item = usize>,
+    {
         let mut total = 0;
         for line in buf_widths {
             if total % terminal_width != 0 {

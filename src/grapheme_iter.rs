@@ -1,10 +1,13 @@
+use std::io::{BufRead, Read, Result};
 use std::str::from_utf8;
 
+#[derive(Debug)]
 pub struct GraphemeIter<'a> {
     data: &'a str,
     offsets: &'a [usize],
     curr_grapheme: usize,
     curr_grapheme_back: usize,
+    curr_offset: usize,
 }
 
 impl<'a> Default for GraphemeIter<'a> {
@@ -14,6 +17,7 @@ impl<'a> Default for GraphemeIter<'a> {
             offsets: &[],
             curr_grapheme: 0,
             curr_grapheme_back: 0,
+            curr_offset: 0,
         }
     }
 }
@@ -25,6 +29,7 @@ impl<'a> GraphemeIter<'a> {
             offsets,
             curr_grapheme: 0,
             curr_grapheme_back: offsets.len(),
+            curr_offset: 0,
         }
     }
 
@@ -35,6 +40,7 @@ impl<'a> GraphemeIter<'a> {
                 offsets,
                 curr_grapheme: 0,
                 curr_grapheme_back: offsets.len(),
+                curr_offset: 0,
             }
         } else {
             GraphemeIter {
@@ -42,8 +48,28 @@ impl<'a> GraphemeIter<'a> {
                 offsets,
                 curr_grapheme: 0,
                 curr_grapheme_back: 0,
+                curr_offset: 0,
             }
         }
+    }
+}
+
+impl<'a> Read for GraphemeIter<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let len = buf.len() - 1;
+        let mut bytes = self.data.as_bytes()[..len].to_owned();
+        buf.swap_with_slice(&mut bytes);
+        Ok(bytes.len())
+    }
+}
+
+impl<'a> BufRead for GraphemeIter<'a> {
+    fn fill_buf(&mut self) -> Result<&[u8]> {
+        Ok(&self.data.as_bytes()[self.curr_offset..])
+    }
+
+    fn consume(&mut self, amt: usize) {
+        self.curr_offset += amt;
     }
 }
 

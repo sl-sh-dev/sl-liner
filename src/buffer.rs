@@ -1,6 +1,6 @@
 use crate::grapheme_iter::GraphemeIter;
 use std::fmt::{self, Write as FmtWrite};
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 use std::iter::FromIterator;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -240,12 +240,7 @@ impl Buffer {
     }
 
     pub fn num_bytes(&self) -> usize {
-        let s: String = self.clone().into();
-        s.len()
-    }
-
-    fn get_all_graphemes(&self) -> Vec<&str> {
-        self.to_graphemes_vec()
+        self.data.as_bytes().len()
     }
 
     fn get_grapheme(&self, cursor: usize) -> Option<&str> {
@@ -363,11 +358,14 @@ impl Buffer {
         }
     }
 
-    pub fn line_widths(&self) -> Vec<usize> {
-        self.data
-            .split('\n')
-            .map(|s| s.graphemes(true).count())
-            .collect()
+    pub fn line_width_until(&self, until: usize) -> impl Iterator<Item = usize> + '_ {
+        self.range_graphemes(0, until)
+            .lines()
+            .map(|line| line.map_or(0, |line| line.graphemes(true).count()))
+    }
+
+    pub fn line_widths(&self) -> impl Iterator<Item = usize> + '_ {
+        self.data.split('\n').map(|s| s.graphemes(true).count())
     }
 
     pub fn lines(&self) -> Vec<String> {
@@ -375,7 +373,7 @@ impl Buffer {
     }
 
     pub fn graphemes(&self) -> Vec<&str> {
-        self.get_all_graphemes()
+        self.to_graphemes_vec()
     }
 
     pub fn truncate(&mut self, num: usize) {
@@ -476,7 +474,7 @@ impl Buffer {
             } else {
                 let start_opt = self.grapheme_indices.get(start);
                 let len = self.data.len();
-                let end_opt= if end >= self.num_graphemes() {
+                let end_opt = if end >= self.num_graphemes() {
                     Some(&len)
                 } else {
                     self.grapheme_indices.get(end)
