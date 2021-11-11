@@ -343,11 +343,9 @@ impl Buffer {
     pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
         if start == 0 && end >= self.curr_num_graphemes {
             self.range_graphemes_all()
+        } else if self.data.is_empty() {
+            GraphemeIter::default()
         } else {
-            println!("thing: {:?}.",
-                     GraphemeIter::new(&self.data,
-                                       &self.grapheme_indices, start, end)
-                         .collect::<String>());
             GraphemeIter::new(&self.data, &self.grapheme_indices, start, end)
         }
     }
@@ -407,12 +405,7 @@ impl Buffer {
     }
 
     pub fn yank(&mut self, start: usize, end: usize) {
-        println!(
-            "meow:curr {}, topos {}, len: {}.",
-            start, end, self.curr_num_graphemes
-        );
         let slice = self.range_graphemes(start, end).collect::<String>();
-        println!("slice: {}", slice);
         self.register = Some(slice);
     }
 

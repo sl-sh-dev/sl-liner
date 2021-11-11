@@ -5,7 +5,7 @@ pub struct GraphemeIter<'a> {
     data: &'a str,
     offsets: &'a [usize],
     curr_grapheme: usize,
-    curr_grapheme_back: usize,
+    curr_grapheme_back: isize,
     curr_offset: Option<usize>,
     min_grapheme: usize,
     max_grapheme: usize,
@@ -37,7 +37,7 @@ impl<'a> GraphemeIter<'a> {
             data,
             offsets,
             curr_grapheme,
-            curr_grapheme_back: max_grapheme - 1,
+            curr_grapheme_back: max_grapheme as isize - 1,
             curr_offset: offsets.get(curr_grapheme).copied(),
             min_grapheme: curr_grapheme,
             max_grapheme,
@@ -133,7 +133,7 @@ impl<'a> Iterator for GraphemeIter<'a> {
 impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let str;
-        if self.curr_grapheme_back == 0 {
+        if self.curr_grapheme_back < self.min_grapheme  as isize {
             str = None
         } else if self.max_grapheme - self.min_grapheme == 1 {
             let start = self.offsets[self.min_grapheme];
@@ -143,29 +143,35 @@ impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
                 let end = self.offsets[self.max_grapheme];
                 str = Some(&self.data[start..end]);
             }
-            self.curr_grapheme_back = 0;
-        } else {
-            let start = self.offsets[self.curr_grapheme_back];
-            if self.curr_grapheme_back == self.max_grapheme - 1 {
+            self.curr_grapheme_back = -1;
+        } else  if self.curr_grapheme_back == self.min_grapheme as isize {
+            let start = self.offsets[self.min_grapheme];
+            let end = self.offsets[self.min_grapheme + 1];
+            self.curr_grapheme_back -= 1;
+            str = Some(&self.data[start..end]);
+        }
+        else {
+            let start = self.offsets[self.curr_grapheme_back as usize];
+            if self.curr_grapheme_back == self.max_grapheme as isize - 1 {
                 if self.max_grapheme == self.offsets.len() {
                     str = Some(&self.data[start..]);
                 } else {
-                    let max_char = self.offsets[self.curr_grapheme_back + 1];
+                    let max_char = self.offsets[self.curr_grapheme_back as usize + 1];
                     str = Some(&self.data[start..max_char]);
                 }
                 self.curr_grapheme_back -= 1;
-            } else if self.curr_grapheme_back == self.min_grapheme {
+            } else if self.curr_grapheme_back == self.min_grapheme as isize {
                 if self.min_grapheme == 0 {
-                    let end = self.offsets[self.curr_grapheme_back + 1];
+                    let end = self.offsets[self.curr_grapheme_back as usize + 1];
                     self.curr_grapheme_back -= 1;
                     str = Some(&self.data[..end]);
                 } else {
-                    let end = self.offsets[self.curr_grapheme_back + 1];
+                    let end = self.offsets[self.curr_grapheme_back as usize + 1];
                     self.curr_grapheme_back -= 1;
                     str = Some(&self.data[start..end]);
                 }
             } else {
-                let end = self.offsets[self.curr_grapheme_back + 1];
+                let end = self.offsets[self.curr_grapheme_back as usize + 1];
                 self.curr_grapheme_back -= 1;
                 str = Some(&self.data[start..end]);
             }
