@@ -503,7 +503,7 @@ impl Buffer {
     pub fn contains(&self, other: &Buffer) -> bool {
         let other = &other.data;
         if other.is_empty() {
-            return false;
+            false
         } else {
             self.data.contains(other)
         }
