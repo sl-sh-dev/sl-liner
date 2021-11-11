@@ -365,6 +365,7 @@ impl Buffer {
         self.data.split('\n').map(|x| x.to_owned()).collect()
     }
 
+    //TODO why not return reference or iterator or... remove
     pub fn graphemes(&self) -> Vec<&str> {
         self.to_graphemes_vec()
     }

@@ -14,9 +14,8 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut word_start = None;
     let mut just_had_backslash = false;
 
-    let buf_vec = buf.graphemes();
-    let buf_ref: Vec<&str> = buf_vec.iter().map(|s| &**s).collect();
-    for (i, &c) in buf_ref.iter().enumerate() {
+    let buf_vec = buf.range_graphemes_all();
+    for (i, c) in buf_vec.enumerate() {
         if c == "\\" {
             just_had_backslash = true;
             continue;
