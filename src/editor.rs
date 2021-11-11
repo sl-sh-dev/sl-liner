@@ -178,7 +178,7 @@ impl<'a> Editor<'a> {
         }
 
         let last_char = cur_buf!(self).last();
-        if last_char == Some("\\".to_owned()) {
+        if last_char == Some("\\") {
             let buf = cur_buf_mut!(self);
             buf.push('\n');
             self.cursor.move_cursor_to_end_of_line(buf);
@@ -330,9 +330,8 @@ impl<'a> Editor<'a> {
 
             let word = match word_range {
                 Some((start, end)) => buf
-                    .range(start, end)
-                    .iter()
-                    .map(|x| String::from(*x))
+                    .range_graphemes(start, end)
+                    .map(String::from)
                     .collect::<String>(),
                 None => String::new(),
             };

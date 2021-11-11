@@ -9,6 +9,7 @@ use unicode_segmentation::UnicodeSegmentation;
 pub enum Action {
     Insert { start: usize, text: String },
     Remove { start: usize, text: String },
+    Noop { start: usize },
     StartGroup,
     EndGroup,
 }
@@ -22,13 +23,14 @@ impl Action {
             }
             Action::Remove { start, ref text } => {
                 let len = text.len();
-                buf.remove_raw(start, start + len);
+                buf.remove_raw(start, start + len, false);
                 if len > start {
                     Some(0)
                 } else {
                     Some(start - len)
                 }
             }
+            Action::Noop { start } => Some(start),
             Action::StartGroup | Action::EndGroup => None,
         }
     }
@@ -36,13 +38,14 @@ impl Action {
     pub fn undo(&self, buf: &mut Buffer) -> Option<usize> {
         match *self {
             Action::Insert { start, ref text } => {
-                buf.remove_raw(start, start + text.len());
+                buf.remove_raw(start, start + text.len(), false);
                 Some(start)
             }
             Action::Remove { start, ref text } => {
                 buf.insert_raw(start, text);
                 Some(start)
             }
+            Action::Noop { start } => Some(start),
             Action::StartGroup | Action::EndGroup => None,
         }
     }
@@ -71,15 +74,14 @@ impl Eq for Buffer {}
 impl From<Buffer> for String {
     fn from(buf: Buffer) -> Self {
         let mut to = String::new();
-        let chars = buf.to_char_vec();
-        let mut buf_iter = chars.iter().peekable();
+        let mut buf_iter = buf.data.chars().peekable();
         while let Some(ch) = buf_iter.next() {
-            if ch == &'\\' && buf_iter.peek() == Some(&&'\n') {
+            if ch == '\\' && buf_iter.peek() == Some(&'\n') {
                 // '\\' followed by newline, ignore both.
                 buf_iter.next();
                 continue;
             }
-            to.push(*ch);
+            to.push(ch);
         }
         to
     }
@@ -99,7 +101,7 @@ impl<'a> From<&'a str> for Buffer {
 
 impl fmt::Display for Buffer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let chars = self.to_char_vec();
+        let chars = self.data.chars();
         for c in chars {
             f.write_char(c)?;
         }
@@ -246,13 +248,6 @@ impl Buffer {
         self.to_graphemes_vec()
     }
 
-    fn get_graphemes(&self, start: usize, end: usize) -> Vec<&str> {
-        let graphemes = self.to_graphemes_vec();
-        let len = graphemes.len();
-        let end = if end >= len { len } else { end };
-        graphemes[start..end].to_owned()
-    }
-
     fn get_grapheme(&self, cursor: usize) -> Option<&str> {
         let graphemes = self.to_graphemes_vec();
         graphemes.get(cursor).copied()
@@ -269,18 +264,14 @@ impl Buffer {
     /// Returns the graphemes removed. Does not register as an action in the undo/redo
     /// buffer or in the buffer's register.
     pub fn remove_unrecorded(&mut self, start: usize, end: usize) {
-        self.remove_raw(start, end);
+        self.remove_raw(start, end, false);
     }
 
     /// Returns the number of graphemes removed.
     pub fn remove(&mut self, start: usize, end: usize) -> usize {
         let orig_len = self.num_graphemes();
-        let text = self.remove_raw(start, end);
+        self.remove_raw(start, end, true);
         let new_len = self.num_graphemes();
-        self.register = text.to_owned();
-        if let Some(text) = text {
-            self.push_action(Action::Remove { start, text });
-        }
         orig_len - new_len
     }
 
@@ -319,16 +310,21 @@ impl Buffer {
         inserted
     }
 
+    pub fn insert_str(&mut self, start: usize, text: &str) -> usize {
+        let orig_len = self.num_graphemes();
+        let text = text.to_owned();
+        let act = Action::Insert { start, text };
+        self.insert_action(act);
+        let new_len = self.num_graphemes();
+        new_len - orig_len
+    }
+
     pub fn insert<'a, I>(&mut self, start: usize, text: I) -> usize
     where
         I: Iterator<Item = &'a char>,
     {
         let text: String = text.collect::<String>();
-        let orig_len = self.num_graphemes();
-        let act = Action::Insert { start, text };
-        self.insert_action(act);
-        let new_len = self.num_graphemes();
-        new_len - orig_len
+        self.insert_str(start, &text)
     }
 
     pub fn insert_action(&mut self, act: Action) {
@@ -338,40 +334,44 @@ impl Buffer {
 
     pub fn append_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.num_graphemes();
-        self.insert(start, other.to_char_vec().iter())
+        self.insert_str(start, &other.data)
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
-        self.truncate(0);
-        self.insert(0, other.to_char_vec().iter())
+        self.remove_unrecorded(0, self.curr_num_graphemes);
+        self.insert_str(0, &other.data)
     }
 
-    pub fn range(&self, start: usize, end: usize) -> Vec<&str> {
-        self.get_graphemes(start, end)
+    pub fn range_graphemes_all(&self) -> GraphemeIter {
+        GraphemeIter::new(&self.data, &self.grapheme_indices)
     }
 
     pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
-        let start_idx = self.grapheme_indices.get(start);
-        let end_idx = self.grapheme_indices.get(end);
-        if let (Some(start_idx), Some(end_idx)) = (start_idx, end_idx) {
-            GraphemeIter::new_bytes(
-                &self.data.as_bytes()[*start_idx..*end_idx],
-                &self.grapheme_indices[start..end],
-            )
+        if start == 0 && end == self.curr_num_graphemes {
+            self.range_graphemes_all()
         } else {
-            GraphemeIter::default()
+            let start_idx = self.grapheme_indices.get(start);
+            let end_idx = self.grapheme_indices.get(end);
+            if let (Some(start_idx), Some(end_idx)) = (start_idx, end_idx) {
+                GraphemeIter::new_bytes(
+                    &self.data.as_bytes()[*start_idx..*end_idx],
+                    &self.grapheme_indices[start..end],
+                )
+            } else {
+                GraphemeIter::default()
+            }
         }
     }
 
     pub fn line_widths(&self) -> Vec<usize> {
-        self.data.split('\n').map(|s| s.graphemes(true).count()).collect()
+        self.data
+            .split('\n')
+            .map(|s| s.graphemes(true).count())
+            .collect()
     }
 
     pub fn lines(&self) -> Vec<String> {
-        self.get_all_graphemes()
-            .split(|&c| c == "\n")
-            .map(|s| s.iter().cloned().collect())
-            .collect()
+        self.data.split('\n').map(|x| x.to_owned()).collect()
     }
 
     pub fn graphemes(&self) -> Vec<&str> {
@@ -402,11 +402,15 @@ impl Buffer {
     where
         W: Write,
     {
-        let graphemes = self.to_graphemes_vec();
-        let string: String = graphemes.iter().skip(after).cloned().collect();
-        out.write_all(string.as_bytes())?;
-
-        Ok(string.len())
+        let mut ret = 0;
+        if self.curr_num_graphemes != 0 {
+            if let Some(&offset) = self.grapheme_indices.get(after) {
+                let bytes = &self.data.as_bytes()[offset..];
+                out.write_all(bytes)?;
+                ret = bytes.len();
+            }
+        }
+        Ok(ret)
     }
 
     pub fn yank(&mut self, start: usize, end: usize) {
@@ -439,10 +443,6 @@ impl Buffer {
         Self::string_to_grapheme_indices(&self.data)
     }
 
-    fn to_char_vec(&self) -> Vec<char> {
-        self.data.chars().map(char::from).collect::<Vec<char>>()
-    }
-
     /// done after an insert/remove for two reasons:
     /// 1. the number of graphemes may change
     /// 2. knowing the length of the buffer in graphemes is an important
@@ -462,26 +462,42 @@ impl Buffer {
         self.recompute_size();
     }
 
-    fn remove_raw(&mut self, start: usize, end: usize) -> Option<String> {
-        let mut ret = Some("".to_owned());
+    fn remove_raw(&mut self, start: usize, end: usize, save_action: bool) {
+        let mut logged_action = false;
         if !self.data.is_empty() && start != end {
-            let start = self.grapheme_indices.get(start);
-            if end >= self.num_graphemes() {
-                if let Some(start) = start {
-                    let str = self.data.drain(start..).collect::<String>();
-                    self.recompute_size();
-                    ret = Some(str)
+            if start == 0 && end == self.num_graphemes() {
+                let str = self.data.to_owned();
+                self.data.clear();
+                if save_action {
+                    self.register = Some(str.to_owned());
+                    self.push_action(Action::Remove { start, text: str });
+                    logged_action = true;
                 }
             } else {
-                let end = self.grapheme_indices.get(end);
-                if let (Some(start), Some(end)) = (start, end) {
-                    let str = self.data.drain(start..end).collect::<String>();
-                    self.recompute_size();
-                    ret = Some(str)
+                let start_opt = self.grapheme_indices.get(start);
+                let len = self.data.len();
+                let end_opt= if end >= self.num_graphemes() {
+                    Some(&len)
+                } else {
+                    self.grapheme_indices.get(end)
+                };
+
+                if let (Some(start_idx), Some(end_idx)) = (start_opt, end_opt) {
+                    let drain = self.data.drain(start_idx..end_idx);
+                    if save_action {
+                        let str = drain.collect::<String>();
+                        self.register = Some(str.to_owned());
+                        self.push_action(Action::Remove { start, text: str });
+                        logged_action = true;
+                    }
                 }
             }
         }
-        ret
+        if !logged_action && save_action {
+            self.push_action(Action::Noop { start });
+        } else {
+            self.recompute_size();
+        }
     }
 
     fn insert_raw(&mut self, start: usize, new_graphemes: &str) {
@@ -528,22 +544,22 @@ impl Buffer {
     }
 
     /// Returns the first grapheme of the buffer or None if empty.
-    pub fn first(&self) -> Option<String> {
+    pub fn first(&self) -> Option<&str> {
         let mut ret = None;
         if !self.data.is_empty() {
-            if let Some(str) = self.data.graphemes(true).next() {
-                ret = Some(String::from(str))
+            if let Some(str) = self.range_graphemes_all().next() {
+                ret = Some(str)
             }
         }
         ret
     }
 
     /// Returns the last grapheme of the buffer or None if empty.
-    pub fn last(&self) -> Option<String> {
+    pub fn last(&self) -> Option<&str> {
         let mut ret = None;
         if !self.data.is_empty() {
-            if let Some(str) = self.data.graphemes(true).rev().next() {
-                ret = Some(String::from(str))
+            if let Some(str) = self.range_graphemes_all().rev().next() {
+                ret = Some(str)
             }
         }
         ret
@@ -833,7 +849,7 @@ mod tests {
         let first = buf.first();
         assert!(first.is_some());
         let s = "स्";
-        assert_eq!(String::from(s), first.unwrap());
+        assert_eq!(s, first.unwrap());
     }
 
     #[test]
@@ -860,5 +876,13 @@ mod tests {
         let trim = "(“न” “म” “स्” “";
         let str: String = buf.range_graphemes(0, 14).into();
         assert_eq!(trim, str);
+    }
+
+    #[test]
+    fn test_range_graphemes_on_empty() {
+        let orig = "";
+        let buf = Buffer::from(orig);
+        let str: String = buf.range_graphemes(5, 14).into();
+        assert_eq!(orig, str);
     }
 }
