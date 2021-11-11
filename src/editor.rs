@@ -745,12 +745,15 @@ impl<'a> Editor<'a> {
         let buf = cur_buf!(self);
         let is_search = self.is_search();
 
-        let metrics = Metrics::new(prompt, buf, &self.cursor, self.autosuggestion.as_ref())?;
+        let metrics = Metrics::new(&prompt, buf, &self.cursor, self.autosuggestion.as_ref())?;
         self.cursor.pre_display_adjustment(buf);
         self.term.clear_after_cursor()?;
         let completion_lines = self
             .term
             .maybe_write_completions(self.show_completions_hint.as_ref())?;
+
+        // Write the prompt
+        self.term.write_prompt(&prompt)?;
 
         self.term.show_lines(
             buf,

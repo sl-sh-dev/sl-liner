@@ -17,13 +17,13 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn new(
-        prompt: String,
+        prompt: &str,
         buf: &Buffer,
         cursor: &Cursor,
         autosuggestion: Option<&Buffer>,
     ) -> io::Result<Self> {
         let width = util::terminal_width()?;
-        let prompt_width = util::last_prompt_line_width(&prompt);
+        let prompt_width = util::last_prompt_line_width(prompt);
         let buf_width = buf.width();
 
         let buf_widths = match autosuggestion {
@@ -193,6 +193,10 @@ impl<'a> Terminal<'a> {
         write!(self.buf, "{}{}", clear::All, cursor::Goto(1, 1)).map_err(fmt_io_err)?;
         self.term_cursor_line = 1;
         Ok(())
+    }
+
+    pub fn write_prompt(&mut self, prompt: &str) -> io::Result<()> {
+        write!(&mut self.buf, "{}", prompt).map_err(fmt_io_err)
     }
 
     fn print_completion_list(

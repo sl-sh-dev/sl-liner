@@ -222,8 +222,7 @@ impl Buffer {
     }
 
     pub fn num_chars(&self) -> usize {
-        let s: String = self.clone().into();
-        s.width()
+        self.data.len()
     }
 
     pub fn num_bytes(&self) -> usize {
