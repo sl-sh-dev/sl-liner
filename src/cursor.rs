@@ -114,10 +114,6 @@ impl<'a> Cursor<'a> {
         buf.truncate(0);
     }
 
-    //TODO issue:
-    // because things can come in a character at a time, e.g. technologist
-    // emoji, care needs to be taken as to when/how to get a valid
-    // char position.
     pub fn delete_until_cursor(&mut self, buf: &mut Buffer, start: usize) {
         let moved = buf.remove(start, self.curr_grapheme);
         self.curr_grapheme -= moved;

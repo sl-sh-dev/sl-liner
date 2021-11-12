@@ -421,26 +421,39 @@ fn vi_move_word_end(
 
 fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
-    buf.graphemes()
-        .iter()
-        .enumerate()
-        .skip(start)
-        .filter(|&(_, c)| c as &str == ch.to_string())
-        .nth(count - 1)
-        .map(|(i, _)| i)
+    let mut offset = None;
+    let str = &ch.to_string();
+    let mut count = count;
+    for (i, s) in buf.range_graphemes_all().enumerate().skip(start) {
+        if s == str {
+            if count == 1 {
+                offset = Some(i);
+                break;
+            } else {
+                count -= 1;
+            }
+        }
+    }
+    offset
 }
 
 fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
     let rstart = buf.num_graphemes() - start;
-    buf.graphemes()
-        .iter()
-        .enumerate()
-        .rev()
-        .skip(rstart)
-        .filter(|&(_, c)| c as &str == ch.to_string())
-        .nth(count - 1)
-        .map(|(i, _)| i)
+    let mut offset = None;
+    let str = &ch.to_string();
+    let mut count = count;
+    for (i, s) in buf.range_graphemes_all().enumerate().rev().skip(rstart) {
+        if s == str {
+            if count == 1 {
+                offset = Some(i);
+                break;
+            } else {
+                count -= 1;
+            }
+        }
+    }
+    offset
 }
 
 fn find_char_balance_delim(
@@ -451,10 +464,9 @@ fn find_char_balance_delim(
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
-    let buf_chars = buf.graphemes();
-    let iter = buf_chars.iter().enumerate().skip(start);
+    let iter = buf.range_graphemes_from(start).enumerate();
     let to_skip = |i| start + i;
-    find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
+    find_balance_delim(to_find, to_find_opposite, count, to_skip, Box::new(iter))
 }
 
 fn find_char_rev_balance_delim(
@@ -466,24 +478,22 @@ fn find_char_rev_balance_delim(
 ) -> Option<usize> {
     assert!(count > 0);
     let rstart = buf.num_graphemes() - start;
-    let buf_vec = buf.graphemes();
-    let iter = buf_vec.iter().enumerate().rev().skip(rstart);
+    let iter = buf.range_graphemes_until(start).rev().enumerate();
     let to_skip = |i| buf.num_graphemes() - rstart - i - 1;
-    find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
+    find_balance_delim(to_find, to_find_opposite, count, to_skip, Box::new(iter))
 }
 
 /// searches through string for matching character but refuses to match
 /// characters if they are unbalanced, used for matching pairs of (), {}, and []
-fn find_balance_delim<'a, F, I>(
+fn find_balance_delim<F>(
     to_find: char,
     to_find_opposite: char,
     count: usize,
     to_skip: F,
-    iter: I,
+    iter: Box<dyn Iterator<Item = (usize, &str)> + '_>,
 ) -> Option<usize>
 where
     F: Fn(usize) -> usize,
-    I: Iterator<Item = (usize, &'a &'a str)>,
 {
     let mut count = count;
     let mut balance = 0;
@@ -6648,6 +6658,26 @@ mod tests {
     }
 
     #[test]
+    /// test find_char with unicode symbol
+    fn test_find_char_unicode() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        ed.insert_str_after_cursor("abcस्तेabc").unwrap();
+        assert_eq!(super::find_char(ed.current_buffer(), 0, 'a', 2), Some(5));
+    }
+
+    #[test]
     /// test find_char with count
     fn test_find_char_with_count() {
         let mut out = Vec::new();
@@ -6730,6 +6760,29 @@ mod tests {
         assert_eq!(
             super::find_char_rev(ed.current_buffer(), 5, 'c', 1),
             Some(2)
+        );
+    }
+
+    #[test]
+    /// test find_char_rev with unicode symbol
+    fn test_find_char_rev_unicode() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        ed.insert_str_after_cursor("abcस्तेabc").unwrap();
+        assert_eq!(
+            super::find_char_rev(ed.current_buffer(), 5, 'a', 1),
+            Some(0)
         );
     }
 

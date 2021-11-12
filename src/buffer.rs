@@ -69,6 +69,7 @@ impl PartialEq for Buffer {
         self.data == other.data
     }
 }
+
 impl Eq for Buffer {}
 
 impl From<Buffer> for String {
@@ -227,12 +228,11 @@ impl Buffer {
         self.undone_actions.clear();
     }
 
-    pub fn last_arg(&self) -> Option<String> {
+    pub fn last_arg(&self) -> Option<&str> {
         self.data
             .split_word_bounds()
             .filter(|s| !s.trim().is_empty())
             .last()
-            .map(String::from)
     }
 
     pub fn num_graphemes(&self) -> usize {
@@ -328,7 +328,7 @@ impl Buffer {
 
     pub fn append_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.num_graphemes();
-        self.insert_str(start, &other.data)
+        self.insert_str(start, &other.data[start..])
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
@@ -338,6 +338,19 @@ impl Buffer {
 
     pub fn range_graphemes_all(&self) -> GraphemeIter {
         GraphemeIter::new(&self.data, &self.grapheme_indices, 0, self.num_graphemes())
+    }
+
+    pub fn range_graphemes_until(&self, until: usize) -> GraphemeIter {
+        GraphemeIter::new(&self.data, &self.grapheme_indices, 0, until)
+    }
+
+    pub fn range_graphemes_from(&self, start: usize) -> GraphemeIter {
+        GraphemeIter::new(
+            &self.data,
+            &self.grapheme_indices,
+            start,
+            self.num_graphemes(),
+        )
     }
 
     pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
@@ -360,14 +373,8 @@ impl Buffer {
         self.data.split('\n').map(|s| s.graphemes(true).count())
     }
 
-    //TODO why not return reference or iterator?
-    pub fn lines(&self) -> Vec<String> {
-        self.data.split('\n').map(|x| x.to_owned()).collect()
-    }
-
-    //TODO why not return reference or iterator or... remove
-    pub fn graphemes(&self) -> Vec<&str> {
-        self.to_graphemes_vec()
+    pub fn lines(&self) -> impl Iterator<Item = &str> + '_  {
+        self.data.split('\n').map(|s| s)
     }
 
     pub fn truncate(&mut self, num: usize) {
@@ -408,14 +415,6 @@ impl Buffer {
     pub fn yank(&mut self, start: usize, end: usize) {
         let slice = self.range_graphemes(start, end).collect::<String>();
         self.register = Some(slice);
-    }
-
-    fn string_to_graphemes_vec(str: &str) -> Vec<&str> {
-        str.graphemes(true).collect::<Vec<&str>>()
-    }
-
-    fn to_graphemes_vec(&self) -> Vec<&str> {
-        Self::string_to_graphemes_vec(&self.data)
     }
 
     fn string_to_grapheme_indices(str: &str) -> Vec<usize> {
@@ -846,7 +845,7 @@ mod tests {
         let last_arg = buf.last_arg();
         assert!(last_arg.is_some());
         let s = "स्तेa";
-        assert_eq!(String::from(s), last_arg.unwrap());
+        assert_eq!(s, last_arg.unwrap());
         let buf = Buffer::from(s);
         let v = buf.as_bytes();
         assert_eq!(

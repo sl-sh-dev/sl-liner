@@ -298,30 +298,30 @@ impl<'a> Terminal<'a> {
         };
         let mut buf_num_remaining_bytes = buf.num_bytes();
 
-        let lines_len = lines.len();
-        for (i, line) in lines.into_iter().enumerate() {
+        let mut had_lines = false;
+        for (i, line) in lines.enumerate() {
+            had_lines = true;
             if i > 0 {
                 write!(self.buf, "{}", cursor::Right(metrics.prompt_width as u16))
                     .map_err(fmt_io_err)?;
             }
 
             if buf_num_remaining_bytes == 0 {
-                self.buf.push_str(&line);
+                self.buf.push_str(line);
             } else if line.len() > buf_num_remaining_bytes {
-                self.display_with_suggest(&line, is_search, buf_num_remaining_bytes)?;
+                self.display_with_suggest(line, is_search, buf_num_remaining_bytes)?;
                 buf_num_remaining_bytes = 0;
             } else {
                 buf_num_remaining_bytes -= line.len();
-                let written_line = self.colorize(&line);
+                let written_line = self.colorize(line);
                 if is_search {
                     write!(self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
                 }
                 self.buf.push_str(&written_line);
             }
-
-            if i + 1 < lines_len {
-                self.buf.push_str("\r\n");
-            }
+        }
+        if had_lines {
+            self.buf.push_str("\r\n");
         }
         Ok(())
     }

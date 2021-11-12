@@ -663,7 +663,6 @@ impl<'a> Editor<'a> {
 
     pub fn curr_char(&self) -> Option<&str> {
         let buf = cur_buf!(self);
-        //TODO extract into cursor, maybe hand cursor buffer?
         buf.grapheme_after(self.cursor.char_vec_pos())
     }
 
