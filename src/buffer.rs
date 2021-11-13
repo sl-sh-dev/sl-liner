@@ -332,7 +332,7 @@ impl Buffer {
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
-        self.remove_unrecorded(0, self.curr_num_graphemes);
+        self.remove(0, self.curr_num_graphemes);
         self.insert_str(0, &other.data)
     }
 
@@ -356,7 +356,7 @@ impl Buffer {
     pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
         if start == 0 && end >= self.curr_num_graphemes {
             self.range_graphemes_all()
-        } else if self.data.is_empty() {
+        } else if self.data.is_empty() || start == end {
             GraphemeIter::default()
         } else {
             GraphemeIter::new(&self.data, &self.grapheme_indices, start, end)

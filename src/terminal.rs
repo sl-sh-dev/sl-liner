@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 use std::io;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Metrics {
     width: usize,
     prompt_width: usize,
@@ -39,6 +39,8 @@ impl Metrics {
             }
             _ => buf.line_width_until(cursor.char_vec_pos()),
         };
+
+        // Total number of terminal spaces taken up by prompt and buffer
         // Total number of terminal spaces taken up by prompt and buffer
         let new_total_width = Metrics::calc_width(prompt_width, buf_widths, width);
         let new_total_width_to_cursor =
@@ -70,6 +72,9 @@ impl Metrics {
                 total = ((total / terminal_width) + 1) * terminal_width;
             }
             total += prompt_width + line;
+        }
+        if total == 0 { // no lines returned, treat buf_width as 0
+            total += prompt_width
         }
         total
     }
@@ -383,5 +388,79 @@ impl<'a> Terminal<'a> {
 
     pub fn write_newline(&mut self) -> io::Result<()> {
         self.out.write_all(b"\r\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::get_buffer_words;
+    use super::*;
+
+    #[test]
+    fn test_metrics_cursor_beg_no_autosuggestion() {
+        let prompt = "&>";
+
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let cur = Cursor::new(word_divider_fcn);
+
+        let buf = Buffer::from("hello hello".to_owned());
+        let autosuggestion = Buffer::default();
+        let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();
+        assert_eq!(m.width, 80);
+        assert_eq!(m.prompt_width, 2);
+        assert_eq!(m.new_total_width, 2);
+        assert_eq!(m.new_total_width_to_cursor, 2);
+        assert_eq!(m.new_num_lines, 1);
+    }
+
+    #[test]
+    fn test_metrics_cursor_end_no_autosuggestion() {
+        let prompt = "&>";
+
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+        let buf = Buffer::from("hello hello".to_owned());
+        cur.move_cursor_to_end_of_line(&buf);
+        let autosuggestion = Buffer::from("".to_owned());
+        let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();
+        assert_eq!(m.width, 80);
+        assert_eq!(m.prompt_width, 2);
+        assert_eq!(m.new_total_width, 2);
+        assert_eq!(m.new_total_width_to_cursor, 13);
+        assert_eq!(m.new_num_lines, 1);
+    }
+
+    #[test]
+    fn test_metrics_cursor_beg_with_autosuggestion() {
+        let prompt = "&>";
+
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let cur = Cursor::new(word_divider_fcn);
+        let buf = Buffer::from("hello hello".to_owned());
+        let autosuggestion = Buffer::from("hello hello hello".to_owned());
+        let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();
+        assert_eq!(m.width, 80);
+        assert_eq!(m.prompt_width, 2);
+        assert_eq!(m.new_total_width, 19);
+        assert_eq!(m.new_total_width_to_cursor, 2);
+        assert_eq!(m.new_num_lines, 1);
+    }
+
+    #[test]
+    fn test_metrics_cursor_end_with_autosuggestion() {
+        let prompt = "&>";
+
+        let word_divider_fcn = &Box::new(get_buffer_words);
+        let mut cur = Cursor::new(word_divider_fcn);
+        let buf = Buffer::from("hello hello".to_owned());
+        cur.move_cursor_to_end_of_line(&buf);
+        let autosuggestion = Buffer::from("hello hello hello".to_owned());
+        let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();
+        assert_eq!(m.width, 80);
+        assert_eq!(m.prompt_width, 2);
+        assert_eq!(m.new_total_width, 19);
+        assert_eq!(m.new_total_width_to_cursor, 13); // buf_widths_to_cursor: [17].
+        assert_eq!(m.new_num_lines, 1);              // should be 11
+
     }
 }

@@ -71,7 +71,12 @@ impl<'a> Read for GraphemeIter<'a> {
 impl<'a> BufRead for GraphemeIter<'a> {
     fn fill_buf(&mut self) -> Result<&[u8]> {
         if let Some(curr_offset) = self.curr_offset {
-            Ok(&self.data.as_bytes()[curr_offset..])
+            if self.max_grapheme == self.offsets.len() {
+                Ok(&self.data.as_bytes()[curr_offset..])
+            } else {
+                let max_offset = self.offsets[self.max_grapheme];
+                Ok(&self.data.as_bytes()[curr_offset..max_offset])
+            }
         } else {
             Ok(&[])
         }
