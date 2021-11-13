@@ -373,8 +373,8 @@ impl Buffer {
         self.data.split('\n').map(|s| s.graphemes(true).count())
     }
 
-    pub fn lines(&self) -> impl Iterator<Item = &str> + '_  {
-        self.data.split('\n').map(|s| s)
+    pub fn lines(&self) -> Vec<&str> {
+        self.data.split('\n').map(|s| s).collect::<Vec<&str>>()
     }
 
     pub fn truncate(&mut self, num: usize) {

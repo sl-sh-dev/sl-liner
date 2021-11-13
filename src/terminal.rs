@@ -298,9 +298,8 @@ impl<'a> Terminal<'a> {
         };
         let mut buf_num_remaining_bytes = buf.num_bytes();
 
-        let mut had_lines = false;
-        for (i, line) in lines.enumerate() {
-            had_lines = true;
+        let lines_len = lines.len();
+        for (i, line) in lines.iter().enumerate() {
             if i > 0 {
                 write!(self.buf, "{}", cursor::Right(metrics.prompt_width as u16))
                     .map_err(fmt_io_err)?;
@@ -319,9 +318,9 @@ impl<'a> Terminal<'a> {
                 }
                 self.buf.push_str(&written_line);
             }
-        }
-        if had_lines {
-            self.buf.push_str("\r\n");
+            if i + 1 < lines_len {
+                self.buf.push_str("\r\n");
+            }
         }
         Ok(())
     }
