@@ -277,6 +277,19 @@ mod tests {
     }
 
     #[test]
+    fn test_line_widths() {
+        let hospital = "\u{1f3e5}";
+        let hospital_buf = Buffer::from(hospital.to_owned());
+        assert_eq!(hospital_buf.line_widths().collect::<Vec<usize>>(), vec![2]);
+        let devanagari = "ते";
+        let devanagari_buf = Buffer::from(devanagari.to_owned());
+        assert_eq!(
+            devanagari_buf.line_widths().collect::<Vec<usize>>(),
+            vec![1]
+        );
+    }
+
+    #[test]
     fn test_clear_exit_for_female_scientist() {
         let word_divider_fcn = &Box::new(get_buffer_words);
         let mut cur = Cursor::new(word_divider_fcn);

@@ -3,6 +3,7 @@ use std::fmt::{self, Write as FmtWrite};
 use std::io::{self, BufRead, Write};
 use std::iter::FromIterator;
 use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 /// A modification performed on a `Buffer`. These are used for the purpose of undo/redo.
 #[derive(Debug, Clone)]
@@ -392,14 +393,15 @@ impl Buffer {
     pub fn line_width_until(&self, until: usize) -> impl Iterator<Item = usize> + '_ {
         self.range_graphemes(0, until)
             .lines()
-            .map(|line| line.map_or(0, |line| line.graphemes(true).count()))
+            .map(|line| line.map_or(0, |line| line.width()))
     }
 
     pub fn line_widths(&self) -> impl Iterator<Item = usize> + '_ {
-        self.data.split('\n').map(|s| s.graphemes(true).count())
+        self.range_graphemes_all()
+            .lines()
+            .map(|line| line.map_or(0, |line| line.width()))
     }
 
-    //TODO can we remove anonymous lifetime?
     pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
         self.data.lines()
     }

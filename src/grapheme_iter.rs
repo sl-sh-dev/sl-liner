@@ -55,11 +55,10 @@ impl<'a> GraphemeIter<'a> {
             Some(self.offsets[self.max_grapheme])
         };
         match (min, max) {
-            (None, None) => &self.data[..],
+            (None, None) => self.data,
             (Some(start), None) => &self.data[start..],
             (None, Some(end)) => &self.data[..end],
             (Some(start), Some(end)) => &self.data[start..end],
-
         }
     }
 
