@@ -76,7 +76,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn char_vec_pos(&self) -> usize {
+    pub fn curr_grapheme(&self) -> usize {
         self.curr_grapheme
     }
 

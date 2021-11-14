@@ -162,7 +162,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn cursor(&self) -> usize {
-        self.cursor.char_vec_pos()
+        self.cursor.curr_grapheme()
     }
 
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
@@ -663,7 +663,7 @@ impl<'a> Editor<'a> {
 
     pub fn curr_char(&self) -> Option<&str> {
         let buf = cur_buf!(self);
-        buf.grapheme_after(self.cursor.char_vec_pos())
+        buf.grapheme_after(self.cursor.curr_grapheme())
     }
 
     pub fn is_cursor_at_beginning_of_word_or_line(&self) -> bool {

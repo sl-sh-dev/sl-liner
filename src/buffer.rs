@@ -228,11 +228,26 @@ impl Buffer {
         self.undone_actions.clear();
     }
 
+    pub fn is_last_arg_newline(&self) -> bool {
+        let mut iter = self
+            .data
+            .split_word_bounds()
+            .filter(|s| !s.is_empty())
+            .rev();
+        let last = iter.next().map_or("", |s| s);
+        let next_last = iter.next().map_or("", |s| s);
+        last == "\n" || (last == "\r" && next_last == "\n")
+    }
+
     pub fn last_arg(&self) -> Option<&str> {
         self.data
             .split_word_bounds()
             .filter(|s| !s.trim().is_empty())
             .last()
+    }
+
+    pub fn num_lines(&self) -> usize {
+        self.lines().count()
     }
 
     pub fn num_graphemes(&self) -> usize {
@@ -328,7 +343,8 @@ impl Buffer {
 
     pub fn append_buffer(&mut self, other: &Buffer) -> usize {
         let start = self.num_graphemes();
-        self.insert_str(start, &other.data[start..])
+        let other_data_offset = other.grapheme_indices.get(start).map_or(0, |o| *o);
+        self.insert_str(start, &other.data[other_data_offset..])
     }
 
     pub fn copy_buffer(&mut self, other: &Buffer) -> usize {
@@ -353,6 +369,16 @@ impl Buffer {
         )
     }
 
+    pub fn range(&self, start: usize, end: usize) -> &str {
+        if start == 0 && end >= self.curr_num_graphemes {
+            self.range_graphemes_all().slice()
+        } else if self.data.is_empty() || start == end {
+            GraphemeIter::default().slice()
+        } else {
+            GraphemeIter::new(&self.data, &self.grapheme_indices, start, end).slice()
+        }
+    }
+
     pub fn range_graphemes(&self, start: usize, end: usize) -> GraphemeIter {
         if start == 0 && end >= self.curr_num_graphemes {
             self.range_graphemes_all()
@@ -373,8 +399,9 @@ impl Buffer {
         self.data.split('\n').map(|s| s.graphemes(true).count())
     }
 
-    pub fn lines(&self) -> Vec<&str> {
-        self.data.split('\n').map(|s| s).collect::<Vec<&str>>()
+    //TODO can we remove anonymous lifetime?
+    pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
+        self.data.lines()
     }
 
     pub fn truncate(&mut self, num: usize) {
@@ -385,13 +412,11 @@ impl Buffer {
     where
         W: Write,
     {
-        out.write_all(self.data.as_bytes())
+        out.write_all(self.as_bytes())
     }
 
-    pub fn as_bytes(&self) -> Vec<u8> {
-        // NOTE: not particularly efficient. Could make a proper byte iterator with minimal
-        // allocations if performance becomes an issue.
-        self.to_string().into_bytes()
+    fn as_bytes(&self) -> &[u8] {
+        self.data.as_bytes()
     }
 
     /// Takes other buffer, measures its length and prints this buffer from the point where

@@ -43,6 +43,26 @@ impl<'a> GraphemeIter<'a> {
         }
     }
 
+    pub fn slice(&self) -> &'a str {
+        let min = if self.min_grapheme == 0 {
+            None
+        } else {
+            Some(self.offsets[self.min_grapheme])
+        };
+        let max = if self.max_grapheme == self.offsets.len() {
+            None
+        } else {
+            Some(self.offsets[self.max_grapheme])
+        };
+        match (min, max) {
+            (None, None) => &self.data[..],
+            (Some(start), None) => &self.data[start..],
+            (None, Some(end)) => &self.data[..end],
+            (Some(start), Some(end)) => &self.data[start..end],
+
+        }
+    }
+
     pub fn get(&self, idx: usize) -> Option<&'a str> {
         let mut str = None;
         if idx < self.max_grapheme {
@@ -91,7 +111,7 @@ impl<'a> BufRead for GraphemeIter<'a> {
 
 impl<'a> From<GraphemeIter<'a>> for String {
     fn from(g_iter: GraphemeIter) -> Self {
-        let mut str = String::with_capacity(g_iter.data.len());
+        let mut str = String::new();
         for g in g_iter {
             str.push_str(g);
         }
@@ -216,11 +236,13 @@ mod tests {
         let expected_str = String::from("012ते345");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&expected_str, &offsets, 0, 7);
+        let gs2 = GraphemeIter::new(&expected_str, &offsets, 0, 7);
         let mut actual_str = String::with_capacity(12);
         for f in gs {
             actual_str.push_str(f);
         }
         assert_eq!(expected_str, actual_str);
+        assert_eq!(expected_str, gs2.slice());
     }
 
     #[test]
@@ -229,11 +251,13 @@ mod tests {
         let expected_str = String::from("ते34");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&base, &offsets, 3, 6);
+        let gs2 = GraphemeIter::new(&base, &offsets, 3, 6);
         let mut actual_str = String::with_capacity(8);
         for f in gs {
             actual_str.push_str(f);
         }
         assert_eq!(expected_str, actual_str);
+        assert_eq!(expected_str, gs2.slice());
     }
 
     #[test]
@@ -242,23 +266,28 @@ mod tests {
         let expected_rev_str = String::from("543ते210");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&expected_str, &offsets, 0, 7);
+        let gs2 = GraphemeIter::new(&expected_str, &offsets, 0, 7);
         let mut actual_rev_str = String::with_capacity(12);
         for x in gs.rev() {
             actual_rev_str.push_str(x);
         }
         assert_eq!(expected_rev_str, actual_rev_str);
+        assert_eq!(expected_str, gs2.slice());
     }
 
     #[test]
     fn test_iterate_backwards_slice() {
         let expected_str = String::from("012ते345");
         let expected_rev_str = String::from("43ते");
+        let expected_slice_str = String::from("ते34");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&expected_str, &offsets, 3, 6);
+        let gs2 = GraphemeIter::new(&expected_str, &offsets, 3, 6);
         let mut actual_rev_str = String::with_capacity(8);
         for x in gs.rev() {
             actual_rev_str.push_str(x);
         }
         assert_eq!(expected_rev_str, actual_rev_str);
+        assert_eq!(expected_slice_str, gs2.slice());
     }
 }
