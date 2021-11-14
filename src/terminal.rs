@@ -330,11 +330,11 @@ impl<'a> Terminal<'a> {
 
             if buf_num_remaining_bytes == 0 {
                 self.buf.push_str(line);
-            } else if line.len() > buf_num_remaining_bytes {
+            } else if line.as_bytes().len() > buf_num_remaining_bytes {
                 self.display_with_suggest(line, is_search, buf_num_remaining_bytes)?;
                 buf_num_remaining_bytes = 0;
             } else {
-                buf_num_remaining_bytes -= line.len();
+                buf_num_remaining_bytes -= line.as_bytes().len();
                 let written_line = self.colorize(line);
                 if is_search {
                     write!(self.buf, "{}", color::Yellow.fg_str()).map_err(fmt_io_err)?;
