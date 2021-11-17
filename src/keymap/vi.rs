@@ -224,6 +224,7 @@ impl ViMoveDir {
     }
 }
 
+//TODO make configurable
 /// All alphanumeric characters and _ are considered valid for keywords in vi by default.
 fn is_vi_keyword(str: &str) -> bool {
     let mut ret = false;

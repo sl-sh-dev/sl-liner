@@ -329,14 +329,11 @@ impl<'a> Editor<'a> {
             let buf = cur_buf_mut!(self);
 
             let word = match word_range {
-                Some((start, end)) => buf
-                    .range_graphemes(start, end)
-                    .map(String::from)
-                    .collect::<String>(),
-                None => String::new(),
+                Some((start, end)) => buf.range_graphemes(start, end).slice(),
+                None => "",
             };
 
-            let mut completions = handler.completions(word.as_ref());
+            let mut completions = handler.completions(word);
             completions.sort();
             completions.dedup();
             (word, completions)
@@ -361,7 +358,7 @@ impl<'a> Editor<'a> {
             if let Some(p) = common_prefix {
                 let s = p.iter().cloned().collect::<String>();
 
-                if s.len() > word.len() && s.starts_with(&word[..]) {
+                if s.len() > word.len() && s.starts_with(word) {
                     self.delete_word_before_cursor(false)?;
                     return self.insert_str_after_cursor(s.as_ref());
                 }
