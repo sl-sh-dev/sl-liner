@@ -6674,7 +6674,7 @@ mod tests {
             &mut buf,
         )
         .unwrap();
-        ed.insert_str_after_cursor("abcस्तेabc").unwrap();
+        ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc").unwrap();
         assert_eq!(super::find_char(ed.current_buffer(), 0, 'a', 2), Some(5));
     }
 
@@ -6780,7 +6780,7 @@ mod tests {
             &mut buf,
         )
         .unwrap();
-        ed.insert_str_after_cursor("abcस्तेabc").unwrap();
+        ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc").unwrap();
         assert_eq!(
             super::find_char_rev(ed.current_buffer(), 5, 'a', 1),
             Some(0)

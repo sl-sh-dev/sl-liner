@@ -66,11 +66,10 @@ impl<'a> GraphemeIter<'a> {
         let mut str = None;
         if idx < self.max_grapheme {
             let start = self.offsets[idx];
-            let end;
             if idx + 1 == self.max_grapheme {
                 str = Some(&self.data[start..]);
             } else {
-                end = self.offsets[idx + 1];
+                let end = self.offsets[idx + 1];
                 str = Some(&self.data[start..end]);
             }
         }
@@ -231,8 +230,40 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_get() {
+        let base: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let gs = GraphemeIter::new(&base, &offsets, 0, 7);
+        assert_eq!("5", gs.get(6).unwrap());
+        assert_eq!("\u{924}\u{947}", gs.get(3).unwrap());
+    }
+
+    #[test]
+    fn test_slices() {
+        let base: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let true_min_artificial_max = GraphemeIter::new(&base, &offsets, 0, 6);
+        assert_eq!("012\u{924}\u{947}34", true_min_artificial_max.slice());
+
+        let true_min_and_max = GraphemeIter::new(&base, &offsets, 0, 7);
+        assert_eq!("012\u{924}\u{947}345", true_min_and_max.slice());
+
+        let artificial_min_and_true_max = GraphemeIter::new(&base, &offsets, 2, 7);
+        assert_eq!("2\u{924}\u{947}345", artificial_min_and_true_max.slice());
+
+        let artificial_min_and_max = GraphemeIter::new(&base, &offsets, 2, 4);
+        assert_eq!("2\u{924}\u{947}", artificial_min_and_max.slice());
+
+        let one_grapheme = GraphemeIter::new(&base, &offsets, 3, 4);
+        assert_eq!("\u{924}\u{947}", one_grapheme.slice());
+
+        let no_graphemes = GraphemeIter::new(&base, &offsets, 3, 3);
+        assert_eq!("", no_graphemes.slice());
+    }
+
+    #[test]
     fn test_iterate() {
-        let expected_str = String::from("012ते345");
+        let expected_str: String = String::from("012\u{924}\u{947}345");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&expected_str, &offsets, 0, 7);
         let gs2 = GraphemeIter::new(&expected_str, &offsets, 0, 7);
@@ -246,8 +277,8 @@ mod tests {
 
     #[test]
     fn test_iterate_forward_slice() {
-        let base = String::from("012ते345");
-        let expected_str = String::from("ते34");
+        let base: String = String::from("012\u{924}\u{947}345");
+        let expected_str = String::from("\u{924}\u{947}34");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&base, &offsets, 3, 6);
         let gs2 = GraphemeIter::new(&base, &offsets, 3, 6);
@@ -261,8 +292,8 @@ mod tests {
 
     #[test]
     fn test_iterate_back() {
-        let expected_str = String::from("012ते345");
-        let expected_rev_str = String::from("543ते210");
+        let expected_str: String = String::from("012\u{924}\u{947}345");
+        let expected_rev_str = String::from("543\u{924}\u{947}210");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&expected_str, &offsets, 0, 7);
         let gs2 = GraphemeIter::new(&expected_str, &offsets, 0, 7);
@@ -276,9 +307,9 @@ mod tests {
 
     #[test]
     fn test_iterate_backwards_slice() {
-        let expected_str = String::from("012ते345");
-        let expected_rev_str = String::from("43ते");
-        let expected_slice_str = String::from("ते34");
+        let expected_str: String = String::from("012\u{924}\u{947}345");
+        let expected_rev_str = String::from("43\u{924}\u{947}");
+        let expected_slice_str = String::from("\u{924}\u{947}34");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
         let gs = GraphemeIter::new(&expected_str, &offsets, 3, 6);
         let gs2 = GraphemeIter::new(&expected_str, &offsets, 3, 6);

@@ -846,9 +846,9 @@ mod tests {
 
     #[test]
     fn test_append() {
-        let orig = String::from("hello string स्ते");
+        let orig = String::from("hello string \u{938}\u{94d}\u{924}\u{947}");
         let mut buf0 = Buffer::from(orig.clone());
-        let append = "स्तेa";
+        let append = "\u{938}\u{94d}\u{924}\u{947}a";
         let buf1 = Buffer::from(append);
         buf0.append_buffer(&buf1);
         assert_eq!(Buffer::from(orig + append), buf0);
@@ -856,22 +856,22 @@ mod tests {
 
     #[test]
     fn test_first() {
-        let s = "स्ते hello string";
+        let s = "\u{938}\u{94d}\u{924}\u{947} hello string";
         let buf = Buffer::from(s);
         let first = buf.first();
         assert!(first.is_some());
-        let s = "स्";
+        let s = "\u{938}\u{94d}";
         assert_eq!(s, first.unwrap());
     }
 
     #[test]
     fn test_push() {
-        let s = "hello string स्ते";
+        let s = "hello string \u{938}\u{94d}\u{924}\u{947}";
         let mut buf = Buffer::from(s);
         buf.push('a');
         let last_arg = buf.last_arg();
         assert!(last_arg.is_some());
-        let s = "स्तेa";
+        let s = "\u{938}\u{94d}\u{924}\u{947}a";
         assert_eq!(s, last_arg.unwrap());
         let buf = Buffer::from(s);
         let v = buf.as_bytes();
@@ -883,9 +883,9 @@ mod tests {
 
     #[test]
     fn test_range_chars() {
-        let orig = "(“न” “म” “स्” “ते”)";
+        let orig = "('\u{928}' '\u{92e}' '\u{938}\u{94d}' '\u{924}\u{947}')";
         let buf = Buffer::from(orig);
-        let trim = "(“न” “म” “स्” “";
+        let trim = "('\u{928}' '\u{92e}' '\u{938}\u{94d}' '";
         let str: String = buf.range_graphemes(0, 14).into();
         assert_eq!(trim, str);
     }
