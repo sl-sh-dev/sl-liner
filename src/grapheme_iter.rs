@@ -17,7 +17,7 @@ impl<'a> Default for GraphemeIter<'a> {
             data: "",
             offsets: &[],
             curr_grapheme: 0,
-            curr_grapheme_back: 0,
+            curr_grapheme_back: -1,
             curr_offset: Some(0),
             min_grapheme: 0,
             max_grapheme: 0,
@@ -122,31 +122,20 @@ impl<'a> Iterator for GraphemeIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let str;
-        if self.curr_grapheme >= self.max_grapheme {
-            //base case we've iterated over the edge.
+        if self.offsets.is_empty() || self.curr_grapheme > self.curr_grapheme_back as usize {
+            //base case we've iterated over the edge or the buffer is empty.
             str = None
-        } else if self.max_grapheme - self.min_grapheme == 1 {
-            //special case where the buffer is only 1 long
-            let start = self.offsets[self.min_grapheme];
-            if self.max_grapheme == self.offsets.len() {
-                // take care to slice properly if at proper end of self.data
-                str = Some(&self.data[start..]);
-            } else {
-                let end = self.offsets[self.max_grapheme];
-                str = Some(&self.data[start..end]);
-            }
-            self.curr_grapheme = self.max_grapheme + 1;
         } else {
             let start = self.offsets[self.curr_grapheme];
             self.curr_grapheme += 1;
 
-            if self.curr_grapheme == self.max_grapheme {
+            if self.curr_grapheme as isize == self.curr_grapheme_back + 1 {
                 // if cursor is at end of iter
                 if self.curr_grapheme == self.offsets.len() {
                     // take care to slice properly if at proper end of self.data
                     str = Some(&self.data[start..]);
                 } else {
-                    let end = self.offsets[self.max_grapheme];
+                    let end = self.offsets[self.curr_grapheme_back as usize + 1];
                     str = Some(&self.data[start..end]);
                 }
             } else {
@@ -162,26 +151,9 @@ impl<'a> Iterator for GraphemeIter<'a> {
 impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let str;
-        if self.curr_grapheme_back < self.min_grapheme as isize {
-            // base case we've run past the min
+        if self.offsets.is_empty() || self.curr_grapheme_back < self.curr_grapheme as isize {
+            // base case we've run past the min or the buffer is empty.
             str = None
-        } else if self.max_grapheme - self.min_grapheme == 1 {
-            // special case where buffer is only 1 long
-            let start = self.offsets[self.min_grapheme];
-            if self.max_grapheme == self.offsets.len() {
-                // take care to slice properly if at proper end of self.data
-                str = Some(&self.data[start..]);
-            } else {
-                let end = self.offsets[self.max_grapheme];
-                str = Some(&self.data[start..end]);
-            }
-            self.curr_grapheme_back = -1;
-        } else if self.curr_grapheme_back as usize == self.min_grapheme {
-            // we've reached the end
-            let start = self.offsets[self.min_grapheme];
-            let end = self.offsets[self.min_grapheme + 1];
-            self.curr_grapheme_back -= 1;
-            str = Some(&self.data[start..end]);
         } else {
             let start = self.offsets[self.curr_grapheme_back as usize];
             if self.curr_grapheme_back as usize == self.max_grapheme - 1 {
@@ -194,11 +166,11 @@ impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
                     str = Some(&self.data[start..max_char]);
                 }
                 self.curr_grapheme_back -= 1;
-            } else if self.curr_grapheme_back == self.min_grapheme as isize {
+            } else if self.curr_grapheme_back == self.curr_grapheme as isize {
                 // last iteration
                 let end = self.offsets[self.curr_grapheme_back as usize + 1];
                 self.curr_grapheme_back -= 1;
-                if self.min_grapheme == 0 {
+                if self.curr_grapheme == 0 {
                     // take care to slice properly if at proper end of self.data
                     str = Some(&self.data[..end]);
                 } else {
@@ -322,6 +294,58 @@ mod tests {
     }
 
     #[test]
+    fn test_special_case_back_iter() {
+        let expected_str: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+
+        let gs_end = GraphemeIter::new(&expected_str, &offsets, 6, 7);
+        let mut iter = gs_end.into_iter();
+        let init_len = iter.len();
+        assert_eq!(1, init_len);
+
+        let str = iter.next_back();
+        assert_eq!("5", str.unwrap());
+        let len = iter.len();
+        assert_eq!(0, len);
+
+        let gs_beg = GraphemeIter::new(&expected_str, &offsets, 0, 1);
+        let mut iter = gs_beg.into_iter();
+        let init_len = iter.len();
+        assert_eq!(1, init_len);
+
+        let str = iter.next_back();
+        assert_eq!("0", str.unwrap());
+        let len = iter.len();
+        assert_eq!(0, len);
+    }
+
+    #[test]
+    fn test_special_case_forward_iter() {
+        let expected_str: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+
+        let gs_end = GraphemeIter::new(&expected_str, &offsets, 6, 7);
+        let mut iter = gs_end.into_iter();
+        let init_len = iter.len();
+        assert_eq!(1, init_len);
+
+        let str = iter.next();
+        assert_eq!("5", str.unwrap());
+        let len = iter.len();
+        assert_eq!(0, len);
+
+        let gs_beg = GraphemeIter::new(&expected_str, &offsets, 0, 1);
+        let mut iter = gs_beg.into_iter();
+        let init_len = iter.len();
+        assert_eq!(1, init_len);
+
+        let str = iter.next();
+        assert_eq!("0", str.unwrap());
+        let len = iter.len();
+        assert_eq!(0, len);
+    }
+
+    #[test]
     fn test_exact_size_iter() {
         let expected_str: String = String::from("012\u{924}\u{947}345");
         let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
@@ -330,15 +354,18 @@ mod tests {
         let init_len = iter.len();
         assert_eq!(3, init_len);
 
-        iter.next_back();
+        let str = iter.next_back();
+        assert_eq!("4", str.unwrap());
         let len = iter.len();
         assert_eq!(2, len);
 
-        iter.next();
+        let str = iter.next();
+        assert_eq!("\u{924}\u{947}", str.unwrap());
         let len = iter.len();
         assert_eq!(1, len);
 
-        iter.next_back();
+        let str = iter.next_back();
+        assert_eq!("3", str.unwrap());
         let len = iter.len();
         assert_eq!(0, len);
     }
