@@ -79,10 +79,10 @@ impl<'a> GraphemeIter<'a> {
 
 impl<'a> Read for GraphemeIter<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let len = buf.len() - 1;
-        let mut bytes = self.data.as_bytes()[..len].to_owned();
-        buf.swap_with_slice(&mut bytes);
-        Ok(bytes.len())
+        let src_buf_len = buf.len() - 1;
+        let bytes = &self.data.as_bytes()[..src_buf_len];
+        buf.copy_from_slice(bytes);
+        Ok(src_buf_len)
     }
 }
 
@@ -217,10 +217,10 @@ impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
 
 impl<'a> ExactSizeIterator for GraphemeIter<'a> {
     fn len(&self) -> usize {
-        if self.curr_grapheme_back < 0 {
+        if self.curr_grapheme as isize >= self.curr_grapheme_back  + 1 {
             0
         } else {
-            self.curr_grapheme_back as usize + 1
+            (self.curr_grapheme_back - self.curr_grapheme as isize + 1) as usize
         }
     }
 }
@@ -319,5 +319,27 @@ mod tests {
         }
         assert_eq!(expected_rev_str, actual_rev_str);
         assert_eq!(expected_slice_str, gs2.slice());
+    }
+
+    #[test]
+    fn test_exact_size_iter() {
+        let expected_str: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let gs = GraphemeIter::new(&expected_str, &offsets, 3, 6);
+        let mut iter = gs.into_iter();
+        let init_len = iter.len();
+        assert_eq!(3, init_len);
+
+        iter.next_back();
+        let len = iter.len();
+        assert_eq!(2, len);
+
+        iter.next();
+        let len = iter.len();
+        assert_eq!(1, len);
+
+        iter.next_back();
+        let len = iter.len();
+        assert_eq!(0, len);
     }
 }
