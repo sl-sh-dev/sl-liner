@@ -79,10 +79,16 @@ impl<'a> GraphemeIter<'a> {
 
 impl<'a> Read for GraphemeIter<'a> {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        let src_buf_len = buf.len() - 1;
-        let bytes = &self.data.as_bytes()[..src_buf_len];
-        buf.copy_from_slice(bytes);
-        Ok(src_buf_len)
+        let dest_buf_len = buf.len();
+        let src_buf_len = self.data.as_bytes().len();
+        if dest_buf_len > src_buf_len {
+            let bytes = &self.data.as_bytes()[..];
+            buf[..src_buf_len].copy_from_slice(bytes);
+        } else {
+            let bytes = &self.data.as_bytes()[..dest_buf_len];
+            buf.copy_from_slice(bytes);
+        }
+        Ok(dest_buf_len)
     }
 }
 
@@ -189,7 +195,7 @@ impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
 
 impl<'a> ExactSizeIterator for GraphemeIter<'a> {
     fn len(&self) -> usize {
-        if self.curr_grapheme as isize >= self.curr_grapheme_back  + 1 {
+        if self.curr_grapheme as isize >= self.curr_grapheme_back + 1 {
             0
         } else {
             (self.curr_grapheme_back - self.curr_grapheme as isize + 1) as usize
@@ -368,5 +374,50 @@ mod tests {
         assert_eq!("3", str.unwrap());
         let len = iter.len();
         assert_eq!(0, len);
+    }
+
+    #[test]
+    fn test_read_fill_large_buf() {
+        let str: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let mut gs = GraphemeIter::new(&str, &offsets, 3, 6);
+
+        let mut buffer = [0; 15];
+
+        // read up to 10 bytes
+        let n = gs.read(&mut buffer[..]).unwrap();
+        assert_eq!(n, 15);
+        assert_eq!(
+            String::from("012\u{924}\u{947}345\u{0}\u{0}\u{0}"),
+            std::str::from_utf8(&buffer).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_read_fill_small_buf() {
+        let str: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let mut gs = GraphemeIter::new(&str, &offsets, 3, 6);
+
+        let mut buffer = [0; 6];
+
+        // read up to 10 bytes
+        let n = gs.read(&mut buffer[..]).unwrap();
+        assert_eq!(n, 6);
+        assert_eq!("012\u{924}", std::str::from_utf8(&buffer).unwrap());
+    }
+
+    #[test]
+    fn test_read_fill_buf() {
+        let str: String = String::from("012\u{924}\u{947}345");
+        let offsets: Vec<usize> = vec![0, 1, 2, 3, 9, 10, 11];
+        let mut gs = GraphemeIter::new(&str, &offsets, 3, 6);
+
+        let mut buffer = [0; 10];
+
+        // read up to 10 bytes
+        let n = gs.read(&mut buffer[..]).unwrap();
+        assert_eq!(n, 10);
+        assert_eq!("012\u{924}\u{947}3", std::str::from_utf8(&buffer).unwrap());
     }
 }
