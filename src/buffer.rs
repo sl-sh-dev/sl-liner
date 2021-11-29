@@ -888,6 +888,20 @@ mod tests {
         let trim = "('\u{928}' '\u{92e}' '\u{938}\u{94d}' '";
         let str: String = buf.range_graphemes(0, 14).into();
         assert_eq!(trim, str);
+
+        let str: &str = buf.range(0, 14).into();
+        assert_eq!(trim, str);
+    }
+
+    #[test]
+    fn test_whole_range_chars() {
+        let orig = "('\u{928}' '\u{92e}' '\u{938}\u{94d}' '\u{924}\u{947}')";
+        let buf = Buffer::from(orig);
+        let str: String = buf.range_graphemes(0, 42).into();
+        assert_eq!(orig, str);
+
+        let str: &str = buf.range(0, 42).into();
+        assert_eq!(orig, str);
     }
 
     #[test]
@@ -896,5 +910,18 @@ mod tests {
         let buf = Buffer::from(orig);
         let str: String = buf.range_graphemes(5, 14).into();
         assert_eq!(orig, str);
+
+        let str: &str = buf.range(5, 14);
+        assert_eq!(orig, str);
+    }
+
+    #[test]
+    fn test_noop() {
+        let orig = "";
+        let mut buf = Buffer::from(orig);
+        let start = 0;
+        let act = Action::Noop { start };
+        let ret = act.do_on(&mut buf);
+        assert_eq!(start, ret.unwrap());
     }
 }

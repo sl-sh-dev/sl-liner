@@ -63,17 +63,17 @@ impl<'a> GraphemeIter<'a> {
     }
 
     pub fn get(&self, idx: usize) -> Option<&'a str> {
-        let mut str = None;
         if idx < self.max_grapheme {
             let start = self.offsets[idx];
             if idx + 1 == self.max_grapheme {
-                str = Some(&self.data[start..]);
+                Some(&self.data[start..])
             } else {
                 let end = self.offsets[idx + 1];
-                str = Some(&self.data[start..end]);
+                Some(&self.data[start..end])
             }
+        } else {
+            None
         }
-        str
     }
 }
 
@@ -82,7 +82,7 @@ impl<'a> Read for GraphemeIter<'a> {
         let dest_buf_len = buf.len();
         let src_buf_len = self.data.as_bytes().len();
         if dest_buf_len > src_buf_len {
-            let bytes = &self.data.as_bytes()[..];
+            let bytes = self.data.as_bytes();
             buf[..src_buf_len].copy_from_slice(bytes);
         } else {
             let bytes = &self.data.as_bytes()[..dest_buf_len];
@@ -127,10 +127,9 @@ impl<'a> Iterator for GraphemeIter<'a> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let str;
         if self.offsets.is_empty() || self.curr_grapheme > self.curr_grapheme_back as usize {
             //base case we've iterated over the edge or the buffer is empty.
-            str = None
+            None
         } else {
             let start = self.offsets[self.curr_grapheme];
             self.curr_grapheme += 1;
@@ -139,63 +138,61 @@ impl<'a> Iterator for GraphemeIter<'a> {
                 // if cursor is at end of iter
                 if self.curr_grapheme == self.offsets.len() {
                     // take care to slice properly if at proper end of self.data
-                    str = Some(&self.data[start..]);
+                    Some(&self.data[start..])
                 } else {
                     let end = self.offsets[self.curr_grapheme_back as usize + 1];
-                    str = Some(&self.data[start..end]);
+                    Some(&self.data[start..end])
                 }
             } else {
                 // somewhere in the middle
                 let end = self.offsets[self.curr_grapheme];
-                str = Some(&self.data[start..end]);
+                Some(&self.data[start..end])
             }
         }
-        str
     }
 }
 
 impl<'a> DoubleEndedIterator for GraphemeIter<'a> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        let str;
         if self.offsets.is_empty() || self.curr_grapheme_back < self.curr_grapheme as isize {
             // base case we've run past the min or the buffer is empty.
-            str = None
+            None
         } else {
             let start = self.offsets[self.curr_grapheme_back as usize];
             if self.curr_grapheme_back as usize == self.max_grapheme - 1 {
                 // first iteration
                 if self.max_grapheme == self.offsets.len() {
                     // take care to slice properly if at proper end of self.data
-                    str = Some(&self.data[start..]);
+                    self.curr_grapheme_back -= 1;
+                    Some(&self.data[start..])
                 } else {
                     let max_char = self.offsets[self.curr_grapheme_back as usize + 1];
-                    str = Some(&self.data[start..max_char]);
+                    self.curr_grapheme_back -= 1;
+                    Some(&self.data[start..max_char])
                 }
-                self.curr_grapheme_back -= 1;
             } else if self.curr_grapheme_back == self.curr_grapheme as isize {
                 // last iteration
                 let end = self.offsets[self.curr_grapheme_back as usize + 1];
                 self.curr_grapheme_back -= 1;
                 if self.curr_grapheme == 0 {
                     // take care to slice properly if at proper end of self.data
-                    str = Some(&self.data[..end]);
+                    Some(&self.data[..end])
                 } else {
-                    str = Some(&self.data[start..end]);
+                    Some(&self.data[start..end])
                 }
             } else {
                 // somewhere in the middle
                 let end = self.offsets[self.curr_grapheme_back as usize + 1];
                 self.curr_grapheme_back -= 1;
-                str = Some(&self.data[start..end]);
+                Some(&self.data[start..end])
             }
         }
-        str
     }
 }
 
 impl<'a> ExactSizeIterator for GraphemeIter<'a> {
     fn len(&self) -> usize {
-        if self.curr_grapheme as isize >= self.curr_grapheme_back + 1 {
+        if self.curr_grapheme as isize > self.curr_grapheme_back {
             0
         } else {
             (self.curr_grapheme_back - self.curr_grapheme as isize + 1) as usize
@@ -419,5 +416,25 @@ mod tests {
         let n = gs.read(&mut buffer[..]).unwrap();
         assert_eq!(n, 10);
         assert_eq!("012\u{924}\u{947}3", std::str::from_utf8(&buffer).unwrap());
+    }
+
+    #[test]
+    fn test_empty_grapheme_iter() {
+        let mut gs = GraphemeIter::default();
+        assert_eq!(None, gs.get(8));
+        assert_eq!("", gs.slice());
+        let mut buffer = [0; 1];
+        let n = gs.read(&mut buffer[..]).unwrap();
+        assert_eq!(1, n); //TODO not sure about this.
+        assert_eq!(String::from("\u{0}"), std::str::from_utf8(&buffer).unwrap());
+        assert!(gs.fill_buf().unwrap().is_empty());
+        assert_eq!(0, gs.len());
+        let g: String = gs.into();
+        assert_eq!("", g);
+
+        let mut gs = GraphemeIter::default();
+        assert_eq!(None, gs.next());
+        let mut gs = GraphemeIter::default();
+        assert_eq!(None, gs.next_back());
     }
 }
