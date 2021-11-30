@@ -1,6 +1,6 @@
 use crate::grapheme_iter::GraphemeIter;
 use std::fmt::{self, Write as FmtWrite};
-use std::io::{self, BufRead, Write};
+use std::io::{self, Write};
 use std::iter::FromIterator;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
@@ -392,14 +392,16 @@ impl Buffer {
 
     pub fn line_width_until(&self, until: usize) -> impl Iterator<Item = usize> + '_ {
         self.range_graphemes(0, until)
+            .slice()
             .lines()
-            .map(|line| line.map_or(0, |line| line.width()))
+            .map(|line| line.width())
     }
 
     pub fn line_widths(&self) -> impl Iterator<Item = usize> + '_ {
         self.range_graphemes_all()
+            .slice()
             .lines()
-            .map(|line| line.map_or(0, |line| line.width()))
+            .map(|line| line.width())
     }
 
     pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
