@@ -1,9 +1,9 @@
 use std::{borrow::Cow, io};
-use unicode_width::*;
+use unicode_segmentation::UnicodeSegmentation;
 
 pub fn last_prompt_line_width<S: AsRef<str>>(s: S) -> usize {
     let last_prompt_line_width = handle_prompt(s.as_ref());
-    remove_codes(last_prompt_line_width).width()
+    remove_codes(last_prompt_line_width).graphemes(true).count()
 }
 
 pub fn find_longest_common_prefix<T: Clone + Eq>(among: &[Vec<T>]) -> Option<Vec<T>> {

@@ -122,8 +122,9 @@ impl<'a> Editor<'a> {
 
         if !ed.new_buf.is_empty() {
             ed.move_cursor_to_end_of_line()?;
+        } else {
+            ed.display_term()?;
         }
-        ed.display_term()?;
         Ok(ed)
     }
 
@@ -161,7 +162,7 @@ impl<'a> Editor<'a> {
     }
 
     pub fn cursor(&self) -> usize {
-        self.cursor.char_vec_pos()
+        self.cursor.curr_grapheme()
     }
 
     // XXX: Returning a bool to indicate doneness is a bit awkward, maybe change it
@@ -177,7 +178,7 @@ impl<'a> Editor<'a> {
         }
 
         let last_char = cur_buf!(self).last();
-        if last_char == Some(&'\\') {
+        if last_char == Some("\\") {
             let buf = cur_buf_mut!(self);
             buf.push('\n');
             self.cursor.move_cursor_to_end_of_line(buf);
@@ -328,11 +329,11 @@ impl<'a> Editor<'a> {
             let buf = cur_buf_mut!(self);
 
             let word = match word_range {
-                Some((start, end)) => buf.range(start, end),
-                None => "".into(),
+                Some((start, end)) => buf.range_graphemes(start, end).slice(),
+                None => "",
             };
 
-            let mut completions = handler.completions(word.as_ref());
+            let mut completions = handler.completions(word);
             completions.sort();
             completions.dedup();
             (word, completions)
@@ -357,7 +358,7 @@ impl<'a> Editor<'a> {
             if let Some(p) = common_prefix {
                 let s = p.iter().cloned().collect::<String>();
 
-                if s.len() > word.len() && s.starts_with(&word[..]) {
+                if s.len() > word.len() && s.starts_with(word) {
                     self.delete_word_before_cursor(false)?;
                     return self.insert_str_after_cursor(s.as_ref());
                 }
@@ -403,7 +404,7 @@ impl<'a> Editor<'a> {
         ignore_space_before_cursor: bool,
     ) -> io::Result<()> {
         if let Some((start, _)) = self.get_word_before_cursor(ignore_space_before_cursor) {
-            self.cursor.remove(cur_buf_mut!(self), start);
+            self.cursor.delete_until_cursor(cur_buf_mut!(self), start);
         }
         self.display_term()
     }
@@ -422,7 +423,7 @@ impl<'a> Editor<'a> {
         } else {
             self.hist_buf_valid = false;
             self.freshen_history();
-            if self.new_buf.num_chars() > 0 {
+            if self.new_buf.num_graphemes() > 0 {
                 match self.history_subset_loc {
                     Some(i) if i > 0 => {
                         self.history_subset_loc = Some(i - 1);
@@ -461,7 +462,7 @@ impl<'a> Editor<'a> {
             self.search(true)
         } else {
             self.hist_buf_valid = false;
-            if self.new_buf.num_chars() > 0 {
+            if self.new_buf.num_graphemes() > 0 {
                 if let Some(i) = self.history_subset_loc {
                     if i < self.history_subset_index.len() - 1 {
                         self.history_subset_loc = Some(i + 1);
@@ -509,6 +510,32 @@ impl<'a> Editor<'a> {
             self.move_cursor_to_end_of_line()
         } else {
             self.display_term()
+        }
+    }
+
+    pub fn flip_case(&mut self) -> io::Result<()> {
+        let cursor = self.cursor();
+        let buf_mut = cur_buf_mut!(self);
+        let str = buf_mut.grapheme_after(cursor).map(String::from);
+        if let Some(str) = str {
+            let mut c = str.chars();
+            match c.next() {
+                Some(f) if f.is_lowercase() => {
+                    self.cursor.delete_after_cursor(buf_mut);
+                    self.insert_str_after_cursor(
+                        &*(f.to_uppercase().collect::<String>() + c.as_str()),
+                    )
+                }
+                Some(f) if f.is_uppercase() => {
+                    self.cursor.delete_after_cursor(buf_mut);
+                    self.insert_str_after_cursor(
+                        &*(f.to_lowercase().collect::<String>() + c.as_str()),
+                    )
+                }
+                _ => self.move_cursor_right(1),
+            }
+        } else {
+            self.move_cursor_right(1)
         }
     }
 
@@ -631,9 +658,9 @@ impl<'a> Editor<'a> {
         self.display_term()
     }
 
-    pub fn curr_char(&self) -> Option<char> {
+    pub fn curr_char(&self) -> Option<&str> {
         let buf = cur_buf!(self);
-        buf.char_after(self.cursor.char_vec_pos())
+        buf.grapheme_after(self.cursor.curr_grapheme())
     }
 
     pub fn is_cursor_at_beginning_of_word_or_line(&self) -> bool {
@@ -668,7 +695,7 @@ impl<'a> Editor<'a> {
                         buf.copy_buffer(x);
                     }
                     Some(ref x) => {
-                        buf.insert_from_buffer(x);
+                        buf.append_buffer(x);
                     }
                     None => (),
                 }
@@ -683,7 +710,7 @@ impl<'a> Editor<'a> {
     /// Return None if nothing found.
     fn current_autosuggestion(&mut self) -> Option<Buffer> {
         // If we are editing a previous history item no autosuggestion.
-        if self.hist_buf_valid || self.new_buf.num_chars() == 0 {
+        if self.hist_buf_valid || self.new_buf.num_graphemes() == 0 {
             return None;
         }
         let context_history = &self.history;
@@ -941,7 +968,7 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor.set_char_vec_pos(0);
+        ed.move_cursor_to_start_of_line().unwrap();
 
         ed.delete_until(5).unwrap();
         assert_eq!(ed.cursor(), 0);
@@ -964,7 +991,7 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor.set_char_vec_pos(4);
+        ed.move_cursor_left(1).unwrap();
 
         ed.delete_until(1).unwrap();
         assert_eq!(ed.cursor(), 1);
@@ -987,10 +1014,35 @@ mod tests {
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
-        ed.cursor.set_char_vec_pos(4);
+        ed.move_cursor_left(1).unwrap();
 
         ed.delete_until_inclusive(1).unwrap();
         assert_eq!(ed.cursor(), 1);
         assert_eq!(String::from(ed), "r");
+    }
+
+    #[test]
+    fn test_cursor_when_init_buffer_is_not_empty() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let buffer = Buffer::from("\u{1f469}\u{200d}\u{1f4bb} start here_".to_owned());
+        let mut ed = Editor::new_with_init_buffer(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+            buffer,
+        )
+        .unwrap();
+        ed.insert_str_after_cursor("right").unwrap();
+        assert_eq!(ed.cursor(), 18);
+        assert_eq!(
+            "\u{1f469}\u{200d}\u{1f4bb} start here_right",
+            String::from(ed)
+        );
     }
 }

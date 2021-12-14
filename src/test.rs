@@ -36,6 +36,7 @@ fn test_get_cursor_position() {
         ("abc  abc", 8, OnWordRightEdge(1)),
         (" a", 0, InSpace(None, Some(0))),
         ("a ", 2, InSpace(Some(0), None)),
+        ("", 0, InSpace(None, None)),
     ];
 
     for t in tests {
@@ -60,11 +61,11 @@ fn test_buffer_actions() {
         &[
             Action::Insert {
                 start: 0,
-                text: "hi".chars().collect(),
+                text: "hi".to_owned(),
             },
             Action::Remove {
                 start: 1,
-                text: ".".chars().collect(),
+                text: ".".to_owned(),
             },
         ],
     );

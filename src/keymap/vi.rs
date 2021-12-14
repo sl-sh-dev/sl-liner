@@ -224,9 +224,23 @@ impl ViMoveDir {
     }
 }
 
+//TODO make configurable
 /// All alphanumeric characters and _ are considered valid for keywords in vi by default.
-fn is_vi_keyword(c: char) -> bool {
-    c == '_' || c.is_alphanumeric()
+fn is_vi_keyword(str: &str) -> bool {
+    let mut ret = false;
+    if str == "_" {
+        ret = true
+    } else if !str.trim().is_empty() {
+        for c in str.chars() {
+            if c.is_alphanumeric() {
+                ret = true;
+            } else {
+                ret = false;
+                break;
+            }
+        }
+    }
+    ret
 }
 
 fn move_word_ws_is_word(ed: &mut Editor, count: usize) -> io::Result<()> {
@@ -266,18 +280,18 @@ fn vi_move_word(
     let mut cursor = ed.cursor();
     'repeat: for _ in 0..count {
         let buf = ed.current_buffer();
-        let mut state = match buf.char_after(cursor) {
+        let mut state = match buf.grapheme_after(cursor) {
             None => break,
-            Some(c) => match c {
-                c if c.is_whitespace() => State::Whitespace,
-                c if is_vi_keyword(c) => State::Keyword,
+            Some(str) => match str {
+                str if str.trim().is_empty() => State::Whitespace,
+                str if is_vi_keyword(str) => State::Keyword,
                 _ => State::NonKeyword,
             },
         };
 
-        while direction.advance(&mut cursor, buf.num_chars()) {
-            let c = match buf.char_after(cursor) {
-                Some(c) => c,
+        while direction.advance(&mut cursor, buf.num_graphemes()) {
+            let str = match buf.grapheme_after(cursor) {
+                Some(str) => str,
                 _ => break 'repeat,
             };
 
@@ -288,32 +302,32 @@ fn vi_move_word(
             // increments one more time. The default behavior just cycles
             // through Whitespace.
             match state {
-                State::Whitespace => match c {
-                    c if c.is_whitespace() => {}
+                State::Whitespace => match str {
+                    str if str.trim().is_empty() => {}
                     _ => {
                         break;
                     }
                 },
-                State::Keyword => match c {
-                    c if c.is_whitespace() => {
+                State::Keyword => match str {
+                    str if str.trim().is_empty() => {
                         if ws_included_in_count {
                             break;
                         } else {
                             state = State::Whitespace
                         }
                     }
-                    c if move_mode == ViMoveMode::Keyword && !is_vi_keyword(c) => break,
+                    str if move_mode == ViMoveMode::Keyword && !is_vi_keyword(str) => break,
                     _ => {}
                 },
-                State::NonKeyword => match c {
-                    c if c.is_whitespace() => {
+                State::NonKeyword => match str {
+                    str if str.trim().is_empty() => {
                         if ws_included_in_count {
                             break;
                         } else {
                             state = State::Whitespace
                         }
                     }
-                    c if move_mode == ViMoveMode::Keyword && is_vi_keyword(c) => break,
+                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => break,
                     _ => {}
                 },
             }
@@ -363,18 +377,18 @@ fn vi_move_word_end(
         let buf = ed.current_buffer();
         let mut state = State::Whitespace;
 
-        while direction.advance(&mut cursor, buf.num_chars()) {
-            let c = match buf.char_after(cursor) {
+        while direction.advance(&mut cursor, buf.num_graphemes()) {
+            let str = match buf.grapheme_after(cursor) {
                 Some(c) => c,
                 _ => break 'repeat,
             };
 
             match state {
-                State::Whitespace => match c {
+                State::Whitespace => match str {
                     // skip initial whitespace
-                    c if c.is_whitespace() => {}
+                    str if str.trim().is_empty() => {}
                     // if we are in keyword mode and found a keyword, stop on word
-                    c if move_mode == ViMoveMode::Keyword && is_vi_keyword(c) => {
+                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => {
                         state = State::EndOnWord;
                     }
                     // not in keyword mode, stop on whitespace
@@ -386,16 +400,16 @@ fn vi_move_word_end(
                         state = State::EndOnOther;
                     }
                 },
-                State::EndOnWord if !is_vi_keyword(c) => {
-                    direction.go_back(&mut cursor, buf.num_chars());
+                State::EndOnWord if !is_vi_keyword(str) => {
+                    direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
-                State::EndOnWhitespace if c.is_whitespace() => {
-                    direction.go_back(&mut cursor, buf.num_chars());
+                State::EndOnWhitespace if str.trim().is_empty() => {
+                    direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
-                State::EndOnOther if c.is_whitespace() || is_vi_keyword(c) => {
-                    direction.go_back(&mut cursor, buf.num_chars());
+                State::EndOnOther if str.trim().is_empty() || is_vi_keyword(str) => {
+                    direction.go_back(&mut cursor, buf.num_graphemes());
                     break;
                 }
                 _ => {}
@@ -408,24 +422,39 @@ fn vi_move_word_end(
 
 fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
-    buf.chars()
-        .enumerate()
-        .skip(start)
-        .filter(|&(_, &c)| c == ch)
-        .nth(count - 1)
-        .map(|(i, _)| i)
+    let mut offset = None;
+    let str = &ch.to_string();
+    let mut count = count;
+    for (i, s) in buf.range_graphemes_all().enumerate().skip(start) {
+        if s == str {
+            if count == 1 {
+                offset = Some(i);
+                break;
+            } else {
+                count -= 1;
+            }
+        }
+    }
+    offset
 }
 
 fn find_char_rev(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
-    let rstart = buf.num_chars() - start;
-    buf.chars()
-        .enumerate()
-        .rev()
-        .skip(rstart)
-        .filter(|&(_, &c)| c == ch)
-        .nth(count - 1)
-        .map(|(i, _)| i)
+    let rstart = buf.num_graphemes() - start;
+    let mut offset = None;
+    let str = &ch.to_string();
+    let mut count = count;
+    for (i, s) in buf.range_graphemes_all().enumerate().rev().skip(rstart) {
+        if s == str {
+            if count == 1 {
+                offset = Some(i);
+                break;
+            } else {
+                count -= 1;
+            }
+        }
+    }
+    offset
 }
 
 fn find_char_balance_delim(
@@ -436,9 +465,9 @@ fn find_char_balance_delim(
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
-    let iter = buf.chars().enumerate().skip(start);
+    let iter = buf.range_graphemes_from(start).enumerate();
     let to_skip = |i| start + i;
-    find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
+    find_balance_delim(to_find, to_find_opposite, count, to_skip, Box::new(iter))
 }
 
 fn find_char_rev_balance_delim(
@@ -449,24 +478,23 @@ fn find_char_rev_balance_delim(
     count: usize,
 ) -> Option<usize> {
     assert!(count > 0);
-    let rstart = buf.num_chars() - start;
-    let iter = buf.chars().enumerate().rev().skip(rstart);
-    let to_skip = |i| buf.num_chars() - rstart - i - 1;
-    find_balance_delim(to_find, to_find_opposite, count, to_skip, iter)
+    let rstart = buf.num_graphemes() - start;
+    let iter = buf.range_graphemes_until(start).rev().enumerate();
+    let to_skip = |i| buf.num_graphemes() - rstart - i - 1;
+    find_balance_delim(to_find, to_find_opposite, count, to_skip, Box::new(iter))
 }
 
 /// searches through string for matching character but refuses to match
 /// characters if they are unbalanced, used for matching pairs of (), {}, and []
-fn find_balance_delim<'a, F, I>(
+fn find_balance_delim<F>(
     to_find: char,
     to_find_opposite: char,
     count: usize,
     to_skip: F,
-    iter: I,
+    iter: Box<dyn Iterator<Item = (usize, &str)> + '_>,
 ) -> Option<usize>
 where
     F: Fn(usize) -> usize,
-    I: Iterator<Item = (usize, &'a char)>,
 {
     let mut count = count;
     let mut balance = 0;
@@ -476,9 +504,9 @@ where
         // close paren, then the close paren must be added to the stack and
         // popped only when another to_find char is found. An idx is returned
         // only when the to_find character is found and the stack is empty.
-        if *c == to_find_opposite {
+        if c[..] == to_find_opposite.to_string() {
             balance += 1;
-        } else if *c == to_find {
+        } else if c[..] == to_find.to_string() {
             if balance == 0 {
                 if count == 1 {
                     return Some(to_skip(i));
@@ -740,7 +768,7 @@ impl Vi {
     /// Get the current count or the number of remaining chars in the buffer.
     fn move_count_right<'a>(&self, ed: &Editor<'a>) -> usize {
         cmp::min(
-            ed.current_buffer().num_chars() - ed.cursor(),
+            ed.current_buffer().num_graphemes() - ed.cursor(),
             self.move_count(),
         )
     }
@@ -1107,23 +1135,7 @@ impl Vi {
 
                         self.set_mode(Tilde, ed)?;
                         for _ in 0..self.move_count_right(ed) {
-                            match ed.current_buffer().char_after(ed.cursor()) {
-                                Some(c) if c.is_lowercase() => {
-                                    ed.delete_after_cursor()?;
-                                    for c in c.to_uppercase() {
-                                        ed.insert_after_cursor(c)?;
-                                    }
-                                }
-                                Some(c) if c.is_uppercase() => {
-                                    ed.delete_after_cursor()?;
-                                    for c in c.to_lowercase() {
-                                        ed.insert_after_cursor(c)?;
-                                    }
-                                }
-                                _ => {
-                                    ed.move_cursor_right(1)?;
-                                }
-                            }
+                            ed.flip_case()?;
                         }
                         self.pop_mode(ed)?;
                         Ok(())
@@ -1504,7 +1516,7 @@ impl Vi {
             // cursor. For analogous reasons 'di(' does nothing to this string:
             //     "(aa|a|a(bbbb)cccc"
             // To ensure this behavior, balancing logic for beg, and end must be applied.
-            if curr_char == end {
+            if curr_char.eq(&end.to_string()) {
                 let is_behind;
                 if beg != end {
                     is_behind = find_char_rev_balance_delim(buf, start, beg, end, count);
@@ -1515,7 +1527,7 @@ impl Vi {
                     behind = is_behind;
                     ahead = Some(start);
                 }
-            } else if curr_char == beg {
+            } else if curr_char.eq(&beg.to_string()) {
                 let is_ahead;
                 if beg != end {
                     is_ahead = find_char_balance_delim(buf, start + 1, end, beg, count);
@@ -6647,6 +6659,27 @@ mod tests {
     }
 
     #[test]
+    /// test find_char with unicode symbol
+    fn test_find_char_unicode() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
+            .unwrap();
+        assert_eq!(super::find_char(ed.current_buffer(), 0, 'a', 2), Some(5));
+    }
+
+    #[test]
     /// test find_char with count
     fn test_find_char_with_count() {
         let mut out = Vec::new();
@@ -6729,6 +6762,30 @@ mod tests {
         assert_eq!(
             super::find_char_rev(ed.current_buffer(), 5, 'c', 1),
             Some(2)
+        );
+    }
+
+    #[test]
+    /// test find_char_rev with unicode symbol
+    fn test_find_char_rev_unicode() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
+            .unwrap();
+        assert_eq!(
+            super::find_char_rev(ed.current_buffer(), 5, 'a', 1),
+            Some(0)
         );
     }
 
@@ -7267,7 +7324,10 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("replace some words").unwrap();
+        ed.insert_str_after_cursor(
+            "replace so\u{1f469}\u{200d}\u{1f4bb}\u{1f469}\u{200d}\u{1f4bb}me words",
+        )
+        .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7284,7 +7344,10 @@ mod tests {
             ]
             .iter(),
         );
-        assert_eq!(String::from(ed), "replace some words");
+        assert_eq!(
+            String::from(ed),
+            "replace so\u{1f469}\u{200d}\u{1f4bb}\u{1f469}\u{200d}\u{1f4bb}me words"
+        );
     }
 
     #[test]
@@ -7646,6 +7709,41 @@ mod tests {
     }
 
     #[test]
+    fn test_yank_and_put_back() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+        .unwrap();
+        let mut map = Vi::new();
+        map.init(&mut ed);
+        ed.insert_str_after_cursor("abc defg").unwrap();
+
+        simulate_key_codes(
+            &mut map,
+            &mut ed,
+            [
+                KeyCode::Esc,
+                KeyCode::Char('0'),
+                KeyCode::Char('y'),
+                KeyCode::Char('$'),
+                KeyCode::Char('P'),
+            ]
+            .iter(),
+        );
+        assert_eq!(ed.cursor(), 7);
+        assert_eq!(String::from(ed), "abc defgabc defg");
+    }
+
+    #[test]
     fn test_delete_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
@@ -7662,7 +7760,8 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("(abc defg)").unwrap();
+        ed.insert_str_after_cursor("(ab\u{1f469}\u{200d}\u{1f4bb} \u{1f469}\u{200d}\u{1f4bb}efg)")
+            .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7842,7 +7941,8 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("echo \"hello world\"").unwrap();
+        ed.insert_str_after_cursor("echo \"hello world\u{1f469}\u{200d}\u{1f52c}\"")
+            .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7856,8 +7956,11 @@ mod tests {
             ]
             .iter(),
         );
-        assert_eq!(ed.cursor(), 16);
-        assert_eq!(String::from(ed), "echo \"hello worldhello world\"");
+        assert_eq!(ed.cursor(), 17);
+        assert_eq!(
+            String::from(ed),
+            "echo \"hello world\u{1f469}\u{200d}\u{1f52c}hello world\u{1f469}\u{200d}\u{1f52c}\""
+        );
     }
 
     #[test]
@@ -7912,7 +8015,10 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("echo [hello world]").unwrap();
+        ed.insert_str_after_cursor(
+            "echo [hello \u{1f469}\u{200d}\u{1f52c}\u{1f469}\u{200d}\u{1f52c} world]",
+        )
+        .unwrap();
 
         simulate_key_codes(
             &mut map,
@@ -7952,8 +8058,10 @@ mod tests {
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
-        ed.insert_str_after_cursor("<div id='foo'>content</p>")
-            .unwrap();
+        ed.insert_str_after_cursor(
+            "<div id='foo'>\u{1f468}\u{200d}\u{1f52c}content\u{1f468}\u{200d}\u{1f52c}</p>",
+        )
+        .unwrap();
 
         simulate_key_codes(
             &mut map,

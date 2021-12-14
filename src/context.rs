@@ -14,18 +14,19 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut word_start = None;
     let mut just_had_backslash = false;
 
-    for (i, &c) in buf.chars().enumerate() {
-        if c == '\\' {
+    let buf_vec = buf.range_graphemes_all();
+    for (i, c) in buf_vec.enumerate() {
+        if c == "\\" {
             just_had_backslash = true;
             continue;
         }
 
         if let Some(start) = word_start {
-            if c == ' ' && !just_had_backslash {
+            if c == " " && !just_had_backslash {
                 res.push((start, i));
                 word_start = None;
             }
-        } else if c != ' ' {
+        } else if c != " " {
             word_start = Some(i);
         }
 
@@ -33,7 +34,7 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
     }
 
     if let Some(start) = word_start {
-        res.push((start, buf.num_chars()));
+        res.push((start, buf.num_graphemes()));
     }
 
     res
