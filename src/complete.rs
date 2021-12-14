@@ -116,7 +116,7 @@ impl Completer for FilenameCompleter {
                     let sn = file_name.to_string_lossy();
                     start_name = {
                         if !self.case_sensitive {
-                            sn.to_lowercase();
+                            let _ = sn.to_lowercase();
                         };
                         Some(sn)
                     }

@@ -655,17 +655,13 @@ impl Vi {
         ed.display_term()
     }
 
-    fn set_mode_preserve_last<'a>(
-        &mut self,
-        mode: Mode,
-        mut ed: &mut Editor<'a>,
-    ) -> io::Result<()> {
+    fn set_mode_preserve_last<'a>(&mut self, mode: Mode, ed: &mut Editor<'a>) -> io::Result<()> {
         use self::Mode::*;
 
         ed.set_no_eol(mode == Normal);
         self.movement_reset = mode != Insert;
         self.mode_stack.push(mode);
-        self.set_editor_mode(&mut ed)?;
+        self.set_editor_mode(ed)?;
 
         if mode == Insert || mode == Tilde {
             ed.current_buffer_mut().start_undo_group();
@@ -676,7 +672,7 @@ impl Vi {
     fn pop_mode_after_movement<'a>(
         &mut self,
         move_type: MoveType,
-        mut ed: &mut Editor<'a>,
+        ed: &mut Editor<'a>,
     ) -> io::Result<()> {
         use self::Mode::*;
         use self::MoveType::*;
@@ -723,10 +719,10 @@ impl Vi {
             self.count = 0;
         }
 
-        self.set_editor_mode(&mut ed)
+        self.set_editor_mode(ed)
     }
 
-    fn pop_mode<'a>(&mut self, mut ed: &mut Editor<'a>) -> io::Result<()> {
+    fn pop_mode<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
         use self::Mode::*;
 
         let last_mode = self.mode_stack.pop();
@@ -740,16 +736,16 @@ impl Vi {
         if last_mode == Tilde {
             ed.display_term()
         } else {
-            self.set_editor_mode(&mut ed)
+            self.set_editor_mode(ed)
         }
     }
 
     /// Return to normal mode.
-    fn normal_mode_abort<'a>(&mut self, mut ed: &mut Editor<'a>) -> io::Result<()> {
+    fn normal_mode_abort<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
         self.mode_stack.clear();
         ed.set_no_eol(true);
         self.count = 0;
-        self.set_editor_mode(&mut ed)
+        self.set_editor_mode(ed)
     }
 
     /// When doing a move, 0 should behave the same as 1 as far as the count goes.
@@ -1633,7 +1629,7 @@ impl KeyMap for Vi {
         }
     }
 
-    fn init<'a>(&mut self, mut ed: &mut Editor<'a>) {
+    fn init<'a>(&mut self, ed: &mut Editor<'a>) {
         self.mode_stack.clear();
         self.mode_stack.push(Mode::Insert);
         self.current_command.clear();
@@ -1648,7 +1644,7 @@ impl KeyMap for Vi {
         self.last_char_movement = None;
         // since we start in insert mode, we need to start an undo group
         ed.current_buffer_mut().start_undo_group();
-        let _ = self.set_editor_mode(&mut ed);
+        let _ = self.set_editor_mode(ed);
     }
 }
 

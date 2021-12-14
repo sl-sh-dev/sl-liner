@@ -4,7 +4,6 @@ pub struct GraphemeIter<'a> {
     offsets: &'a [usize],
     curr_grapheme: usize,
     curr_grapheme_back: isize,
-    curr_offset: Option<usize>,
     min_grapheme: usize,
     max_grapheme: usize,
 }
@@ -16,7 +15,6 @@ impl<'a> Default for GraphemeIter<'a> {
             offsets: &[],
             curr_grapheme: 0,
             curr_grapheme_back: -1,
-            curr_offset: Some(0),
             min_grapheme: 0,
             max_grapheme: 0,
         }
@@ -35,7 +33,6 @@ impl<'a> GraphemeIter<'a> {
             offsets,
             curr_grapheme,
             curr_grapheme_back: max_grapheme as isize - 1,
-            curr_offset: offsets.get(curr_grapheme).copied(),
             min_grapheme: curr_grapheme,
             max_grapheme,
         }
