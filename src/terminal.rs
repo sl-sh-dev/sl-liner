@@ -1,6 +1,7 @@
 use crate::context::ColorClosure;
 use crate::prompt::Prompt;
 use crate::{util, Buffer, Cursor};
+use log::debug;
 use sl_console::{clear, color, cursor};
 use std::cmp::Ordering;
 use std::fmt::Write;
@@ -13,6 +14,34 @@ pub struct Metrics {
     new_total_width: usize,
     new_total_width_to_cursor: usize,
     new_num_lines: usize,
+}
+
+fn calc_width_to_cursor<I>(
+    prompt_width: usize,
+    buf_widths: I,
+    terminal_width: usize,
+    last_arg_newline: bool,
+) -> usize
+where
+    I: Iterator<Item = usize>,
+{
+    let mut total = 0;
+    for line in buf_widths {
+        if total % terminal_width != 0 {
+            total = ((total / terminal_width) + 1) * terminal_width;
+        }
+        total += prompt_width + line;
+    }
+    if total == 0 {
+        // no lines returned, treat buf_width as 0
+        total += prompt_width
+    } else if last_arg_newline {
+        if total % terminal_width != 0 {
+            total = ((total / terminal_width) + 1) * terminal_width;
+        }
+        total += prompt_width;
+    }
+    total
 }
 
 impl Metrics {
@@ -46,8 +75,8 @@ impl Metrics {
 
         // Total number of terminal spaces taken up by prompt and buffer
         let new_total_width =
-            Metrics::calc_width(prompt_width, buf_widths, width, buf_widths_end_newline);
-        let new_total_width_to_cursor = Metrics::calc_width(
+            calc_width_to_cursor(prompt_width, buf_widths, width, buf_widths_end_newline);
+        let new_total_width_to_cursor = calc_width_to_cursor(
             prompt_width,
             buf_widths_to_cursor,
             width,
@@ -56,6 +85,17 @@ impl Metrics {
 
         let new_num_lines = (new_total_width + width) / width;
 
+        debug!(
+            "Current terminal metrics: {:?}",
+            Metrics {
+                width,
+                prompt_width,
+                new_total_width,
+                new_total_width_to_cursor,
+                new_num_lines,
+            }
+        );
+
         Ok(Metrics {
             width,
             prompt_width,
@@ -63,35 +103,6 @@ impl Metrics {
             new_total_width_to_cursor,
             new_num_lines,
         })
-    }
-
-    /// Move the term cursor to the same line as the prompt.
-    fn calc_width<I>(
-        prompt_width: usize,
-        buf_widths: I,
-        terminal_width: usize,
-        last_arg_newline: bool,
-    ) -> usize
-    where
-        I: Iterator<Item = usize>,
-    {
-        let mut total = 0;
-        for line in buf_widths {
-            if total % terminal_width != 0 {
-                total = ((total / terminal_width) + 1) * terminal_width;
-            }
-            total += prompt_width + line;
-        }
-        if total == 0 {
-            // no lines returned, treat buf_width as 0
-            total += prompt_width
-        } else if last_arg_newline {
-            if total % terminal_width != 0 {
-                total = ((total / terminal_width) + 1) * terminal_width;
-            }
-            total += prompt_width;
-        }
-        total
     }
 }
 
@@ -357,10 +368,10 @@ impl<'a> Terminal<'a> {
         let cursor_line_diff = metrics.new_num_lines as isize - self.term_cursor_line as isize;
         match cursor_line_diff.cmp(&0) {
             Ordering::Greater => {
-                write!(self.buf, "{}", cursor::Up(cursor_line_diff as u16)).map_err(fmt_io_err)?
+                write!(self.buf, "{}", cursor::Up(cursor_line_diff as u16)).map_err(fmt_io_err)?;
             }
             Ordering::Less => unreachable!(),
-            Ordering::Equal => {}
+            Ordering::Equal => { }
         }
 
         // Now that we are on the right line, we must move the term cursor left or right
@@ -473,8 +484,8 @@ mod tests {
         assert_eq!(m.width, 80);
         assert_eq!(m.prompt_width, 2);
         assert_eq!(m.new_total_width, 19);
-        assert_eq!(m.new_total_width_to_cursor, 13); // buf_widths_to_cursor: [17].
-        assert_eq!(m.new_num_lines, 1); // should be 11
+        assert_eq!(m.new_total_width_to_cursor, 13);
+        assert_eq!(m.new_num_lines, 1);
     }
 
     #[test]

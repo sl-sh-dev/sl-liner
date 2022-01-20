@@ -881,6 +881,27 @@ mod tests {
     }
 
     #[test]
+    fn move_cursor_multiline() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        )
+            .unwrap();
+        ed.insert_str_after_cursor("let\\").unwrap();
+        assert_eq!(ed.cursor(), 4);
+        let done = ed.handle_newline();
+        assert!(!done.unwrap());
+    }
+
+    #[test]
     fn move_cursor_left() {
         let mut out = Vec::new();
         let mut history = History::new();
@@ -904,6 +925,29 @@ mod tests {
         ed.insert_after_cursor('f').unwrap();
         assert_eq!(ed.cursor(), 3);
         assert_eq!(String::from(ed), "left");
+    }
+
+    #[test]
+    fn test_handle_newline() {
+        let mut out = Vec::new();
+        let mut history = History::new();
+        let words = Box::new(get_buffer_words);
+        let mut buf = String::with_capacity(512);
+        let mut ed = Editor::new(
+            &mut out,
+            Prompt::from("prompt"),
+            None,
+            &mut history,
+            &words,
+            &mut buf,
+        ).unwrap();
+
+        ed.insert_str_after_cursor("oneline").unwrap();
+        assert_eq!(ed.cursor(), 7);
+
+        let done = ed.handle_newline();
+        assert!(done.unwrap());
+
     }
 
     #[test]
