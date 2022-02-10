@@ -1,6 +1,5 @@
 use std::io;
 use std::time;
-use log::debug;
 
 use sl_console::*;
 

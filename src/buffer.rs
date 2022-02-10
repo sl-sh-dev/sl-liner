@@ -247,20 +247,16 @@ impl Buffer {
             .last()
     }
 
-    pub fn by_newline(&self) -> impl Iterator<Item = &str> + '_ {
-        self.data.split("\n")
-    }
-
-    pub fn num_new_lines(&self) -> usize {
-        self.data.split("\n").count()
-    }
-
     pub fn num_lines(&self) -> usize {
-        self.lines().count()
+        self.data.split("\n").count()
     }
 
     pub fn num_graphemes(&self) -> usize {
         self.curr_num_graphemes
+    }
+
+    pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
+        self.data.split("\n")
     }
 
     pub fn num_bytes(&self) -> usize {
@@ -410,10 +406,6 @@ impl Buffer {
             .slice()
             .lines()
             .map(|line| line.width())
-    }
-
-    pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
-        self.data.lines()
     }
 
     pub fn truncate(&mut self, num: usize) {

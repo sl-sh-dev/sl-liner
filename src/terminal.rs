@@ -1,7 +1,6 @@
 use crate::context::ColorClosure;
 use crate::prompt::Prompt;
 use crate::{util, Buffer, Cursor};
-use log::debug;
 use sl_console::{clear, color, cursor};
 use std::cmp::Ordering;
 use std::fmt::Write;
@@ -84,17 +83,6 @@ impl Metrics {
         );
 
         let new_num_lines = (new_total_width + width) / width;
-
-        debug!(
-            "Current terminal metrics: {:?}",
-            Metrics {
-                width,
-                prompt_width,
-                new_total_width,
-                new_total_width_to_cursor,
-                new_num_lines,
-            }
-        );
 
         Ok(Metrics {
             width,
@@ -324,8 +312,8 @@ impl<'a> Terminal<'a> {
         // Then, we loop and subtract from that number until it's 0, in which case we are printing
         // the autosuggestion from here on (in a different color).
         let (lines, lines_len) = match autosuggestion {
-            Some(suggestion) if show_autosuggest => (suggestion.by_newline(), suggestion.num_new_lines()),
-            _ => (buf.by_newline(), buf.num_new_lines()),
+            Some(suggestion) if show_autosuggest => (suggestion.lines(), suggestion.num_lines()),
+            _ => (buf.lines(), buf.num_lines()),
         };
         let mut buf_num_remaining_bytes = buf.num_bytes();
 

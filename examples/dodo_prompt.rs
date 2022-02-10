@@ -1,9 +1,7 @@
 extern crate regex;
-extern crate simplelog;
 extern crate sl_console;
 extern crate sl_liner;
 
-use simplelog::*;
 use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
@@ -12,7 +10,6 @@ use regex::Regex;
 use sl_console::color;
 use std::fs::File;
 
-use log::debug;
 use sl_liner::cursor::CursorPosition;
 use sl_liner::keymap;
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
@@ -82,26 +79,6 @@ impl Completer for CommentCompleter {
 }
 
 fn main() {
-    CombinedLogger::init(vec![
-        TermLogger::new(
-            LevelFilter::Warn,
-            Config::default(),
-            TerminalMode::Mixed,
-            ColorChoice::Auto,
-        ),
-        WriteLogger::new(
-            LevelFilter::Debug,
-            Config::default(),
-            File::create(
-                "my_rust_binary\
-            .log",
-            )
-            .unwrap(),
-        ),
-    ])
-    .unwrap();
-    debug!("this is a debug {}", "message");
-
     let mut con = Context::new();
     con.set_completer(Box::new(CommentCompleter { inner: None }));
 
