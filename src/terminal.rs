@@ -92,6 +92,24 @@ impl Metrics {
             new_num_lines,
         })
     }
+
+    pub fn term_cursor_line(&self) -> usize {
+        (self.new_total_width_to_cursor + self.width) / self.width
+    }
+
+    pub fn cursor_line_diff(&self) -> isize {
+        self.new_num_lines as isize - self.term_cursor_line() as isize
+    }
+
+    pub fn at_end_of_line(&self) -> bool {
+        self.new_total_width % self.width == 0
+    }
+
+    pub fn cursor_col_diff(&self) -> isize {
+        self.new_total_width as isize
+            - self.new_total_width_to_cursor as isize
+            - self.cursor_line_diff() * self.width as isize
+    }
 }
 
 /// An interface to simplify writing to and clearing the terminal. This is where most
@@ -345,15 +363,13 @@ impl<'a> Terminal<'a> {
 
     pub fn display(&mut self, metrics: Metrics, completion_lines: usize) -> io::Result<()> {
         // at the end of the line, move the cursor down a line
-        if metrics.new_total_width % metrics.width == 0 {
+        if metrics.at_end_of_line() {
             self.buf.push_str("\r\n");
         }
 
-        self.term_cursor_line = (metrics.new_total_width_to_cursor + metrics.width) / metrics.width;
-
         // The term cursor is now on the bottom line. We may need to move the term cursor up
         // to the line where the true cursor is.
-        let cursor_line_diff = metrics.new_num_lines as isize - self.term_cursor_line as isize;
+        let cursor_line_diff = metrics.cursor_line_diff();
         match cursor_line_diff.cmp(&0) {
             Ordering::Greater => {
                 write!(self.buf, "{}", cursor::Up(cursor_line_diff as u16)).map_err(fmt_io_err)?;
@@ -364,9 +380,7 @@ impl<'a> Terminal<'a> {
 
         // Now that we are on the right line, we must move the term cursor left or right
         // to match the true cursor.
-        let cursor_col_diff = metrics.new_total_width as isize
-            - metrics.new_total_width_to_cursor as isize
-            - cursor_line_diff * metrics.width as isize;
+        let cursor_col_diff = metrics.cursor_col_diff();
         match cursor_col_diff.cmp(&0) {
             Ordering::Greater => {
                 write!(self.buf, "{}", cursor::Left(cursor_col_diff as u16)).map_err(fmt_io_err)?
@@ -378,7 +392,7 @@ impl<'a> Terminal<'a> {
             Ordering::Equal => {}
         }
 
-        self.term_cursor_line += completion_lines;
+        self.term_cursor_line = completion_lines + metrics.term_cursor_line();
 
         write!(
             self.buf,
