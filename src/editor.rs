@@ -899,6 +899,10 @@ mod tests {
         assert_eq!(ed.cursor(), 4);
         let done = ed.handle_newline();
         assert!(!done.unwrap());
+        ed.insert_str_after_cursor("\\\n").unwrap();
+        assert_eq!(ed.cursor(), 7);
+        let done = ed.handle_newline();
+        assert!(done.unwrap());
     }
 
     #[test]

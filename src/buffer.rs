@@ -926,4 +926,20 @@ mod tests {
         let ret = act.do_on(&mut buf);
         assert_eq!(start, ret.unwrap());
     }
+
+    #[test]
+    fn test_newlines() {
+        let orig = "elemeno\\\n";
+        let buf = Buffer::from(orig);
+        assert_eq!(2, buf.num_lines());
+        for (i, line) in buf.lines().enumerate() {
+            if i == 0 {
+                assert_eq!("elemeno\\", line);
+            } else if i == 1 {
+                assert_eq!("", line);
+            } else {
+                panic!("There should only be two elements in the buffer!");
+            }
+        }
+    }
 }
