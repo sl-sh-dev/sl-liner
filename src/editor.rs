@@ -894,7 +894,7 @@ mod tests {
             &words,
             &mut buf,
         )
-            .unwrap();
+        .unwrap();
         ed.insert_str_after_cursor("let\\").unwrap();
         assert_eq!(ed.cursor(), 4);
         let done = ed.handle_newline();
@@ -940,14 +940,14 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
-        ).unwrap();
+        )
+        .unwrap();
 
         ed.insert_str_after_cursor("oneline").unwrap();
         assert_eq!(ed.cursor(), 7);
 
         let done = ed.handle_newline();
         assert!(done.unwrap());
-
     }
 
     #[test]

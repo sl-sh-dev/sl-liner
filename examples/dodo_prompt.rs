@@ -8,7 +8,6 @@ use std::mem::replace;
 
 use regex::Regex;
 use sl_console::color;
-use std::fs::File;
 
 use sl_liner::cursor::CursorPosition;
 use sl_liner::keymap;

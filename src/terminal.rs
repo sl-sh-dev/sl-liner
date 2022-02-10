@@ -359,7 +359,7 @@ impl<'a> Terminal<'a> {
                 write!(self.buf, "{}", cursor::Up(cursor_line_diff as u16)).map_err(fmt_io_err)?;
             }
             Ordering::Less => unreachable!(),
-            Ordering::Equal => { }
+            Ordering::Equal => {}
         }
 
         // Now that we are on the right line, we must move the term cursor left or right

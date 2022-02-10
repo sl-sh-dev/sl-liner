@@ -248,7 +248,7 @@ impl Buffer {
     }
 
     pub fn num_lines(&self) -> usize {
-        self.data.split("\n").count()
+        self.data.split('\n').count()
     }
 
     pub fn num_graphemes(&self) -> usize {
@@ -256,7 +256,7 @@ impl Buffer {
     }
 
     pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
-        self.data.split("\n")
+        self.data.split('\n')
     }
 
     pub fn num_bytes(&self) -> usize {
