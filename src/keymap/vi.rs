@@ -1513,23 +1513,21 @@ impl Vi {
             //     "(aa|a|a(bbbb)cccc"
             // To ensure this behavior, balancing logic for beg, and end must be applied.
             if curr_char.eq(&end.to_string()) {
-                let is_behind;
-                if beg != end {
-                    is_behind = find_char_rev_balance_delim(buf, start, beg, end, count);
+                let is_behind = if beg != end {
+                    find_char_rev_balance_delim(buf, start, beg, end, count)
                 } else {
-                    is_behind = find_char_rev(buf, start, beg, count);
-                }
+                    find_char_rev(buf, start, beg, count)
+                };
                 if is_behind.is_some() {
                     behind = is_behind;
                     ahead = Some(start);
                 }
             } else if curr_char.eq(&beg.to_string()) {
-                let is_ahead;
-                if beg != end {
-                    is_ahead = find_char_balance_delim(buf, start + 1, end, beg, count);
+                let is_ahead = if beg != end {
+                    find_char_balance_delim(buf, start + 1, end, beg, count)
                 } else {
-                    is_ahead = find_char(buf, start, end, count);
-                }
+                    find_char(buf, start, end, count)
+                };
                 if is_ahead.is_some() {
                     behind = Some(start);
                     ahead = is_ahead;

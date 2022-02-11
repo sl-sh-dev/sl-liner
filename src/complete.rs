@@ -172,7 +172,7 @@ impl Completer for FilenameCompleter {
                     }
                     b.push(s.as_ref());
 
-                    matches.push(b.to_string_lossy().replace(" ", r"\ "));
+                    matches.push(b.to_string_lossy().replace(' ', r"\ "));
                 }
             }
         }

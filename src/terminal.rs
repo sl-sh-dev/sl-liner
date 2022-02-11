@@ -15,6 +15,34 @@ pub struct Metrics {
     new_num_lines: usize,
 }
 
+fn calc_width_to_cursor<I>(
+    prompt_width: usize,
+    buf_widths: I,
+    terminal_width: usize,
+    last_arg_newline: bool,
+) -> usize
+where
+    I: Iterator<Item = usize>,
+{
+    let mut total = 0;
+    for line in buf_widths {
+        if total % terminal_width != 0 {
+            total = ((total / terminal_width) + 1) * terminal_width;
+        }
+        total += prompt_width + line;
+    }
+    if total == 0 {
+        // no lines returned, treat buf_width as 0
+        total += prompt_width
+    } else if last_arg_newline {
+        if total % terminal_width != 0 {
+            total = ((total / terminal_width) + 1) * terminal_width;
+        }
+        total += prompt_width;
+    }
+    total
+}
+
 impl Metrics {
     pub fn new(
         prompt: &str,
@@ -46,8 +74,8 @@ impl Metrics {
 
         // Total number of terminal spaces taken up by prompt and buffer
         let new_total_width =
-            Metrics::calc_width(prompt_width, buf_widths, width, buf_widths_end_newline);
-        let new_total_width_to_cursor = Metrics::calc_width(
+            calc_width_to_cursor(prompt_width, buf_widths, width, buf_widths_end_newline);
+        let new_total_width_to_cursor = calc_width_to_cursor(
             prompt_width,
             buf_widths_to_cursor,
             width,
@@ -65,33 +93,22 @@ impl Metrics {
         })
     }
 
-    /// Move the term cursor to the same line as the prompt.
-    fn calc_width<I>(
-        prompt_width: usize,
-        buf_widths: I,
-        terminal_width: usize,
-        last_arg_newline: bool,
-    ) -> usize
-    where
-        I: Iterator<Item = usize>,
-    {
-        let mut total = 0;
-        for line in buf_widths {
-            if total % terminal_width != 0 {
-                total = ((total / terminal_width) + 1) * terminal_width;
-            }
-            total += prompt_width + line;
-        }
-        if total == 0 {
-            // no lines returned, treat buf_width as 0
-            total += prompt_width
-        } else if last_arg_newline {
-            if total % terminal_width != 0 {
-                total = ((total / terminal_width) + 1) * terminal_width;
-            }
-            total += prompt_width;
-        }
-        total
+    pub fn term_cursor_line(&self) -> usize {
+        (self.new_total_width_to_cursor + self.width) / self.width
+    }
+
+    pub fn cursor_line_diff(&self) -> isize {
+        self.new_num_lines as isize - self.term_cursor_line() as isize
+    }
+
+    pub fn at_end_of_line(&self) -> bool {
+        self.new_total_width % self.width == 0
+    }
+
+    pub fn cursor_col_diff(&self) -> isize {
+        self.new_total_width as isize
+            - self.new_total_width_to_cursor as isize
+            - self.cursor_line_diff() * self.width as isize
     }
 }
 
@@ -219,7 +236,7 @@ impl<'a> Terminal<'a> {
     }
 
     pub fn write_prompt(&mut self, prompt: &str) -> io::Result<()> {
-        write!(&mut self.buf, "{}", prompt).map_err(fmt_io_err)
+        write!(self.buf, "{}", prompt).map_err(fmt_io_err)
     }
 
     fn print_completion_list(
@@ -346,18 +363,16 @@ impl<'a> Terminal<'a> {
 
     pub fn display(&mut self, metrics: Metrics, completion_lines: usize) -> io::Result<()> {
         // at the end of the line, move the cursor down a line
-        if metrics.new_total_width % metrics.width == 0 {
+        if metrics.at_end_of_line() {
             self.buf.push_str("\r\n");
         }
 
-        self.term_cursor_line = (metrics.new_total_width_to_cursor + metrics.width) / metrics.width;
-
         // The term cursor is now on the bottom line. We may need to move the term cursor up
         // to the line where the true cursor is.
-        let cursor_line_diff = metrics.new_num_lines as isize - self.term_cursor_line as isize;
+        let cursor_line_diff = metrics.cursor_line_diff();
         match cursor_line_diff.cmp(&0) {
             Ordering::Greater => {
-                write!(self.buf, "{}", cursor::Up(cursor_line_diff as u16)).map_err(fmt_io_err)?
+                write!(self.buf, "{}", cursor::Up(cursor_line_diff as u16)).map_err(fmt_io_err)?;
             }
             Ordering::Less => unreachable!(),
             Ordering::Equal => {}
@@ -365,9 +380,7 @@ impl<'a> Terminal<'a> {
 
         // Now that we are on the right line, we must move the term cursor left or right
         // to match the true cursor.
-        let cursor_col_diff = metrics.new_total_width as isize
-            - metrics.new_total_width_to_cursor as isize
-            - cursor_line_diff * metrics.width as isize;
+        let cursor_col_diff = metrics.cursor_col_diff();
         match cursor_col_diff.cmp(&0) {
             Ordering::Greater => {
                 write!(self.buf, "{}", cursor::Left(cursor_col_diff as u16)).map_err(fmt_io_err)?
@@ -379,7 +392,7 @@ impl<'a> Terminal<'a> {
             Ordering::Equal => {}
         }
 
-        self.term_cursor_line += completion_lines;
+        self.term_cursor_line = completion_lines + metrics.term_cursor_line();
 
         write!(
             self.buf,
@@ -473,8 +486,8 @@ mod tests {
         assert_eq!(m.width, 80);
         assert_eq!(m.prompt_width, 2);
         assert_eq!(m.new_total_width, 19);
-        assert_eq!(m.new_total_width_to_cursor, 13); // buf_widths_to_cursor: [17].
-        assert_eq!(m.new_num_lines, 1); // should be 11
+        assert_eq!(m.new_total_width_to_cursor, 13);
+        assert_eq!(m.new_num_lines, 1);
     }
 
     #[test]

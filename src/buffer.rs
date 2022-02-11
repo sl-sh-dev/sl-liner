@@ -255,6 +255,10 @@ impl Buffer {
         self.curr_num_graphemes
     }
 
+    pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
+        self.data.split('\n')
+    }
+
     pub fn num_bytes(&self) -> usize {
         self.data.as_bytes().len()
     }
@@ -402,10 +406,6 @@ impl Buffer {
             .slice()
             .lines()
             .map(|line| line.width())
-    }
-
-    pub fn lines(&self) -> impl Iterator<Item = &str> + '_ {
-        self.data.lines()
     }
 
     pub fn truncate(&mut self, num: usize) {
@@ -925,5 +925,21 @@ mod tests {
         let act = Action::Noop { start };
         let ret = act.do_on(&mut buf);
         assert_eq!(start, ret.unwrap());
+    }
+
+    #[test]
+    fn test_newlines() {
+        let orig = "elemeno\\\n";
+        let buf = Buffer::from(orig);
+        assert_eq!(2, buf.num_lines());
+        for (i, line) in buf.lines().enumerate() {
+            if i == 0 {
+                assert_eq!("elemeno\\", line);
+            } else if i == 1 {
+                assert_eq!("", line);
+            } else {
+                panic!("There should only be two elements in the buffer!");
+            }
+        }
     }
 }
