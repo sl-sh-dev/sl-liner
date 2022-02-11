@@ -236,7 +236,7 @@ impl<'a> Terminal<'a> {
     }
 
     pub fn write_prompt(&mut self, prompt: &str) -> io::Result<()> {
-        write!(&mut self.buf, "{}", prompt).map_err(fmt_io_err)
+        write!(self.buf, "{}", prompt).map_err(fmt_io_err)
     }
 
     fn print_completion_list(
