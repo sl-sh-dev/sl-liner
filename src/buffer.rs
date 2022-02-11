@@ -247,6 +247,14 @@ impl Buffer {
             .last()
     }
 
+    pub fn by_newline(&self) -> impl Iterator<Item = &str> + '_ {
+        self.data.split("\n")
+    }
+
+    pub fn num_new_lines(&self) -> usize {
+        self.data.split("\n").count()
+    }
+
     pub fn num_lines(&self) -> usize {
         self.lines().count()
     }
