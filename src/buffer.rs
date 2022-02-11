@@ -248,7 +248,7 @@ impl Buffer {
     }
 
     pub fn num_lines(&self) -> usize {
-        self.data.split('\n').count()
+        self.lines().count()
     }
 
     pub fn num_graphemes(&self) -> usize {
