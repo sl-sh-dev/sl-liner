@@ -116,6 +116,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = TestKeyMap;
@@ -143,6 +144,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = TestKeyMap;
@@ -170,6 +172,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = TestKeyMap;

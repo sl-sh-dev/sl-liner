@@ -258,6 +258,7 @@ mod tests {
             &mut history,
             &mut words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -287,6 +288,7 @@ mod tests {
             &mut history,
             &mut words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -317,6 +319,7 @@ mod tests {
             &mut history,
             &mut words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -359,6 +362,7 @@ mod tests {
             &mut history,
             &mut words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -388,6 +392,7 @@ mod tests {
             &mut history,
             &mut words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Emacs::new();

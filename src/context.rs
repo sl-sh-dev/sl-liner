@@ -128,6 +128,7 @@ impl Context {
             &self.word_divider_fn,
             &mut self.buf,
             buffer,
+            None,
         )?;
         self.keymap.init(&mut ed);
         ed.use_closure(false);

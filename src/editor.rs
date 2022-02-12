@@ -16,6 +16,7 @@ use super::complete::Completer;
 pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
+    line_completion_fn: Option<&'a dyn Fn(&Buffer) -> bool>,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
@@ -85,8 +86,9 @@ impl<'a> Editor<'a> {
         history: &'a mut History,
         word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
+        line_completion_fn: Option<&'a dyn Fn(&Buffer) -> bool>,
     ) -> io::Result<Self> {
-        Editor::new_with_init_buffer(out, prompt, f, history, word_divider_fn, buf, Buffer::new())
+        Editor::new_with_init_buffer(out, prompt, f, history, word_divider_fn, buf, Buffer::new(), line_completion_fn)
     }
 
     pub fn new_with_init_buffer<B: Into<Buffer>>(
@@ -97,11 +99,13 @@ impl<'a> Editor<'a> {
         word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
         buffer: B,
+        line_completion_fn: Option<&'a dyn Fn(&Buffer) -> bool>,
     ) -> io::Result<Self> {
         let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
+            line_completion_fn,
             cursor: Cursor::new(word_divider_fn),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
@@ -177,9 +181,14 @@ impl<'a> Editor<'a> {
             return Ok(false);
         }
 
-        let last_char = cur_buf!(self).last();
-        if last_char == Some("\\") {
-            let buf = cur_buf_mut!(self);
+        let buf = cur_buf_mut!(self);
+        let last_char = buf.last();
+        let done = if let Some(last_completion_fn) = self.line_completion_fn {
+            last_completion_fn(buf)
+        } else {
+            true
+        };
+        if last_char == Some("\\") || !done {
             buf.push('\n');
             self.cursor.move_cursor_to_end_of_line(buf);
             self.display_term()?;
@@ -870,6 +879,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -893,6 +903,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("let\\").unwrap();
@@ -918,6 +929,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None
         )
         .unwrap();
         ed.insert_str_after_cursor("let").unwrap();
@@ -944,6 +956,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -967,6 +980,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -990,6 +1004,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1013,6 +1028,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1036,6 +1052,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1059,6 +1076,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1084,6 +1102,7 @@ mod tests {
             &words,
             &mut buf,
             buffer,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();

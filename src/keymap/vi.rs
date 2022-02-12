@@ -1713,6 +1713,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1743,6 +1744,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1773,6 +1775,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1807,6 +1810,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1845,6 +1849,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1881,6 +1886,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1919,6 +1925,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1955,6 +1962,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1999,6 +2007,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2039,6 +2048,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2080,6 +2090,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2171,6 +2182,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2206,6 +2218,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2245,6 +2258,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2285,6 +2299,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2322,6 +2337,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2359,6 +2375,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2397,6 +2414,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2435,6 +2453,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2473,6 +2492,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2511,6 +2531,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2549,6 +2570,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2590,6 +2612,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2631,6 +2654,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2669,6 +2693,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2707,6 +2732,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2745,6 +2771,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2789,6 +2816,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2827,6 +2855,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2863,6 +2892,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2899,6 +2929,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2936,6 +2967,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2971,6 +3003,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3007,6 +3040,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3044,6 +3078,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3081,6 +3116,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3117,6 +3153,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3153,6 +3190,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3198,6 +3236,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3241,6 +3280,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3285,6 +3325,7 @@ mod tests {
                 &mut history,
                 &words,
                 &mut buf,
+                None,
             )
             .unwrap();
             let mut map = Vi::new();
@@ -3329,6 +3370,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3364,6 +3406,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3400,6 +3443,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3441,6 +3485,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3476,6 +3521,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3572,6 +3618,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3663,6 +3710,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3698,6 +3746,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3736,6 +3785,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3770,6 +3820,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3804,6 +3855,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3840,6 +3892,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3877,6 +3930,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3914,6 +3968,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3955,6 +4010,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3982,6 +4038,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4020,6 +4077,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4050,6 +4108,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4088,6 +4147,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4125,6 +4185,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4155,6 +4216,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4194,6 +4256,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4232,6 +4295,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4269,6 +4333,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4309,6 +4374,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4351,6 +4417,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4389,6 +4456,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4429,6 +4497,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4459,6 +4528,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4489,6 +4559,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4525,6 +4596,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4555,6 +4627,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4595,6 +4668,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4633,6 +4707,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4662,6 +4737,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4698,6 +4774,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4734,6 +4811,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4771,6 +4849,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4808,6 +4887,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4843,6 +4923,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4873,6 +4954,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4909,6 +4991,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4947,6 +5030,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4984,6 +5068,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5011,6 +5096,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5042,6 +5128,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5073,6 +5160,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5104,6 +5192,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5135,6 +5224,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5162,6 +5252,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5193,6 +5284,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5219,6 +5311,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5246,6 +5339,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5277,6 +5371,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5312,6 +5407,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5346,6 +5442,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5378,6 +5475,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5414,6 +5512,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5486,6 +5585,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5535,6 +5635,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
 
@@ -5565,6 +5666,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5601,6 +5703,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5639,6 +5742,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5675,6 +5779,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5711,6 +5816,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5748,6 +5854,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5790,6 +5897,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5832,6 +5940,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5870,6 +5979,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5907,6 +6017,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5947,6 +6058,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5989,6 +6101,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6033,6 +6146,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6074,6 +6188,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6115,6 +6230,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6161,6 +6277,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6195,6 +6312,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6230,6 +6348,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6265,6 +6384,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6301,6 +6421,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6338,6 +6459,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6377,6 +6499,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6411,6 +6534,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6445,6 +6569,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6479,6 +6604,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6514,6 +6640,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6550,6 +6677,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6588,6 +6716,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6626,6 +6755,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6646,6 +6776,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6666,6 +6797,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
@@ -6687,6 +6819,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6707,6 +6840,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6727,6 +6861,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6750,6 +6885,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6773,6 +6909,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
@@ -6797,6 +6934,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6820,6 +6958,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6840,6 +6979,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6877,6 +7017,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6919,6 +7060,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6961,6 +7103,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7000,6 +7143,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7041,6 +7185,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7096,6 +7241,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7139,6 +7285,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7187,6 +7334,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7224,6 +7372,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7272,6 +7421,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7314,6 +7464,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7359,6 +7510,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7406,6 +7558,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7442,6 +7595,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7466,6 +7620,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7494,6 +7649,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7528,6 +7684,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7556,6 +7713,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7591,6 +7749,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7625,6 +7784,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7659,6 +7819,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7688,6 +7849,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7715,6 +7877,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7750,6 +7913,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7786,6 +7950,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7821,6 +7986,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7859,6 +8025,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7895,6 +8062,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7931,6 +8099,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7970,6 +8139,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8005,6 +8175,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8048,6 +8219,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8095,6 +8267,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8131,6 +8304,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8167,6 +8341,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8202,6 +8377,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8240,6 +8416,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
+            None,
         )
         .unwrap();
         let mut map = Vi::new();
