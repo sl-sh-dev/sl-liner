@@ -188,7 +188,7 @@ impl<'a> Editor<'a> {
         } else {
             true
         };
-        if last_char == Some("\\") || !done {
+        if !done || last_char == Some("\\") {
             buf.push('\n');
             self.cursor.move_cursor_to_end_of_line(buf);
             self.display_term()?;

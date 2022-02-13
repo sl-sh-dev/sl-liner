@@ -7,6 +7,21 @@ use super::*;
 
 pub type ColorClosure = Box<dyn FnMut(&str) -> String>;
 
+pub fn unmatched_braces_newline(buf: &Buffer) -> bool {
+    let buf_vec = buf.range_graphemes_all();
+    let mut stack = vec![];
+    for c in buf_vec {
+        match c {
+            "(" | "[" | "{" => stack.push(c),
+            ")" | "]" | "}" => {
+                stack.pop();
+            },
+            _ => {},
+        }
+    }
+    stack.is_empty()
+}
+
 /// The default for `Context.word_divider_fn`.
 pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut res = Vec::new();
@@ -43,6 +58,7 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
 pub struct Context {
     pub history: History,
     word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
+    line_completion_fn: Box<dyn Fn(&Buffer) -> bool>,
     buf: String,
     handler: Box<dyn Completer>,
     keymap: Box<dyn KeyMap>,
@@ -59,6 +75,7 @@ impl Context {
         Context {
             history: History::new(),
             word_divider_fn: Box::new(get_buffer_words),
+            line_completion_fn: Box::new(unmatched_braces_newline),
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),
@@ -128,7 +145,7 @@ impl Context {
             &self.word_divider_fn,
             &mut self.buf,
             buffer,
-            None,
+            Some(&self.line_completion_fn),
         )?;
         self.keymap.init(&mut ed);
         ed.use_closure(false);
