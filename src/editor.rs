@@ -12,11 +12,16 @@ use crate::{History, Metrics};
 
 use super::complete::Completer;
 
+pub trait Helper {
+    fn validate(&self, buf: &Buffer) -> bool;
+    fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)>;
+}
+
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
-    line_completion_fn: Option<&'a dyn Fn(&Buffer) -> bool>,
+    client_editor_helper: Option<&'a dyn Helper>,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
@@ -86,9 +91,18 @@ impl<'a> Editor<'a> {
         history: &'a mut History,
         word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
-        line_completion_fn: Option<&'a dyn Fn(&Buffer) -> bool>,
+        client_editor_helper: Option<&'a dyn Helper>,
     ) -> io::Result<Self> {
-        Editor::new_with_init_buffer(out, prompt, f, history, word_divider_fn, buf, Buffer::new(), line_completion_fn)
+        Editor::new_with_init_buffer(
+            out,
+            prompt,
+            f,
+            history,
+            word_divider_fn,
+            buf,
+            Buffer::new(),
+            client_editor_helper,
+        )
     }
 
     pub fn new_with_init_buffer<B: Into<Buffer>>(
@@ -99,13 +113,13 @@ impl<'a> Editor<'a> {
         word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
         buffer: B,
-        line_completion_fn: Option<&'a dyn Fn(&Buffer) -> bool>,
+        client_editor_helper: Option<&'a dyn Helper>,
     ) -> io::Result<Self> {
         let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
-            line_completion_fn,
+            client_editor_helper,
             cursor: Cursor::new(word_divider_fn),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
@@ -183,8 +197,8 @@ impl<'a> Editor<'a> {
 
         let buf = cur_buf_mut!(self);
         let last_char = buf.last();
-        let done = if let Some(last_completion_fn) = self.line_completion_fn {
-            last_completion_fn(buf)
+        let done = if let Some(client_edtiro_helper) = self.client_editor_helper {
+            client_edtiro_helper.validate(buf)
         } else {
             true
         };
@@ -929,7 +943,7 @@ mod tests {
             &mut history,
             &words,
             &mut buf,
-            None
+            None,
         )
         .unwrap();
         ed.insert_str_after_cursor("let").unwrap();

@@ -7,7 +7,7 @@ use super::*;
 
 pub type ColorClosure = Box<dyn FnMut(&str) -> String>;
 
-pub fn unmatched_braces_newline(buf: &Buffer) -> bool {
+pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
     let buf_vec = buf.range_graphemes_all();
     let mut stack = vec![];
     for c in buf_vec {
@@ -15,8 +15,8 @@ pub fn unmatched_braces_newline(buf: &Buffer) -> bool {
             "(" | "[" | "{" => stack.push(c),
             ")" | "]" | "}" => {
                 stack.pop();
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
     stack.is_empty()
@@ -58,7 +58,7 @@ pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
 pub struct Context {
     pub history: History,
     word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
-    line_completion_fn: Box<dyn Fn(&Buffer) -> bool>,
+    line_completion_fn: Box<dyn Helper>,
     buf: String,
     handler: Box<dyn Completer>,
     keymap: Box<dyn KeyMap>,
@@ -70,12 +70,30 @@ impl Default for Context {
     }
 }
 
+pub struct ContextHelper {}
+
+impl ContextHelper {
+    pub fn new() -> Box<ContextHelper> {
+        Box::new(ContextHelper {})
+    }
+}
+
+impl Helper for ContextHelper {
+    fn validate(&self, buf: &Buffer) -> bool {
+        check_balanced_delimiters(buf)
+    }
+
+    fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
+        get_buffer_words(buf)
+    }
+}
+
 impl Context {
     pub fn new() -> Self {
         Context {
             history: History::new(),
             word_divider_fn: Box::new(get_buffer_words),
-            line_completion_fn: Box::new(unmatched_braces_newline),
+            line_completion_fn: ContextHelper::new(),
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),
@@ -145,7 +163,7 @@ impl Context {
             &self.word_divider_fn,
             &mut self.buf,
             buffer,
-            Some(&self.line_completion_fn),
+            Some(self.line_completion_fn.as_ref()),
         )?;
         self.keymap.init(&mut ed);
         ed.use_closure(false);
