@@ -70,21 +70,64 @@ impl Default for Context {
     }
 }
 
-pub struct ContextHelper {}
+type WordDivider = Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>;
+type LineCompleter = Box<dyn Fn(&Buffer) -> bool>;
 
-impl ContextHelper {
-    pub fn new() -> Box<ContextHelper> {
-        Box::new(ContextHelper {})
+pub struct ContextHelperBuilder {
+    word_divider_fn: Option<WordDivider>,
+    line_completion_fn: Option<LineCompleter>,
+}
+
+impl Default for ContextHelperBuilder {
+    fn default() -> Self {
+        Self::new()
     }
+}
+
+impl ContextHelperBuilder {
+    pub fn new() -> Self {
+        ContextHelperBuilder {
+            word_divider_fn: None,
+            line_completion_fn: None,
+        }
+    }
+
+    pub fn set_word_divider_fn(
+        &mut self,
+        word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
+    ) -> &mut Self {
+        self.word_divider_fn = Some(word_divider_fn);
+        self
+    }
+
+    pub fn set_line_completion_fn(
+        &mut self,
+        line_completion_fn: Box<dyn Fn(&Buffer) -> bool>,
+    ) -> &mut Self {
+        self.line_completion_fn = Some(line_completion_fn);
+        self
+    }
+
+    pub fn build(self) -> ContextHelper {
+        ContextHelper {
+            word_divider_fn: self.word_divider_fn.unwrap_or(Box::new(get_buffer_words)),
+            line_completion_fn: self.line_completion_fn.unwrap_or(Box::new(check_balanced_delimiters)),
+        }
+    }
+}
+
+pub struct ContextHelper {
+    word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
+    line_completion_fn: Box<dyn Fn(&Buffer) -> bool>,
 }
 
 impl Helper for ContextHelper {
     fn validate(&self, buf: &Buffer) -> bool {
-        check_balanced_delimiters(buf)
+        (self.line_completion_fn)(buf)
     }
 
     fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
-        get_buffer_words(buf)
+        (self.word_divider_fn)(buf)
     }
 }
 
@@ -93,7 +136,7 @@ impl Context {
         Context {
             history: History::new(),
             word_divider_fn: Box::new(get_buffer_words),
-            line_completion_fn: ContextHelper::new(),
+            line_completion_fn: Box::new(ContextHelperBuilder::default().build()),
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),

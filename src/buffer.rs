@@ -789,7 +789,7 @@ mod tests {
     fn test_buffer_to_string_ignore_newline() {
         let mut buf = Buffer::new();
         buf.insert(0, ['h', 'e', '\\', '\n', 'l', 'l', 'o'].iter());
-        assert_eq!("hello".to_owned(), String::from(buf));
+        assert_eq!("he\\\nllo".to_owned(), String::from(buf));
     }
 
     #[test]
