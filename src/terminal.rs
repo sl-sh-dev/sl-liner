@@ -421,14 +421,12 @@ impl<'a> Terminal<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::get_buffer_words;
 
     #[test]
     fn test_metrics_cursor_beg_no_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let cur = Cursor::new(word_divider_fcn);
+        let cur = Cursor::new();
 
         let buf = Buffer::from("hello hello".to_owned());
         let autosuggestion = Buffer::default();
@@ -444,8 +442,7 @@ mod tests {
     fn test_metrics_cursor_end_no_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let mut cur = Cursor::new();
         let buf = Buffer::from("hello hello".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("".to_owned());
@@ -461,8 +458,7 @@ mod tests {
     fn test_metrics_cursor_beg_with_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let cur = Cursor::new(word_divider_fcn);
+        let cur = Cursor::new();
         let buf = Buffer::from("hello hello".to_owned());
         let autosuggestion = Buffer::from("hello hello hello".to_owned());
         let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();
@@ -477,8 +473,7 @@ mod tests {
     fn test_metrics_cursor_end_with_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let mut cur = Cursor::new();
         let buf = Buffer::from("hello hello".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("hello hello hello".to_owned());
@@ -494,8 +489,7 @@ mod tests {
     fn test_metrics_cursor_multiline() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let mut cur = Cursor::new();
         let buf = Buffer::from("hello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\n".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("".to_owned());

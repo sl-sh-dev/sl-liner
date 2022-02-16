@@ -89,7 +89,6 @@ impl<'a> Editor<'a> {
         prompt: Prompt,
         f: Option<ColorClosure>,
         history: &'a mut History,
-        word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
         client_editor_helper: Option<&'a dyn Helper>,
     ) -> io::Result<Self> {
@@ -98,7 +97,6 @@ impl<'a> Editor<'a> {
             prompt,
             f,
             history,
-            word_divider_fn,
             buf,
             Buffer::new(),
             client_editor_helper,
@@ -110,7 +108,6 @@ impl<'a> Editor<'a> {
         prompt: Prompt,
         f: Option<ColorClosure>,
         history: &'a mut History,
-        word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
         buffer: B,
         client_editor_helper: Option<&'a dyn Helper>,
@@ -120,7 +117,7 @@ impl<'a> Editor<'a> {
         let mut ed = Editor {
             prompt,
             client_editor_helper,
-            cursor: Cursor::new(word_divider_fn),
+            cursor: Cursor::new_with_divider(client_editor_helper),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
@@ -197,8 +194,8 @@ impl<'a> Editor<'a> {
 
         let buf = cur_buf_mut!(self);
         let last_char = buf.last();
-        let done = if let Some(client_edtiro_helper) = self.client_editor_helper {
-            client_edtiro_helper.validate(buf)
+        let done = if let Some(client_editor_helper) = self.client_editor_helper {
+            client_editor_helper.validate(buf)
         } else {
             true
         };
@@ -873,7 +870,6 @@ impl<'a> From<Editor<'a>> for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::context::get_buffer_words;
     use crate::prompt::Prompt;
     use crate::History;
 
@@ -884,14 +880,12 @@ mod tests {
     fn delete_all_after_cursor_undo() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -908,14 +902,12 @@ mod tests {
     fn move_cursor_multiline() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -934,14 +926,12 @@ mod tests {
     fn move_cursor_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -961,14 +951,12 @@ mod tests {
     fn test_handle_newline() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -985,14 +973,12 @@ mod tests {
     fn cursor_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1009,14 +995,12 @@ mod tests {
     fn delete_until_backwards() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1033,14 +1017,12 @@ mod tests {
     fn delete_until_forwards() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1057,14 +1039,12 @@ mod tests {
     fn delete_until() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1081,14 +1061,12 @@ mod tests {
     fn delete_until_inclusive() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1105,7 +1083,6 @@ mod tests {
     fn test_cursor_when_init_buffer_is_not_empty() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let buffer = Buffer::from("\u{1f469}\u{200d}\u{1f4bb} start here_".to_owned());
         let mut ed = Editor::new_with_init_buffer(
@@ -1113,7 +1090,6 @@ mod tests {
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             buffer,
             None,

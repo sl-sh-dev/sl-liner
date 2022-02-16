@@ -80,7 +80,6 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::get_buffer_words;
     use crate::{History, Prompt};
     use sl_console::event::Key;
     use std::io::ErrorKind;
@@ -107,14 +106,12 @@ mod tests {
     fn ctrl_d_empty() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -135,14 +132,12 @@ mod tests {
     fn ctrl_d_non_empty() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -163,14 +158,12 @@ mod tests {
     fn ctrl_c() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )

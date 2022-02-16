@@ -110,8 +110,12 @@ impl ContextHelperBuilder {
 
     pub fn build(self) -> ContextHelper {
         ContextHelper {
-            word_divider_fn: self.word_divider_fn.unwrap_or(Box::new(get_buffer_words)),
-            line_completion_fn: self.line_completion_fn.unwrap_or(Box::new(check_balanced_delimiters)),
+            word_divider_fn: self
+                .word_divider_fn
+                .unwrap_or_else(|| Box::new(get_buffer_words)),
+            line_completion_fn: self
+                .line_completion_fn
+                .unwrap_or_else(|| Box::new(check_balanced_delimiters)),
         }
     }
 }
@@ -203,10 +207,9 @@ impl Context {
             prompt,
             f,
             &mut self.history,
-            &self.word_divider_fn,
             &mut self.buf,
             buffer,
-            Some(self.line_completion_fn.as_ref()),
+            Some(&*self.line_completion_fn),
         )?;
         self.keymap.init(&mut ed);
         ed.use_closure(false);

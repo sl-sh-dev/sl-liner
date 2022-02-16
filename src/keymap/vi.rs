@@ -1649,7 +1649,6 @@ impl KeyMap for Vi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::get_buffer_words;
     use crate::{Buffer, Completer, Editor, History, KeyMap, Prompt};
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
@@ -1704,14 +1703,12 @@ mod tests {
     fn enter_is_done() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1735,14 +1732,12 @@ mod tests {
     fn move_cursor_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1766,14 +1761,12 @@ mod tests {
     fn cursor_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1801,14 +1794,12 @@ mod tests {
     fn move_cursor_start_end() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1840,14 +1831,12 @@ mod tests {
     fn vi_initial_insert() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1877,14 +1866,12 @@ mod tests {
     fn vi_left_right_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1916,14 +1903,12 @@ mod tests {
     fn vi_no_eol() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1953,14 +1938,12 @@ mod tests {
     fn vi_switch_from_insert() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -1998,14 +1981,12 @@ mod tests {
         history.push("data hostory").unwrap();
         history.push("data history").unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2039,14 +2020,12 @@ mod tests {
         history.push("data one").unwrap();
         history.push("skip2").unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2081,14 +2060,12 @@ mod tests {
         history.push("data pat one").unwrap();
         history.push("skip2").unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2173,14 +2150,12 @@ mod tests {
     fn vi_normal_delete() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2209,14 +2184,12 @@ mod tests {
     fn vi_change_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2249,14 +2222,12 @@ mod tests {
     fn vi_change_paste_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2290,14 +2261,12 @@ mod tests {
     fn vi_delete_paste_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2328,14 +2297,12 @@ mod tests {
     fn vi_delete_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2366,14 +2333,12 @@ mod tests {
     fn vi_delete_with_multi_paste() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2405,14 +2370,12 @@ mod tests {
     fn vi_delete_with_multi_paste_backwards() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2444,14 +2407,12 @@ mod tests {
     fn vi_yank_paste_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2483,14 +2444,12 @@ mod tests {
     fn vi_2delete_paste_with_text_object_aw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2522,14 +2481,12 @@ mod tests {
     fn vi_2delete_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2561,14 +2518,12 @@ mod tests {
     fn vi_2change_paste_with_text_object_aw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2603,14 +2558,12 @@ mod tests {
     fn vi_2change_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2645,14 +2598,12 @@ mod tests {
     fn vi_3yank_paste_with_text_object_aw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2684,14 +2635,12 @@ mod tests {
     fn vi_2yank_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2723,14 +2672,12 @@ mod tests {
     fn vi_4yank_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2762,14 +2709,12 @@ mod tests {
     fn vi_delete_paste_multi_key_esc_sequence() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2807,14 +2752,12 @@ mod tests {
     fn vi_delete_paste() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2846,14 +2789,12 @@ mod tests {
     fn vi_yank_right() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2883,14 +2824,12 @@ mod tests {
     fn vi_yank_2h() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2920,14 +2859,12 @@ mod tests {
     fn vi_2d_l() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2958,14 +2895,12 @@ mod tests {
     fn vi_yank_h() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -2994,14 +2929,12 @@ mod tests {
     fn vi_yank_upper_f() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3031,14 +2964,12 @@ mod tests {
     fn vi_yank_f() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3069,14 +3000,12 @@ mod tests {
     fn vi_yank_t() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3107,14 +3036,12 @@ mod tests {
     fn vi_yank_upper_t() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3144,14 +3071,12 @@ mod tests {
     fn vi_yank_e() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3181,14 +3106,12 @@ mod tests {
     fn vi_change_paste_backward() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3227,14 +3150,12 @@ mod tests {
     fn vi_delete_paste_backward() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3271,14 +3192,12 @@ mod tests {
     fn vi_delete_paste_words() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3316,14 +3235,12 @@ mod tests {
         {
             let mut history = History::new();
             let mut out = Vec::new();
-            let words = Box::new(get_buffer_words);
             let mut buf = String::with_capacity(512);
             let mut ed = Editor::new(
                 &mut out,
                 Prompt::from("prompt"),
                 None,
                 &mut history,
-                &words,
                 &mut buf,
                 None,
             )
@@ -3361,14 +3278,12 @@ mod tests {
     fn vi_substitute_command() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3397,14 +3312,12 @@ mod tests {
     fn substitute_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3434,14 +3347,12 @@ mod tests {
     fn substitute_with_count_repeat() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3476,14 +3387,12 @@ mod tests {
     fn vi_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3512,14 +3421,12 @@ mod tests {
     fn vi_count_overflow() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3609,14 +3516,12 @@ mod tests {
     fn vi_count_overflow_zero() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3701,14 +3606,12 @@ mod tests {
     fn vi_count_cancel() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3737,14 +3640,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3776,14 +3677,12 @@ mod tests {
     fn vi_dot_command() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3811,14 +3710,12 @@ mod tests {
     fn vi_dot_command_repeat() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3846,14 +3743,12 @@ mod tests {
     fn vi_dot_command_repeat_multiple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3883,14 +3778,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3921,14 +3814,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -3959,14 +3850,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4001,14 +3890,12 @@ mod tests {
     fn move_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4029,14 +3916,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4068,14 +3953,12 @@ mod tests {
     fn movement_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4099,14 +3982,12 @@ mod tests {
     fn movement_with_count_then_insert() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4138,14 +4019,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4176,14 +4055,12 @@ mod tests {
     fn basic_replace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4207,14 +4084,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4247,14 +4122,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4286,14 +4159,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4324,14 +4195,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4365,14 +4234,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4408,14 +4275,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4447,14 +4312,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4488,14 +4351,12 @@ mod tests {
     fn move_count_right() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4519,14 +4380,12 @@ mod tests {
     fn move_count_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4550,14 +4409,12 @@ mod tests {
     fn dot_x_delete() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4587,14 +4444,12 @@ mod tests {
     fn delete_line() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4618,14 +4473,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4659,14 +4512,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4698,14 +4549,12 @@ mod tests {
     fn delete_char_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4728,14 +4577,12 @@ mod tests {
     fn delete_chars_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4765,14 +4612,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4802,14 +4647,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4840,14 +4683,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4878,14 +4719,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4914,14 +4753,12 @@ mod tests {
     fn delete_until_end_shift_d() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4945,14 +4782,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -4982,14 +4817,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5021,14 +4854,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5059,14 +4890,12 @@ mod tests {
     fn move_to_end_of_word_simple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5087,14 +4916,12 @@ mod tests {
     fn move_to_end_of_word_comma() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5119,14 +4946,12 @@ mod tests {
     fn move_to_end_of_word_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5151,14 +4976,12 @@ mod tests {
     fn move_to_end_of_word_whitespace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5183,14 +5006,12 @@ mod tests {
     fn move_to_end_of_word_whitespace_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5215,14 +5036,12 @@ mod tests {
     fn move_to_end_of_word_ws_simple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5243,14 +5062,12 @@ mod tests {
     fn move_to_end_of_word_ws_comma() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5275,14 +5092,12 @@ mod tests {
     fn move_to_end_of_word_ws_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5302,14 +5117,12 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5330,14 +5143,12 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5362,14 +5173,12 @@ mod tests {
     fn move_word_simple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5398,14 +5207,12 @@ mod tests {
     fn move_word_whitespace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5433,14 +5240,12 @@ mod tests {
     fn move_word_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5466,14 +5271,12 @@ mod tests {
     fn move_word_whitespace_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5503,14 +5306,12 @@ mod tests {
     fn move_word_and_back() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5576,14 +5377,12 @@ mod tests {
     fn move_word_and_back_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5626,14 +5425,12 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5657,14 +5454,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5694,14 +5489,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5733,14 +5526,12 @@ mod tests {
     fn change_char_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5770,14 +5561,12 @@ mod tests {
     fn change_chars_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5807,14 +5596,12 @@ mod tests {
     fn change_char_right() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5845,14 +5632,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5888,14 +5673,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5931,14 +5714,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -5970,14 +5751,12 @@ mod tests {
     fn change_until_end_shift_c() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6008,14 +5787,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6049,14 +5826,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6092,14 +5867,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6137,14 +5910,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6179,14 +5950,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6221,14 +5990,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6268,14 +6035,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6303,14 +6068,12 @@ mod tests {
     fn test_t_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6339,14 +6102,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6375,14 +6136,12 @@ mod tests {
     fn test_t_movement_then_normal() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6412,14 +6171,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6450,14 +6207,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6490,14 +6245,12 @@ mod tests {
     fn test_f_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6525,14 +6278,12 @@ mod tests {
     fn test_cap_t_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6560,14 +6311,12 @@ mod tests {
     fn test_cap_f_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6595,14 +6344,12 @@ mod tests {
     fn test_semi_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6631,14 +6378,12 @@ mod tests {
     fn test_comma_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6668,14 +6413,12 @@ mod tests {
     fn test_semi_delete() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6707,14 +6450,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6746,14 +6487,12 @@ mod tests {
     fn test_find_char() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6767,14 +6506,12 @@ mod tests {
     fn test_find_char_with_start() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6788,14 +6525,12 @@ mod tests {
     fn test_find_char_unicode() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6810,14 +6545,12 @@ mod tests {
     fn test_find_char_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6831,14 +6564,12 @@ mod tests {
     fn test_find_char_not_found() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6852,14 +6583,12 @@ mod tests {
     fn test_find_char_rev() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6876,14 +6605,12 @@ mod tests {
     fn test_find_char_rev_with_start() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6900,14 +6627,12 @@ mod tests {
     fn test_find_char_rev_unicode() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6925,14 +6650,12 @@ mod tests {
     fn test_find_char_rev_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6949,14 +6672,12 @@ mod tests {
     fn test_find_char_rev_not_found() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -6970,14 +6691,12 @@ mod tests {
     fn test_undo_with_counts() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7008,14 +6727,12 @@ mod tests {
     fn test_redo_with_counts() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7051,14 +6768,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7094,14 +6809,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7134,14 +6847,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7176,14 +6887,12 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         history.push(Buffer::from("insert-xxx")).unwrap();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7232,14 +6941,12 @@ mod tests {
         let mut history = History::new();
         history.push(Buffer::from("")).unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7276,14 +6983,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7325,14 +7030,12 @@ mod tests {
     fn undo_3x() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7363,14 +7066,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7412,14 +7113,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7455,14 +7154,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7501,14 +7198,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7549,14 +7244,12 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7586,14 +7279,12 @@ mod tests {
     fn tilde_basic() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7611,14 +7302,12 @@ mod tests {
     fn tilde_basic2() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7640,14 +7329,12 @@ mod tests {
     fn tilde_move() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7675,14 +7362,12 @@ mod tests {
     fn tilde_repeat() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7704,14 +7389,12 @@ mod tests {
     fn tilde_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7740,14 +7423,12 @@ mod tests {
     fn tilde_count_short() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7775,14 +7456,12 @@ mod tests {
     fn tilde_nocase() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7810,14 +7489,12 @@ mod tests {
     fn ctrl_h() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7840,14 +7517,12 @@ mod tests {
     fn repeat_char_move_no_char() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7868,14 +7543,12 @@ mod tests {
     fn test_yank_and_put_back() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7904,14 +7577,12 @@ mod tests {
     fn test_delete_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7941,14 +7612,12 @@ mod tests {
     fn test_delete_surround_empty_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -7977,14 +7646,12 @@ mod tests {
     fn test_delete_surround_text_object_paste() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8016,14 +7683,12 @@ mod tests {
     fn test_delete_surround_text_object_over_match_character_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8053,14 +7718,12 @@ mod tests {
     fn test_delete_surround_text_object_over_match_character_no_match() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8090,14 +7753,12 @@ mod tests {
     fn test_yank_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8130,14 +7791,12 @@ mod tests {
     fn test_change_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8166,14 +7825,12 @@ mod tests {
     fn test_change_and_insert_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8210,14 +7867,12 @@ mod tests {
     fn test_yank_and_delete_surround_xml() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8258,14 +7913,12 @@ mod tests {
     fn test_do_not_match_asymmetrical_surround_objects() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8295,14 +7948,12 @@ mod tests {
     fn test_do_not_match_unbalanced_asymmetrical_surround_objects_close() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8332,14 +7983,12 @@ mod tests {
     fn test_do_not_match_unbalanced_asymmetrical_surround_objects_open() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8368,14 +8017,12 @@ mod tests {
     fn test_do_not_match_surround_balanced_text_objects_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
@@ -8407,14 +8054,12 @@ mod tests {
     fn test_match_surround_balanced_text_objects_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             None,
         )
