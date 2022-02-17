@@ -22,39 +22,6 @@ pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
     stack.is_empty()
 }
 
-/// The default for `Context.word_divider_fn`.
-pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
-    let mut res = Vec::new();
-
-    let mut word_start = None;
-    let mut just_had_backslash = false;
-
-    let buf_vec = buf.range_graphemes_all();
-    for (i, c) in buf_vec.enumerate() {
-        if c == "\\" {
-            just_had_backslash = true;
-            continue;
-        }
-
-        if let Some(start) = word_start {
-            if c == " " && !just_had_backslash {
-                res.push((start, i));
-                word_start = None;
-            }
-        } else if c != " " {
-            word_start = Some(i);
-        }
-
-        just_had_backslash = false;
-    }
-
-    if let Some(start) = word_start {
-        res.push((start, buf.num_graphemes()));
-    }
-
-    res
-}
-
 pub struct Context {
     pub history: History,
     word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
@@ -108,6 +75,7 @@ impl ContextHelperBuilder {
         self
     }
 
+    //TODO mention defaults
     pub fn build(self) -> ContextHelper {
         ContextHelper {
             word_divider_fn: self
@@ -140,7 +108,7 @@ impl Context {
         Context {
             history: History::new(),
             word_divider_fn: Box::new(get_buffer_words),
-            line_completion_fn: Box::new(ContextHelperBuilder::default().build()),
+            helper: Box::new(ContextHelperBuilder::default().build()),
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),
@@ -159,9 +127,9 @@ impl Context {
 
     pub fn set_word_divider(
         &mut self,
-        word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
+        helper: Box<dyn Helper>,
     ) -> &mut Self {
-        self.word_divider_fn = word_divider_fn;
+        self.line_completion_fn = helper;
         self
     }
 
@@ -209,7 +177,7 @@ impl Context {
             &mut self.history,
             &mut self.buf,
             buffer,
-            Some(&*self.line_completion_fn),
+            Some(&*self.helper),
         )?;
         self.keymap.init(&mut ed);
         ed.use_closure(false);

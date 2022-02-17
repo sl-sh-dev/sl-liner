@@ -21,7 +21,8 @@ pub trait Helper {
 pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
-    client_editor_helper: Option<&'a dyn Helper>,
+    //TODO rename
+    helper: Option<&'a dyn Helper>,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
@@ -90,7 +91,7 @@ impl<'a> Editor<'a> {
         f: Option<ColorClosure>,
         history: &'a mut History,
         buf: &'a mut String,
-        client_editor_helper: Option<&'a dyn Helper>,
+        helper: Option<&'a dyn Helper>,
     ) -> io::Result<Self> {
         Editor::new_with_init_buffer(
             out,
@@ -99,7 +100,7 @@ impl<'a> Editor<'a> {
             history,
             buf,
             Buffer::new(),
-            client_editor_helper,
+            helper,
         )
     }
 
@@ -110,14 +111,14 @@ impl<'a> Editor<'a> {
         history: &'a mut History,
         buf: &'a mut String,
         buffer: B,
-        client_editor_helper: Option<&'a dyn Helper>,
+        helper: Option<&'a dyn Helper>,
     ) -> io::Result<Self> {
         let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
-            client_editor_helper,
-            cursor: Cursor::new_with_divider(client_editor_helper),
+            helper,
+            cursor: Cursor::new_with_divider(helper),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
@@ -194,8 +195,8 @@ impl<'a> Editor<'a> {
 
         let buf = cur_buf_mut!(self);
         let last_char = buf.last();
-        let done = if let Some(client_editor_helper) = self.client_editor_helper {
-            client_editor_helper.validate(buf)
+        let done = if let Some(helper) = self.helper {
+            helper.validate(buf)
         } else {
             true
         };
