@@ -1,5 +1,6 @@
-use crate::{Buffer, get_buffer_words, Helper};
+use crate::{Buffer, EditorRules};
 use std::cmp;
+
 
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +61,7 @@ pub struct Cursor<'a> {
     curr_grapheme: usize,
     // function to determine how to split words, returns vector of tuples representing index
     // and length of word.
-    word_divider_fn: Option<&'a dyn Helper>,
+    word_divider_fn: Option<&'a dyn EditorRules>,
 
     // if set, the cursor will not be allow to move one past the end of the line, this is necessary
     // for Vi's normal mode.
@@ -82,7 +83,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn new_with_divider(divider: Option<&'a dyn Helper>) -> Self {
+    pub fn new_with_divider(divider: Option<&'a dyn EditorRules>) -> Self {
         Cursor {
             curr_grapheme: 0,
             word_divider_fn: divider,
@@ -111,37 +112,6 @@ impl<'a> Cursor<'a> {
         if self.curr_grapheme > buf_len {
             self.curr_grapheme = buf_len;
         }
-    }
-    pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
-        let mut res = Vec::new();
-
-        let mut word_start = None;
-        let mut just_had_backslash = false;
-
-        let buf_vec = buf.range_graphemes_all();
-        for (i, c) in buf_vec.enumerate() {
-            if c == "\\" {
-                just_had_backslash = true;
-                continue;
-            }
-
-            if let Some(start) = word_start {
-                if c == " " && !just_had_backslash {
-                    res.push((start, i));
-                    word_start = None;
-                }
-            } else if c != " " {
-                word_start = Some(i);
-            }
-
-            just_had_backslash = false;
-        }
-
-        if let Some(start) = word_start {
-            res.push((start, buf.num_graphemes()));
-        }
-
-        res
     }
 
     pub fn get_words_and_cursor_position(
@@ -305,6 +275,38 @@ impl<'a> Cursor<'a> {
             self.curr_grapheme -= 1;
         }
     }
+}
+
+pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
+    let mut res = Vec::new();
+
+    let mut word_start = None;
+    let mut just_had_backslash = false;
+
+    let buf_vec = buf.range_graphemes_all();
+    for (i, c) in buf_vec.enumerate() {
+        if c == "\\" {
+            just_had_backslash = true;
+            continue;
+        }
+
+        if let Some(start) = word_start {
+            if c == " " && !just_had_backslash {
+                res.push((start, i));
+                word_start = None;
+            }
+        } else if c != " " {
+            word_start = Some(i);
+        }
+
+        just_had_backslash = false;
+    }
+
+    if let Some(start) = word_start {
+        res.push((start, buf.num_graphemes()));
+    }
+
+    res
 }
 
 #[cfg(test)]

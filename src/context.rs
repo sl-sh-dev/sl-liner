@@ -22,10 +22,27 @@ pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
     stack.is_empty()
 }
 
+pub fn last_non_ws_char_was_backslash(buf: &Buffer) -> bool {
+    let mut found_backslash = false;
+    // why is this not working but dodo_prompt is stil recognizing open paren as NOT a reason
+    // to evaulate...
+    println!("ok");
+    for x in buf.range_graphemes_all().rev() {
+        if x.trim().is_empty() || x == "\n" {
+            continue;
+        } else if x == "\\" {
+            found_backslash = true;
+            break;
+        } else {
+            break;
+        }
+    }
+    found_backslash
+}
+
 pub struct Context {
     pub history: History,
-    word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
-    line_completion_fn: Box<dyn Helper>,
+    rules: Box<dyn EditorRules>,
     buf: String,
     handler: Box<dyn Completer>,
     keymap: Box<dyn KeyMap>,
@@ -40,6 +57,7 @@ impl Default for Context {
 type WordDivider = Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>;
 type LineCompleter = Box<dyn Fn(&Buffer) -> bool>;
 
+//TODO can't have these be optional if you're also passing an optional. it's just weird.
 pub struct ContextHelperBuilder {
     word_divider_fn: Option<WordDivider>,
     line_completion_fn: Option<LineCompleter>,
@@ -83,7 +101,7 @@ impl ContextHelperBuilder {
                 .unwrap_or_else(|| Box::new(get_buffer_words)),
             line_completion_fn: self
                 .line_completion_fn
-                .unwrap_or_else(|| Box::new(check_balanced_delimiters)),
+                .unwrap_or_else(|| Box::new(last_non_ws_char_was_backslash)),
         }
     }
 }
@@ -93,8 +111,8 @@ pub struct ContextHelper {
     line_completion_fn: Box<dyn Fn(&Buffer) -> bool>,
 }
 
-impl Helper for ContextHelper {
-    fn validate(&self, buf: &Buffer) -> bool {
+impl EditorRules for ContextHelper {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
         (self.line_completion_fn)(buf)
     }
 
@@ -107,8 +125,7 @@ impl Context {
     pub fn new() -> Self {
         Context {
             history: History::new(),
-            word_divider_fn: Box::new(get_buffer_words),
-            helper: Box::new(ContextHelperBuilder::default().build()),
+            rules: Box::new(ContextHelperBuilder::default().build()),
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),
@@ -127,9 +144,9 @@ impl Context {
 
     pub fn set_word_divider(
         &mut self,
-        helper: Box<dyn Helper>,
+        helper: Box<dyn EditorRules>,
     ) -> &mut Self {
-        self.line_completion_fn = helper;
+        self.rules = helper;
         self
     }
 
@@ -177,7 +194,7 @@ impl Context {
             &mut self.history,
             &mut self.buf,
             buffer,
-            Some(&*self.helper),
+            Some(&*self.rules),
         )?;
         self.keymap.init(&mut ed);
         ed.use_closure(false);

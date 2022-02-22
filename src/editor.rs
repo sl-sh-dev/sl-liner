@@ -12,8 +12,8 @@ use crate::{History, Metrics};
 
 use super::complete::Completer;
 
-pub trait Helper {
-    fn validate(&self, buf: &Buffer) -> bool;
+pub trait EditorRules {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool;
     fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)>;
 }
 
@@ -22,7 +22,7 @@ pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
     //TODO rename
-    helper: Option<&'a dyn Helper>,
+    helper: Option<&'a dyn EditorRules>,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
@@ -91,7 +91,7 @@ impl<'a> Editor<'a> {
         f: Option<ColorClosure>,
         history: &'a mut History,
         buf: &'a mut String,
-        helper: Option<&'a dyn Helper>,
+        helper: Option<&'a dyn EditorRules>,
     ) -> io::Result<Self> {
         Editor::new_with_init_buffer(
             out,
@@ -111,7 +111,7 @@ impl<'a> Editor<'a> {
         history: &'a mut History,
         buf: &'a mut String,
         buffer: B,
-        helper: Option<&'a dyn Helper>,
+        helper: Option<&'a dyn EditorRules>,
     ) -> io::Result<Self> {
         let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
@@ -194,13 +194,14 @@ impl<'a> Editor<'a> {
         }
 
         let buf = cur_buf_mut!(self);
-        let last_char = buf.last();
+        //let last_char = buf.last();
         let done = if let Some(helper) = self.helper {
-            helper.validate(buf)
+            helper.evaluate_on_newline(buf)
         } else {
             true
         };
-        if !done || last_char == Some("\\") {
+        //if !done || last_char == Some("\\") {
+        if !done {
             buf.push('\n');
             self.cursor.move_cursor_to_end_of_line(buf);
             self.display_term()?;
