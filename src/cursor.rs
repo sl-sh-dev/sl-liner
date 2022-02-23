@@ -1,7 +1,6 @@
 use crate::{Buffer, EditorRules};
 use std::cmp;
 
-
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CursorPosition {

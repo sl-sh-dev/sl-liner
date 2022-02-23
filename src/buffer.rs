@@ -75,17 +75,7 @@ impl Eq for Buffer {}
 
 impl From<Buffer> for String {
     fn from(buf: Buffer) -> Self {
-        let mut to = String::new();
-        let mut buf_iter = buf.data.chars().peekable();
-        while let Some(ch) = buf_iter.next() {
-            if ch == '\\' && buf_iter.peek() == Some(&'\n') {
-                // '\\' followed by newline, ignore both.
-                buf_iter.next();
-                continue;
-            }
-            to.push(ch);
-        }
-        to
+        buf.data
     }
 }
 

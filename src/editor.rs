@@ -93,15 +93,7 @@ impl<'a> Editor<'a> {
         buf: &'a mut String,
         helper: Option<&'a dyn EditorRules>,
     ) -> io::Result<Self> {
-        Editor::new_with_init_buffer(
-            out,
-            prompt,
-            f,
-            history,
-            buf,
-            Buffer::new(),
-            helper,
-        )
+        Editor::new_with_init_buffer(out, prompt, f, history, buf, Buffer::new(), helper)
     }
 
     pub fn new_with_init_buffer<B: Into<Buffer>>(
@@ -194,24 +186,22 @@ impl<'a> Editor<'a> {
         }
 
         let buf = cur_buf_mut!(self);
-        //let last_char = buf.last();
-        let done = if let Some(helper) = self.helper {
+        let should_evaluate = if let Some(helper) = self.helper {
             helper.evaluate_on_newline(buf)
         } else {
             true
         };
-        //if !done || last_char == Some("\\") {
-        if !done {
-            buf.push('\n');
-            self.cursor.move_cursor_to_end_of_line(buf);
-            self.display_term()?;
-            Ok(false)
-        } else {
+        if should_evaluate {
             self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
             self.display_term_with_autosuggest(false)?;
             self.term.write_newline()?;
             self.show_completions_hint = None;
             Ok(true)
+        } else {
+            buf.push('\n');
+            self.cursor.move_cursor_to_end_of_line(buf);
+            self.display_term()?;
+            Ok(false)
         }
     }
 

@@ -19,14 +19,13 @@ pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
             _ => {}
         }
     }
+    //if the stack is empty, then we should evaluate the line, as there are no unbalanced
+    // delimiters.
     stack.is_empty()
 }
 
-pub fn last_non_ws_char_was_backslash(buf: &Buffer) -> bool {
+pub fn last_non_ws_char_was_not_backslash(buf: &Buffer) -> bool {
     let mut found_backslash = false;
-    // why is this not working but dodo_prompt is stil recognizing open paren as NOT a reason
-    // to evaulate...
-    println!("ok");
     for x in buf.range_graphemes_all().rev() {
         if x.trim().is_empty() || x == "\n" {
             continue;
@@ -37,7 +36,9 @@ pub fn last_non_ws_char_was_backslash(buf: &Buffer) -> bool {
             break;
         }
     }
-    found_backslash
+    // if the last non-whitespace character was not a backslash then we can evaluate the line, as
+    // backslash is the user's way of indicating intent to insert a new line
+    !found_backslash
 }
 
 pub struct Context {
@@ -101,7 +102,7 @@ impl ContextHelperBuilder {
                 .unwrap_or_else(|| Box::new(get_buffer_words)),
             line_completion_fn: self
                 .line_completion_fn
-                .unwrap_or_else(|| Box::new(last_non_ws_char_was_backslash)),
+                .unwrap_or_else(|| Box::new(last_non_ws_char_was_not_backslash)),
         }
     }
 }
@@ -142,10 +143,7 @@ impl Context {
         self
     }
 
-    pub fn set_word_divider(
-        &mut self,
-        helper: Box<dyn EditorRules>,
-    ) -> &mut Self {
+    pub fn set_word_divider(&mut self, helper: Box<dyn EditorRules>) -> &mut Self {
         self.rules = helper;
         self
     }
