@@ -6,15 +6,24 @@ use crate::context::ColorClosure;
 use crate::cursor::CursorPosition;
 use crate::event::*;
 use crate::prompt::Prompt;
-use crate::{util, Terminal};
+use crate::{util, Terminal, last_non_ws_char_was_not_backslash};
 use crate::{Buffer, Cursor};
 use crate::{History, Metrics};
 
 use super::complete::Completer;
 
-pub trait EditorRules {
+pub trait NewlineRule {
     fn evaluate_on_newline(&self, buf: &Buffer) -> bool;
+}
+
+pub trait WordDivideRule {
     fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)>;
+}
+
+pub trait EditorRules
+where
+    Self: WordDivideRule + NewlineRule,
+{
 }
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
@@ -22,7 +31,7 @@ pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
     //TODO rename
-    helper: Option<&'a dyn EditorRules>,
+    editor_rules: Option<&'a dyn EditorRules>,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
@@ -91,9 +100,9 @@ impl<'a> Editor<'a> {
         f: Option<ColorClosure>,
         history: &'a mut History,
         buf: &'a mut String,
-        helper: Option<&'a dyn EditorRules>,
+        editor_rules: Option<&'a dyn EditorRules>,
     ) -> io::Result<Self> {
-        Editor::new_with_init_buffer(out, prompt, f, history, buf, Buffer::new(), helper)
+        Editor::new_with_init_buffer(out, prompt, f, history, buf, Buffer::new(), editor_rules)
     }
 
     pub fn new_with_init_buffer<B: Into<Buffer>>(
@@ -103,14 +112,14 @@ impl<'a> Editor<'a> {
         history: &'a mut History,
         buf: &'a mut String,
         buffer: B,
-        helper: Option<&'a dyn EditorRules>,
+        editor_rules: Option<&'a dyn EditorRules>,
     ) -> io::Result<Self> {
         let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
-            helper,
-            cursor: Cursor::new_with_divider(helper),
+            editor_rules,
+            cursor: Cursor::new_with_divider(editor_rules),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
@@ -186,10 +195,10 @@ impl<'a> Editor<'a> {
         }
 
         let buf = cur_buf_mut!(self);
-        let should_evaluate = if let Some(helper) = self.helper {
-            helper.evaluate_on_newline(buf)
+        let should_evaluate = if let Some(editor_rules) = self.editor_rules {
+            editor_rules.evaluate_on_newline(buf)
         } else {
-            true
+            last_non_ws_char_was_not_backslash(buf)
         };
         if should_evaluate {
             self.cursor.move_cursor_to_end_of_line(cur_buf!(self));

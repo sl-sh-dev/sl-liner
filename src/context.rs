@@ -27,7 +27,7 @@ pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
 pub fn last_non_ws_char_was_not_backslash(buf: &Buffer) -> bool {
     let mut found_backslash = false;
     for x in buf.range_graphemes_all().rev() {
-        if x.trim().is_empty() || x == "\n" {
+        if x == " " {
             continue;
         } else if x == "\\" {
             found_backslash = true;
@@ -39,6 +39,62 @@ pub fn last_non_ws_char_was_not_backslash(buf: &Buffer) -> bool {
     // if the last non-whitespace character was not a backslash then we can evaluate the line, as
     // backslash is the user's way of indicating intent to insert a new line
     !found_backslash
+}
+
+pub struct NewlineDefaultRule;
+
+impl NewlineRule for NewlineDefaultRule {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
+        last_non_ws_char_was_not_backslash(buf)
+    }
+}
+
+pub struct NewlineForBackslashAndOpenDelimRule;
+
+impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
+        last_non_ws_char_was_not_backslash(buf) || check_balanced_delimiters(buf)
+    }
+}
+
+pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
+    let mut res = Vec::new();
+
+    let mut word_start = None;
+    let mut just_had_backslash = false;
+
+    let buf_vec = buf.range_graphemes_all();
+    for (i, c) in buf_vec.enumerate() {
+        if c == "\\" {
+            just_had_backslash = true;
+            continue;
+        }
+
+        if let Some(start) = word_start {
+            if c == " " && !just_had_backslash {
+                res.push((start, i));
+                word_start = None;
+            }
+        } else if c != " " {
+            word_start = Some(i);
+        }
+
+        just_had_backslash = false;
+    }
+
+    if let Some(start) = word_start {
+        res.push((start, buf.num_graphemes()));
+    }
+
+    res
+}
+
+pub struct WordDividerDefaultRule;
+
+impl WordDivideRule for WordDividerDefaultRule {
+    fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
+        get_buffer_words(buf)
+    }
 }
 
 pub struct Context {
@@ -55,70 +111,67 @@ impl Default for Context {
     }
 }
 
-type WordDivider = Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>;
-type LineCompleter = Box<dyn Fn(&Buffer) -> bool>;
-
 //TODO can't have these be optional if you're also passing an optional. it's just weird.
-pub struct ContextHelperBuilder {
-    word_divider_fn: Option<WordDivider>,
-    line_completion_fn: Option<LineCompleter>,
+pub struct EditorRulesBuilder {
+    word_divider_fn: Option<Box<dyn WordDivideRule>>,
+    line_completion_fn: Option<Box<dyn NewlineRule>>,
 }
 
-impl Default for ContextHelperBuilder {
+impl Default for EditorRulesBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ContextHelperBuilder {
+impl EditorRulesBuilder {
     pub fn new() -> Self {
-        ContextHelperBuilder {
+        EditorRulesBuilder {
             word_divider_fn: None,
             line_completion_fn: None,
         }
     }
 
-    pub fn set_word_divider_fn(
-        &mut self,
-        word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
-    ) -> &mut Self {
+    pub fn set_word_divider_fn(mut self, word_divider_fn: Box<dyn WordDivideRule>) -> Self {
         self.word_divider_fn = Some(word_divider_fn);
         self
     }
 
     pub fn set_line_completion_fn(
-        &mut self,
-        line_completion_fn: Box<dyn Fn(&Buffer) -> bool>,
-    ) -> &mut Self {
+        mut self,
+        line_completion_fn: Box<dyn NewlineRule>,
+    ) -> Self {
         self.line_completion_fn = Some(line_completion_fn);
         self
     }
 
-    //TODO mention defaults
     pub fn build(self) -> ContextHelper {
         ContextHelper {
             word_divider_fn: self
                 .word_divider_fn
-                .unwrap_or_else(|| Box::new(get_buffer_words)),
+                .unwrap_or_else(|| Box::new(WordDividerDefaultRule {})),
             line_completion_fn: self
                 .line_completion_fn
-                .unwrap_or_else(|| Box::new(last_non_ws_char_was_not_backslash)),
+                .unwrap_or_else(|| Box::new(NewlineDefaultRule {})),
         }
     }
 }
 
 pub struct ContextHelper {
-    word_divider_fn: Box<dyn Fn(&Buffer) -> Vec<(usize, usize)>>,
-    line_completion_fn: Box<dyn Fn(&Buffer) -> bool>,
+    word_divider_fn: Box<dyn WordDivideRule>,
+    line_completion_fn: Box<dyn NewlineRule>,
 }
 
-impl EditorRules for ContextHelper {
-    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
-        (self.line_completion_fn)(buf)
-    }
+impl EditorRules for ContextHelper {}
 
+impl NewlineRule for ContextHelper {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
+        self.line_completion_fn.evaluate_on_newline(buf)
+    }
+}
+
+impl WordDivideRule for ContextHelper {
     fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
-        (self.word_divider_fn)(buf)
+        self.word_divider_fn.divide_words(buf)
     }
 }
 
@@ -126,7 +179,7 @@ impl Context {
     pub fn new() -> Self {
         Context {
             history: History::new(),
-            rules: Box::new(ContextHelperBuilder::default().build()),
+            rules: Box::new(EditorRulesBuilder::default().build()),
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),
@@ -143,8 +196,8 @@ impl Context {
         self
     }
 
-    pub fn set_word_divider(&mut self, helper: Box<dyn EditorRules>) -> &mut Self {
-        self.rules = helper;
+    pub fn set_editor_rules(&mut self, rules: Box<dyn EditorRules>) -> &mut Self {
+        self.rules = rules;
         self
     }
 

@@ -10,7 +10,9 @@ use regex::Regex;
 use sl_console::color;
 
 use sl_liner::cursor::CursorPosition;
-use sl_liner::keymap;
+use sl_liner::{
+    keymap, EditorRulesBuilder, NewlineForBackslashAndOpenDelimRule,
+};
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen
@@ -79,6 +81,10 @@ impl Completer for CommentCompleter {
 
 fn main() {
     let mut con = Context::new();
+    let editor_rules = EditorRulesBuilder::new()
+        .set_line_completion_fn(Box::new(NewlineForBackslashAndOpenDelimRule {}))
+        .build();
+    con.set_editor_rules(Box::new(editor_rules));
     con.set_completer(Box::new(CommentCompleter { inner: None }));
 
     let history_file = match args().nth(1) {
