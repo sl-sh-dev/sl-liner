@@ -4,6 +4,7 @@ use std::time;
 use sl_console::*;
 
 use super::*;
+use crate::get_buffer_words;
 
 pub type ColorClosure = Box<dyn FnMut(&str) -> String>;
 
@@ -57,38 +58,6 @@ impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
     }
 }
 
-pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
-    let mut res = Vec::new();
-
-    let mut word_start = None;
-    let mut just_had_backslash = false;
-
-    let buf_vec = buf.range_graphemes_all();
-    for (i, c) in buf_vec.enumerate() {
-        if c == "\\" {
-            just_had_backslash = true;
-            continue;
-        }
-
-        if let Some(start) = word_start {
-            if c == " " && !just_had_backslash {
-                res.push((start, i));
-                word_start = None;
-            }
-        } else if c != " " {
-            word_start = Some(i);
-        }
-
-        just_had_backslash = false;
-    }
-
-    if let Some(start) = word_start {
-        res.push((start, buf.num_graphemes()));
-    }
-
-    res
-}
-
 pub struct WordDividerDefaultRule;
 
 impl WordDivideRule for WordDividerDefaultRule {
@@ -111,7 +80,6 @@ impl Default for Context {
     }
 }
 
-//TODO can't have these be optional if you're also passing an optional. it's just weird.
 pub struct EditorRulesBuilder {
     word_divider_fn: Option<Box<dyn WordDivideRule>>,
     line_completion_fn: Option<Box<dyn NewlineRule>>,
