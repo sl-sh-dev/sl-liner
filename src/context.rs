@@ -53,7 +53,7 @@ pub struct NewlineForBackslashAndOpenDelimRule;
 
 impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
     fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
-        last_non_ws_char_was_not_backslash(buf) || check_balanced_delimiters(buf)
+        last_non_ws_char_was_not_backslash(buf) && check_balanced_delimiters(buf)
     }
 }
 
@@ -136,10 +136,7 @@ impl EditorRulesBuilder {
         self
     }
 
-    pub fn set_line_completion_fn(
-        mut self,
-        line_completion_fn: Box<dyn NewlineRule>,
-    ) -> Self {
+    pub fn set_line_completion_fn(mut self, line_completion_fn: Box<dyn NewlineRule>) -> Self {
         self.line_completion_fn = Some(line_completion_fn);
         self
     }

@@ -10,9 +10,7 @@ use regex::Regex;
 use sl_console::color;
 
 use sl_liner::cursor::CursorPosition;
-use sl_liner::{
-    keymap, EditorRulesBuilder, NewlineForBackslashAndOpenDelimRule,
-};
+use sl_liner::{keymap, EditorRulesBuilder, NewlineForBackslashAndOpenDelimRule};
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen

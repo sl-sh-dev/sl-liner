@@ -6,7 +6,7 @@ use crate::context::ColorClosure;
 use crate::cursor::CursorPosition;
 use crate::event::*;
 use crate::prompt::Prompt;
-use crate::{util, Terminal, last_non_ws_char_was_not_backslash};
+use crate::{last_non_ws_char_was_not_backslash, util, Terminal};
 use crate::{Buffer, Cursor};
 use crate::{History, Metrics};
 
