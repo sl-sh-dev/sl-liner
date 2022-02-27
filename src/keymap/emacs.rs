@@ -193,7 +193,7 @@ fn emacs_move_word(ed: &mut Editor, direction: EmacsMoveDir) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Completer, Editor, History, KeyMap, Prompt};
+    use crate::{Completer, Editor, EditorRulesBuilder, History, KeyMap, Prompt};
     use sl_console::event::Key;
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
@@ -249,13 +249,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -277,13 +278,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -306,13 +308,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -347,13 +350,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -375,13 +379,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();

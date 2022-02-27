@@ -421,12 +421,14 @@ impl<'a> Terminal<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::EditorRulesBuilder;
 
     #[test]
     fn test_metrics_cursor_beg_no_autosuggestion() {
         let prompt = "&>";
 
-        let cur = Cursor::new();
+        let rules = EditorRulesBuilder::default().build();
+        let cur = Cursor::new_with_divider(&rules);
 
         let buf = Buffer::from("hello hello".to_owned());
         let autosuggestion = Buffer::default();
@@ -442,7 +444,8 @@ mod tests {
     fn test_metrics_cursor_end_no_autosuggestion() {
         let prompt = "&>";
 
-        let mut cur = Cursor::new();
+        let rules = EditorRulesBuilder::default().build();
+        let mut cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("".to_owned());
@@ -458,7 +461,7 @@ mod tests {
     fn test_metrics_cursor_beg_with_autosuggestion() {
         let prompt = "&>";
 
-        let cur = Cursor::new();
+        let rules = EditorRulesBuilder::default().build();
         let buf = Buffer::from("hello hello".to_owned());
         let autosuggestion = Buffer::from("hello hello hello".to_owned());
         let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();
@@ -473,7 +476,8 @@ mod tests {
     fn test_metrics_cursor_end_with_autosuggestion() {
         let prompt = "&>";
 
-        let mut cur = Cursor::new();
+        let rules = EditorRulesBuilder::default().build();
+        let mut cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("hello hello hello".to_owned());
@@ -489,7 +493,8 @@ mod tests {
     fn test_metrics_cursor_multiline() {
         let prompt = "&>";
 
-        let mut cur = Cursor::new();
+        let rules = EditorRulesBuilder::default().build();
+        let mut cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\n".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("".to_owned());

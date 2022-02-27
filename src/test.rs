@@ -2,14 +2,14 @@ use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 
-use crate::cursor;
 use crate::cursor::CursorPosition;
+use crate::{cursor, editor_rules};
 
 use super::*;
 
 fn assert_cursor_pos(s: &str, cursor: usize, expected_pos: CursorPosition) {
     let buf = Buffer::from(s.to_owned());
-    let words = cursor::get_buffer_words(&buf);
+    let words = editor_rules::get_buffer_words(&buf);
     let pos = CursorPosition::get(cursor, &words[..]);
     assert!(
         expected_pos == pos,

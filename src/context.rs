@@ -91,7 +91,7 @@ impl Context {
             &mut self.history,
             &mut self.buf,
             buffer,
-            Some(&*self.rules),
+            &*self.rules,
         )?;
         self.keymap.init(&mut ed);
         ed.use_closure(false);

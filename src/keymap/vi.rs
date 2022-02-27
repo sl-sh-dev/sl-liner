@@ -1649,7 +1649,7 @@ impl KeyMap for Vi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Buffer, Completer, Editor, History, KeyMap, Prompt};
+    use crate::{Buffer, Completer, Editor, EditorRulesBuilder, History, KeyMap, Prompt};
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
         keymap: &mut M,
@@ -1704,13 +1704,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1733,13 +1734,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1762,13 +1764,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1795,13 +1798,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1832,13 +1836,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1867,13 +1872,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1904,13 +1910,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1939,13 +1946,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1982,13 +1990,14 @@ mod tests {
         history.push("data history").unwrap();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2021,13 +2030,14 @@ mod tests {
         history.push("skip2").unwrap();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2061,13 +2071,14 @@ mod tests {
         history.push("skip2").unwrap();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2151,13 +2162,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2185,20 +2197,20 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
         ed.insert_str_after_cursor("data data data").unwrap();
         assert_eq!(ed.cursor(), 14);
-
         simulate_key_codes(
             &mut map,
             &mut ed,
@@ -2223,13 +2235,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2262,13 +2275,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2298,13 +2312,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2334,13 +2349,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2371,13 +2387,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2408,13 +2425,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2445,13 +2463,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2482,13 +2501,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2519,13 +2539,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2559,13 +2580,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2599,13 +2621,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2636,13 +2659,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2673,13 +2697,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2710,13 +2735,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2753,13 +2779,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2790,13 +2817,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2825,13 +2853,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2860,13 +2889,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2896,13 +2926,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2930,13 +2961,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2965,13 +2997,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3001,13 +3034,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3037,13 +3071,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3072,13 +3107,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3107,13 +3143,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3151,13 +3188,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3193,13 +3231,14 @@ mod tests {
         let mut history = History::new();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3236,13 +3275,14 @@ mod tests {
             let mut history = History::new();
             let mut out = Vec::new();
             let mut buf = String::with_capacity(512);
+            let rules = EditorRulesBuilder::default().build();
             let mut ed = Editor::new(
                 &mut out,
                 Prompt::from("prompt"),
                 None,
                 &mut history,
                 &mut buf,
-                None,
+                &rules,
             )
             .unwrap();
             let mut map = Vi::new();
@@ -3279,13 +3319,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3313,13 +3354,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3348,13 +3390,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3388,13 +3431,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3422,13 +3466,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3517,13 +3562,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3607,13 +3653,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3641,13 +3688,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3678,13 +3726,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3711,13 +3760,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3744,13 +3794,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3779,13 +3830,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3815,13 +3867,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3851,13 +3904,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3891,13 +3945,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3917,13 +3972,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3954,13 +4010,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3983,13 +4040,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4020,13 +4078,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4056,13 +4115,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4085,13 +4145,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4123,13 +4184,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4160,13 +4222,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4196,13 +4259,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4235,13 +4299,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4276,13 +4341,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4313,13 +4379,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4352,13 +4419,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4381,13 +4449,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4410,13 +4479,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4445,13 +4515,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4474,13 +4545,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4513,13 +4585,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4550,13 +4623,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4578,13 +4652,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4613,13 +4688,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4648,13 +4724,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4684,13 +4761,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4720,13 +4798,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4754,13 +4833,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4783,13 +4863,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4818,13 +4899,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4855,13 +4937,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4891,13 +4974,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -4917,13 +5001,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -4947,13 +5032,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -4977,13 +5063,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5007,13 +5094,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5037,13 +5125,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5063,13 +5152,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5093,13 +5183,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5118,13 +5209,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5144,13 +5236,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5174,13 +5267,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5208,13 +5302,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5241,13 +5336,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5272,13 +5368,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5307,13 +5404,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5378,13 +5476,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5426,13 +5525,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
 
@@ -5455,13 +5555,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5490,13 +5591,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5527,13 +5629,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5562,13 +5665,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5597,13 +5701,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5633,13 +5738,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5674,13 +5780,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5715,13 +5822,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5752,13 +5860,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5788,13 +5897,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5827,13 +5937,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5868,13 +5979,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5911,13 +6023,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5951,13 +6064,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5991,13 +6105,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6036,13 +6151,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6069,13 +6185,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6103,13 +6220,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6137,13 +6255,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6172,13 +6291,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6208,13 +6328,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6246,13 +6367,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6279,13 +6401,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6312,13 +6435,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6345,13 +6469,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6379,13 +6504,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6414,13 +6540,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6451,13 +6578,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6488,13 +6616,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6507,13 +6636,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6526,13 +6656,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
@@ -6546,13 +6677,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6565,13 +6697,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6584,13 +6717,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6606,13 +6740,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6628,13 +6763,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
@@ -6651,13 +6787,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6673,13 +6810,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6692,13 +6830,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6728,13 +6867,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6769,13 +6909,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6810,13 +6951,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6848,13 +6990,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6888,13 +7031,14 @@ mod tests {
         let mut history = History::new();
         history.push(Buffer::from("insert-xxx")).unwrap();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6942,13 +7086,14 @@ mod tests {
         history.push(Buffer::from("")).unwrap();
         let mut out = Vec::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6984,13 +7129,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7031,13 +7177,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7067,13 +7214,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7114,13 +7262,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7155,13 +7304,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7199,13 +7349,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7245,13 +7396,14 @@ mod tests {
 
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7280,13 +7432,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7303,13 +7456,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7330,13 +7484,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7363,13 +7518,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7390,13 +7546,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7424,13 +7581,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7457,13 +7615,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7490,13 +7649,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7518,13 +7678,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7544,13 +7705,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7578,13 +7740,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7613,13 +7776,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7647,13 +7811,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7684,13 +7849,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7719,13 +7885,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7754,13 +7921,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7792,13 +7960,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7826,13 +7995,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7868,13 +8038,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7914,13 +8085,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7949,13 +8121,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7984,13 +8157,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8018,13 +8192,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8055,13 +8230,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();

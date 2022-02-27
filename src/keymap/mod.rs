@@ -80,7 +80,7 @@ pub use emacs::Emacs;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{History, Prompt};
+    use crate::{EditorRulesBuilder, History, Prompt};
     use sl_console::event::Key;
     use std::io::ErrorKind;
 
@@ -106,6 +106,7 @@ mod tests {
     fn ctrl_d_empty() {
         let mut out = Vec::new();
         let mut history = History::new();
+        let rules = EditorRulesBuilder::default().build();
         let mut buf = String::with_capacity(512);
         let mut ed = Editor::new(
             &mut out,
@@ -113,7 +114,7 @@ mod tests {
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = TestKeyMap;
@@ -133,13 +134,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = TestKeyMap;
@@ -159,13 +161,14 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
+        let rules = EditorRulesBuilder::default().build();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
             &mut buf,
-            None,
+            &rules,
         )
         .unwrap();
         let mut map = TestKeyMap;
