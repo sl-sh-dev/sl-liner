@@ -33,6 +33,9 @@ pub mod cursor;
 mod util;
 pub use cursor::*;
 
+pub mod editor_rules;
+pub use editor_rules::*;
+
 mod grapheme_iter;
 #[cfg(test)]
 mod test;

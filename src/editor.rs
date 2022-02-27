@@ -4,27 +4,14 @@ use sl_console::{self, color};
 
 use crate::context::ColorClosure;
 use crate::cursor::CursorPosition;
+use crate::editor_rules::last_non_ws_char_was_not_backslash;
 use crate::event::*;
 use crate::prompt::Prompt;
-use crate::{last_non_ws_char_was_not_backslash, util, Terminal};
+use crate::{util, EditorRules, Terminal};
 use crate::{Buffer, Cursor};
 use crate::{History, Metrics};
 
 use super::complete::Completer;
-
-pub trait NewlineRule {
-    fn evaluate_on_newline(&self, buf: &Buffer) -> bool;
-}
-
-pub trait WordDivideRule {
-    fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)>;
-}
-
-pub trait EditorRules
-where
-    Self: WordDivideRule + NewlineRule,
-{
-}
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a> {
