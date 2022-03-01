@@ -10,6 +10,7 @@ use regex::Regex;
 use sl_console::color;
 
 use sl_liner::cursor::CursorPosition;
+use sl_liner::vi::ViKeywordRule;
 use sl_liner::{keymap, EditorRulesBuilder, NewlineForBackslashAndOpenDelimRule};
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
@@ -77,6 +78,33 @@ impl Completer for CommentCompleter {
     }
 }
 
+pub struct ViKeywordWithKebabCase {}
+
+impl ViKeywordWithKebabCase {
+    pub fn new() -> Self {
+        ViKeywordWithKebabCase {}
+    }
+}
+
+impl ViKeywordRule for ViKeywordWithKebabCase {
+    fn is_vi_keyword(&self, str: &str) -> bool {
+        let mut ret = false;
+        if str == "_" || str == "-" {
+            ret = true
+        } else if !str.trim().is_empty() {
+            for c in str.chars() {
+                if c.is_alphanumeric() {
+                    ret = true;
+                } else {
+                    ret = false;
+                    break;
+                }
+            }
+        }
+        ret
+    }
+}
+
 fn main() {
     let mut con = Context::new();
     let editor_rules = EditorRulesBuilder::new()
@@ -115,7 +143,9 @@ fn main() {
                         println!("emacs mode");
                     }
                     "vi" => {
-                        con.set_keymap(Box::new(keymap::Vi::new()));
+                        let mut vi = keymap::Vi::new();
+                        vi.set_keyword_rule(Box::new(ViKeywordWithKebabCase::new()));
+                        con.set_keymap(Box::new(vi));
                         println!("vi mode");
                     }
                     "exit" => {

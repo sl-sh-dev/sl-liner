@@ -8,6 +8,42 @@ use crate::buffer::Buffer;
 use crate::Editor;
 use crate::KeyMap;
 
+pub trait ViKeywordRule {
+    /// All alphanumeric characters and _ are considered valid for keywords in vi by default.
+    fn is_vi_keyword(&self, str: &str) -> bool {
+        let mut ret = false;
+        if str == "_" {
+            ret = true
+        } else if !str.trim().is_empty() {
+            for c in str.chars() {
+                if c.is_alphanumeric() {
+                    ret = true;
+                } else {
+                    ret = false;
+                    break;
+                }
+            }
+        }
+        ret
+    }
+}
+
+pub struct DefaultViKeywordRule;
+
+impl ViKeywordRule for DefaultViKeywordRule {}
+
+impl Default for DefaultViKeywordRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DefaultViKeywordRule {
+    pub fn new() -> Self {
+        DefaultViKeywordRule {}
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharMovement {
     RightUntil,
@@ -224,202 +260,6 @@ impl ViMoveDir {
     }
 }
 
-//TODO make configurable
-/// All alphanumeric characters and _ are considered valid for keywords in vi by default.
-fn is_vi_keyword(str: &str) -> bool {
-    let mut ret = false;
-    if str == "_" {
-        ret = true
-    } else if !str.trim().is_empty() {
-        for c in str.chars() {
-            if c.is_alphanumeric() {
-                ret = true;
-            } else {
-                ret = false;
-                break;
-            }
-        }
-    }
-    ret
-}
-
-fn move_word_ws_is_word(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, true)
-}
-
-fn move_word(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, false)
-}
-
-fn move_word_ws(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count, false)
-}
-
-fn move_to_end_of_word_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Left, count, false)
-}
-
-fn move_to_end_of_word_ws_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count, false)
-}
-
-fn vi_move_word(
-    ed: &mut Editor,
-    move_mode: ViMoveMode,
-    direction: ViMoveDir,
-    count: usize,
-    ws_included_in_count: bool,
-) -> io::Result<()> {
-    #[derive(Clone, Copy)]
-    enum State {
-        Whitespace,
-        Keyword,
-        NonKeyword,
-    }
-
-    let mut cursor = ed.cursor();
-    'repeat: for _ in 0..count {
-        let buf = ed.current_buffer();
-        let mut state = match buf.grapheme_after(cursor) {
-            None => break,
-            Some(str) => match str {
-                str if str.trim().is_empty() => State::Whitespace,
-                str if is_vi_keyword(str) => State::Keyword,
-                _ => State::NonKeyword,
-            },
-        };
-
-        while direction.advance(&mut cursor, buf.num_graphemes()) {
-            let str = match buf.grapheme_after(cursor) {
-                Some(str) => str,
-                _ => break 'repeat,
-            };
-
-            // if ws_included_in_count is true we want to make sure we treat
-            // any contiguous string of whitespace appropriately towards
-            // the overall count, this means that at (NonKeyWord and Keyword)
-            // to Whitespace boundaries we need to break so the count loop
-            // increments one more time. The default behavior just cycles
-            // through Whitespace.
-            match state {
-                State::Whitespace => match str {
-                    str if str.trim().is_empty() => {}
-                    _ => {
-                        break;
-                    }
-                },
-                State::Keyword => match str {
-                    str if str.trim().is_empty() => {
-                        if ws_included_in_count {
-                            break;
-                        } else {
-                            state = State::Whitespace
-                        }
-                    }
-                    str if move_mode == ViMoveMode::Keyword && !is_vi_keyword(str) => break,
-                    _ => {}
-                },
-                State::NonKeyword => match str {
-                    str if str.trim().is_empty() => {
-                        if ws_included_in_count {
-                            break;
-                        } else {
-                            state = State::Whitespace
-                        }
-                    }
-                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => break,
-                    _ => {}
-                },
-            }
-        }
-    }
-
-    // default positioning of cursor when moving in this manner ends one
-    // position to the left of the desired positioning in vi when moving
-    // and treating whitespace as words for the purposed of text objects.
-    if ws_included_in_count && count > 0 {
-        cursor -= 1;
-    }
-    ed.move_cursor_to(cursor)
-}
-
-fn move_to_end_of_word(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Right, count)
-}
-
-fn move_to_end_of_word_ws(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count)
-}
-
-fn move_word_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Left, count)
-}
-
-fn move_word_ws_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count)
-}
-
-fn vi_move_word_end(
-    ed: &mut Editor,
-    move_mode: ViMoveMode,
-    direction: ViMoveDir,
-    count: usize,
-) -> io::Result<()> {
-    enum State {
-        Whitespace,
-        EndOnWord,
-        EndOnOther,
-        EndOnWhitespace,
-    }
-
-    let mut cursor = ed.cursor();
-    'repeat: for _ in 0..count {
-        let buf = ed.current_buffer();
-        let mut state = State::Whitespace;
-
-        while direction.advance(&mut cursor, buf.num_graphemes()) {
-            let str = match buf.grapheme_after(cursor) {
-                Some(c) => c,
-                _ => break 'repeat,
-            };
-
-            match state {
-                State::Whitespace => match str {
-                    // skip initial whitespace
-                    str if str.trim().is_empty() => {}
-                    // if we are in keyword mode and found a keyword, stop on word
-                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => {
-                        state = State::EndOnWord;
-                    }
-                    // not in keyword mode, stop on whitespace
-                    _ if move_mode == ViMoveMode::Whitespace => {
-                        state = State::EndOnWhitespace;
-                    }
-                    // in keyword mode, found non-whitespace non-keyword, stop on anything
-                    _ => {
-                        state = State::EndOnOther;
-                    }
-                },
-                State::EndOnWord if !is_vi_keyword(str) => {
-                    direction.go_back(&mut cursor, buf.num_graphemes());
-                    break;
-                }
-                State::EndOnWhitespace if str.trim().is_empty() => {
-                    direction.go_back(&mut cursor, buf.num_graphemes());
-                    break;
-                }
-                State::EndOnOther if str.trim().is_empty() || is_vi_keyword(str) => {
-                    direction.go_back(&mut cursor, buf.num_graphemes());
-                    break;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    ed.move_cursor_to(cursor)
-}
-
 fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
     let mut offset = None;
@@ -539,7 +379,6 @@ where
 /// // This will hang github actions on windows...
 /// //let res = context.read_line(Prompt::from("[prompt]$ "), None);
 /// ```
-#[derive(Clone)]
 pub struct Vi {
     mode_stack: ModeStack,
     current_command: Vec<Key>,
@@ -553,6 +392,7 @@ pub struct Vi {
     last_char_movement: Option<(char, CharMovement)>,
     esc_sequence: Option<(char, char, u32)>,
     last_insert_ms: u128,
+    keyword_rule: Box<dyn ViKeywordRule>,
     normal_prompt_prefix: Option<String>,
     normal_prompt_suffix: Option<String>,
     insert_prompt_prefix: Option<String>,
@@ -575,6 +415,7 @@ impl Default for Vi {
             last_char_movement: None,
             esc_sequence: None,
             last_insert_ms: 0,
+            keyword_rule: Box::new(DefaultViKeywordRule::new()),
             normal_prompt_prefix: None,
             normal_prompt_suffix: None,
             insert_prompt_prefix: None,
@@ -606,6 +447,10 @@ impl Vi {
 
     pub fn set_esc_sequence(&mut self, key1: char, key2: char, timeout_ms: u32) {
         self.esc_sequence = Some((key1, key2, timeout_ms));
+    }
+
+    pub fn set_keyword_rule(&mut self, keyword_rule: Box<dyn ViKeywordRule>) {
+        self.keyword_rule = keyword_rule;
     }
 
     /// Get the current mode.
@@ -1061,32 +906,32 @@ impl Vi {
                     KeyCode::Char(',') => self.handle_key_move_to_char(key, ReverseRepeat, ed),
                     KeyCode::Char('w') => {
                         let count = self.move_count();
-                        move_word(ed, count)?;
+                        self.move_word(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('W') => {
                         let count = self.move_count();
-                        move_word_ws(ed, count)?;
+                        self.move_word_ws(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('e') => {
                         let count = self.move_count();
-                        move_to_end_of_word(ed, count)?;
+                        self.move_to_end_of_word(ed, count)?;
                         self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('E') => {
                         let count = self.move_count();
-                        move_to_end_of_word_ws(ed, count)?;
+                        self.move_to_end_of_word_ws(ed, count)?;
                         self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('b') => {
                         let count = self.move_count();
-                        move_word_back(ed, count)?;
+                        self.move_word_back(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('B') => {
                         let count = self.move_count();
-                        move_word_ws_back(ed, count)?;
+                        self.move_word_ws_back(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('g') => self.set_mode(Mode::G, ed),
@@ -1434,11 +1279,11 @@ impl Vi {
 
         let res = match key.code {
             KeyCode::Char('e') => {
-                move_to_end_of_word_back(ed, count)?;
+                self.move_to_end_of_word_back(ed, count)?;
                 self.pop_mode_after_movement(Inclusive, ed)
             }
             KeyCode::Char('E') => {
-                move_to_end_of_word_ws_back(ed, count)?;
+                self.move_to_end_of_word_ws_back(ed, count)?;
                 self.pop_mode_after_movement(Inclusive, ed)
             }
 
@@ -1580,8 +1425,8 @@ impl Vi {
         let count = self.move_count();
         if !ed.is_cursor_at_beginning_of_word_or_line() {
             match text_object {
-                TextObjectMode::Whole => move_word_ws_back(ed, 1)?,
-                TextObjectMode::Inner => move_word_back(ed, 1)?,
+                TextObjectMode::Whole => self.move_word_ws_back(ed, 1)?,
+                TextObjectMode::Inner => self.move_word_back(ed, 1)?,
             }
         }
         let mode = self.reset_curor_pos_for_command_mode(ed.cursor());
@@ -1589,14 +1434,14 @@ impl Vi {
             Some(mode) => {
                 let move_type = match text_object {
                     TextObjectMode::Whole => {
-                        move_word(ed, count)?;
+                        self.move_word(ed, count)?;
                         MoveType::Exclusive
                     }
                     TextObjectMode::Inner => {
                         if self.count > 1 {
-                            move_word_ws_is_word(ed, count)?;
+                            self.move_word_ws_is_word(ed, count)?;
                         } else {
-                            move_to_end_of_word(ed, count)?;
+                            self.move_to_end_of_word(ed, count)?;
                         }
                         MoveType::Inclusive
                     }
@@ -1610,6 +1455,197 @@ impl Vi {
             }
             None => self.normal_mode_abort(ed),
         }
+    }
+
+    fn move_word_ws_is_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, true)
+    }
+
+    fn move_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, false)
+    }
+
+    fn move_word_ws(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count, false)
+    }
+
+    fn move_to_end_of_word_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Left, count, false)
+    }
+
+    fn move_to_end_of_word_ws_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count, false)
+    }
+
+    fn vi_move_word(
+        &self,
+        ed: &mut Editor,
+        move_mode: ViMoveMode,
+        direction: ViMoveDir,
+        count: usize,
+        ws_included_in_count: bool,
+    ) -> io::Result<()> {
+        #[derive(Clone, Copy)]
+        enum State {
+            Whitespace,
+            Keyword,
+            NonKeyword,
+        }
+
+        let mut cursor = ed.cursor();
+        'repeat: for _ in 0..count {
+            let buf = ed.current_buffer();
+            let mut state = match buf.grapheme_after(cursor) {
+                None => break,
+                Some(str) => match str {
+                    str if str.trim().is_empty() => State::Whitespace,
+                    str if self.keyword_rule.is_vi_keyword(str) => State::Keyword,
+                    _ => State::NonKeyword,
+                },
+            };
+
+            while direction.advance(&mut cursor, buf.num_graphemes()) {
+                let str = match buf.grapheme_after(cursor) {
+                    Some(str) => str,
+                    _ => break 'repeat,
+                };
+
+                // if ws_included_in_count is true we want to make sure we treat
+                // any contiguous string of whitespace appropriately towards
+                // the overall count, this means that at (NonKeyWord and Keyword)
+                // to Whitespace boundaries we need to break so the count loop
+                // increments one more time. The default behavior just cycles
+                // through Whitespace.
+                match state {
+                    State::Whitespace => match str {
+                        str if str.trim().is_empty() => {}
+                        _ => {
+                            break;
+                        }
+                    },
+                    State::Keyword => match str {
+                        str if str.trim().is_empty() => {
+                            if ws_included_in_count {
+                                break;
+                            } else {
+                                state = State::Whitespace
+                            }
+                        }
+                        str if move_mode == ViMoveMode::Keyword
+                            && !self.keyword_rule.is_vi_keyword(str) =>
+                        {
+                            break
+                        }
+                        _ => {}
+                    },
+                    State::NonKeyword => match str {
+                        str if str.trim().is_empty() => {
+                            if ws_included_in_count {
+                                break;
+                            } else {
+                                state = State::Whitespace
+                            }
+                        }
+                        str if move_mode == ViMoveMode::Keyword
+                            && self.keyword_rule.is_vi_keyword(str) =>
+                        {
+                            break
+                        }
+                        _ => {}
+                    },
+                }
+            }
+        }
+
+        // default positioning of cursor when moving in this manner ends one
+        // position to the left of the desired positioning in vi when moving
+        // and treating whitespace as words for the purposed of text objects.
+        if ws_included_in_count && count > 0 {
+            cursor -= 1;
+        }
+        ed.move_cursor_to(cursor)
+    }
+
+    fn move_to_end_of_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Right, count)
+    }
+
+    fn move_to_end_of_word_ws(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count)
+    }
+
+    fn move_word_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Left, count)
+    }
+
+    fn move_word_ws_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count)
+    }
+
+    fn vi_move_word_end(
+        &self,
+        ed: &mut Editor,
+        move_mode: ViMoveMode,
+        direction: ViMoveDir,
+        count: usize,
+    ) -> io::Result<()> {
+        enum State {
+            Whitespace,
+            EndOnWord,
+            EndOnOther,
+            EndOnWhitespace,
+        }
+
+        let mut cursor = ed.cursor();
+        'repeat: for _ in 0..count {
+            let buf = ed.current_buffer();
+            let mut state = State::Whitespace;
+
+            while direction.advance(&mut cursor, buf.num_graphemes()) {
+                let str = match buf.grapheme_after(cursor) {
+                    Some(c) => c,
+                    _ => break 'repeat,
+                };
+
+                match state {
+                    State::Whitespace => match str {
+                        // skip initial whitespace
+                        str if str.trim().is_empty() => {}
+                        // if we are in keyword mode and found a keyword, stop on word
+                        str if move_mode == ViMoveMode::Keyword
+                            && self.keyword_rule.is_vi_keyword(str) =>
+                        {
+                            state = State::EndOnWord;
+                        }
+                        // not in keyword mode, stop on whitespace
+                        _ if move_mode == ViMoveMode::Whitespace => {
+                            state = State::EndOnWhitespace;
+                        }
+                        // in keyword mode, found non-whitespace non-keyword, stop on anything
+                        _ => {
+                            state = State::EndOnOther;
+                        }
+                    },
+                    State::EndOnWord if !self.keyword_rule.is_vi_keyword(str) => {
+                        direction.go_back(&mut cursor, buf.num_graphemes());
+                        break;
+                    }
+                    State::EndOnWhitespace if str.trim().is_empty() => {
+                        direction.go_back(&mut cursor, buf.num_graphemes());
+                        break;
+                    }
+                    State::EndOnOther
+                        if str.trim().is_empty() || self.keyword_rule.is_vi_keyword(str) =>
+                    {
+                        direction.go_back(&mut cursor, buf.num_graphemes());
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        ed.move_cursor_to(cursor)
     }
 }
 
@@ -4991,8 +5027,8 @@ mod tests {
         let end_pos = ed.cursor();
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
-
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5021,9 +5057,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5052,9 +5089,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5085,7 +5123,8 @@ mod tests {
         ed.move_cursor_to(start_pos).unwrap();
         assert_eq!(ed.cursor(), 8);
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), 17);
     }
 
@@ -5114,9 +5153,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5142,8 +5182,8 @@ mod tests {
         let end_pos = ed.cursor();
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
-
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5172,9 +5212,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5200,7 +5241,8 @@ mod tests {
         let end_pos = ed.cursor();
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5227,7 +5269,8 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5256,9 +5299,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5285,15 +5329,16 @@ mod tests {
         ed.insert_str_after_cursor("some words").unwrap();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
     }
 
@@ -5319,15 +5364,16 @@ mod tests {
         let pos2 = ed.cursor();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
     }
 
@@ -5353,13 +5399,14 @@ mod tests {
         let pos2 = ed.cursor();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
     }
 
@@ -5387,15 +5434,16 @@ mod tests {
         let pos3 = ed.cursor();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos3);
     }
 
@@ -5428,46 +5476,47 @@ mod tests {
 
         // make sure move_word() and move_word_back() are reflections of eachother
 
+        let vi = Vi::new();
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos3);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos5);
 
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos3);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), 0);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos5);
 
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), 0);
     }
 
@@ -5496,27 +5545,28 @@ mod tests {
         ed.insert_str_after_cursor("words").unwrap();
         let pos3 = ed.cursor();
 
+        let vi = Vi::new();
         // make sure move_word() and move_word_back() are reflections of eachother
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word(&mut ed, 3).unwrap();
+        vi.move_word(&mut ed, 3).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word(&mut ed, 2).unwrap();
+        vi.move_word(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos3);
 
-        super::move_word_back(&mut ed, 2).unwrap();
+        vi.move_word_back(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_back(&mut ed, 3).unwrap();
+        vi.move_word_back(&mut ed, 3).unwrap();
         assert_eq!(ed.cursor(), 0);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 2).unwrap();
+        vi.move_word_ws(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 2).unwrap();
+        vi.move_word_ws(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos3);
 
-        super::move_word_ws_back(&mut ed, 2).unwrap();
+        vi.move_word_ws_back(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws_back(&mut ed, 2).unwrap();
+        vi.move_word_ws_back(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), 0);
     }
 
@@ -5544,7 +5594,8 @@ mod tests {
         ed.insert_str_after_cursor("s and some").unwrap();
 
         ed.move_cursor_to(start_pos).unwrap();
-        super::move_to_end_of_word_ws(&mut ed, 2).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
