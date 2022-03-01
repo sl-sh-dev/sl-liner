@@ -8,7 +8,7 @@ pub trait NewlineRule {
 
 pub trait WordDivideRule {
     fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
-        get_buffer_words(buf)
+        divide_words_by_space(buf)
     }
 }
 
@@ -18,23 +18,9 @@ where
 {
 }
 
-pub struct NewlineDefaultRule;
-impl NewlineRule for NewlineDefaultRule {}
-
-pub struct WordDividerDefaultRule;
-impl WordDivideRule for WordDividerDefaultRule {}
-
-pub struct NewlineForBackslashAndOpenDelimRule;
-
-impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
-    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
-        last_non_ws_char_was_not_backslash(buf) && check_balanced_delimiters(buf)
-    }
-}
-
 pub struct EditorRulesBuilder {
-    word_divider_fn: Option<Box<dyn WordDivideRule>>,
-    line_completion_fn: Option<Box<dyn NewlineRule>>,
+    word_divider_rule: Option<Box<dyn WordDivideRule>>,
+    new_line_rule: Option<Box<dyn NewlineRule>>,
 }
 
 impl Default for EditorRulesBuilder {
@@ -46,49 +32,63 @@ impl Default for EditorRulesBuilder {
 impl EditorRulesBuilder {
     pub fn new() -> Self {
         EditorRulesBuilder {
-            word_divider_fn: None,
-            line_completion_fn: None,
+            word_divider_rule: None,
+            new_line_rule: None,
         }
     }
 
-    pub fn set_word_divider_fn(mut self, word_divider_fn: Box<dyn WordDivideRule>) -> Self {
-        self.word_divider_fn = Some(word_divider_fn);
+    pub fn set_word_divider_rule(mut self, word_divider_rule: Box<dyn WordDivideRule>) -> Self {
+        self.word_divider_rule = Some(word_divider_rule);
         self
     }
 
-    pub fn set_line_completion_fn(mut self, line_completion_fn: Box<dyn NewlineRule>) -> Self {
-        self.line_completion_fn = Some(line_completion_fn);
+    pub fn set_new_line_rule(mut self, newline_rule: Box<dyn NewlineRule>) -> Self {
+        self.new_line_rule = Some(newline_rule);
         self
     }
 
-    pub fn build(self) -> ContextHelper {
-        ContextHelper {
-            word_divider_fn: self
-                .word_divider_fn
-                .unwrap_or_else(|| Box::new(WordDividerDefaultRule {})),
-            line_completion_fn: self
-                .line_completion_fn
-                .unwrap_or_else(|| Box::new(NewlineDefaultRule {})),
+    pub fn build(self) -> DefaultEditorRules {
+        DefaultEditorRules {
+            word_divider_rule: self
+                .word_divider_rule
+                .unwrap_or_else(|| Box::new(DefaultWordDividerRule {})),
+            newline_rule: self
+                .new_line_rule
+                .unwrap_or_else(|| Box::new(DefaultNewlineRule {})),
         }
     }
 }
 
-pub struct ContextHelper {
-    word_divider_fn: Box<dyn WordDivideRule>,
-    line_completion_fn: Box<dyn NewlineRule>,
+pub struct DefaultEditorRules {
+    word_divider_rule: Box<dyn WordDivideRule>,
+    newline_rule: Box<dyn NewlineRule>,
 }
 
-impl EditorRules for ContextHelper {}
+impl EditorRules for DefaultEditorRules {}
 
-impl NewlineRule for ContextHelper {
+pub struct DefaultNewlineRule;
+impl NewlineRule for DefaultNewlineRule {}
+
+pub struct DefaultWordDividerRule;
+impl WordDivideRule for DefaultWordDividerRule {}
+
+pub struct NewlineForBackslashAndOpenDelimRule;
+
+impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
     fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
-        self.line_completion_fn.evaluate_on_newline(buf)
+        last_non_ws_char_was_not_backslash(buf) && check_balanced_delimiters(buf)
     }
 }
 
-impl WordDivideRule for ContextHelper {
+impl NewlineRule for DefaultEditorRules {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
+        self.newline_rule.evaluate_on_newline(buf)
+    }
+}
+
+impl WordDivideRule for DefaultEditorRules {
     fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
-        self.word_divider_fn.divide_words(buf)
+        self.word_divider_rule.divide_words(buf)
     }
 }
 
@@ -109,7 +109,7 @@ pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
     stack.is_empty()
 }
 
-pub fn get_buffer_words(buf: &Buffer) -> Vec<(usize, usize)> {
+pub fn divide_words_by_space(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut res = Vec::new();
 
     let mut word_start = None;

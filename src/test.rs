@@ -9,7 +9,7 @@ use super::*;
 
 fn assert_cursor_pos(s: &str, cursor: usize, expected_pos: CursorPosition) {
     let buf = Buffer::from(s.to_owned());
-    let words = editor_rules::get_buffer_words(&buf);
+    let words = editor_rules::divide_words_by_space(&buf);
     let pos = CursorPosition::get(cursor, &words[..]);
     assert!(
         expected_pos == pos,

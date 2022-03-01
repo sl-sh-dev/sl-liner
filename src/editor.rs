@@ -6,17 +6,14 @@ use crate::context::ColorClosure;
 use crate::cursor::CursorPosition;
 use crate::event::*;
 use crate::prompt::Prompt;
-use crate::{util, EditorRules, Terminal};
+use crate::{util, Completer, EditorRules, Terminal};
 use crate::{Buffer, Cursor};
 use crate::{History, Metrics};
-
-use super::complete::Completer;
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
-    //TODO rename
     editor_rules: &'a dyn EditorRules,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's

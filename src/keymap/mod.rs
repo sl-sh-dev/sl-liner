@@ -1,5 +1,4 @@
-use crate::complete::Completer;
-use crate::{Editor, Event, EventKind};
+use crate::{Completer, Editor, Event, EventKind};
 use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io::{self, ErrorKind};
 

@@ -80,7 +80,7 @@ impl Completer for CommentCompleter {
 fn main() {
     let mut con = Context::new();
     let editor_rules = EditorRulesBuilder::new()
-        .set_line_completion_fn(Box::new(NewlineForBackslashAndOpenDelimRule {}))
+        .set_new_line_rule(Box::new(NewlineForBackslashAndOpenDelimRule {}))
         .build();
     con.set_editor_rules(Box::new(editor_rules));
     con.set_completer(Box::new(CommentCompleter { inner: None }));
