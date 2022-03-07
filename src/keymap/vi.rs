@@ -44,6 +44,35 @@ impl DefaultViKeywordRule {
     }
 }
 
+pub struct AlphanumericAndVariableKeywordRule<'a> {
+    treat_as_keyword: Vec<&'a str>,
+}
+
+impl ViKeywordRule for AlphanumericAndVariableKeywordRule<'_> {
+    fn is_vi_keyword(&self, str: &str) -> bool {
+        let mut ret = false;
+        if self.treat_as_keyword.contains(&str) {
+            ret = true
+        } else if !str.trim().is_empty() {
+            for c in str.chars() {
+                if c.is_alphanumeric() {
+                    ret = true;
+                } else {
+                    ret = false;
+                    break;
+                }
+            }
+        }
+        ret
+    }
+}
+
+impl<'a> AlphanumericAndVariableKeywordRule<'a> {
+    pub fn new(treat_as_keyword: Vec<&'a str>) -> Self {
+        AlphanumericAndVariableKeywordRule { treat_as_keyword }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharMovement {
     RightUntil,

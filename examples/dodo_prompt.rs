@@ -10,7 +10,7 @@ use regex::Regex;
 use sl_console::color;
 
 use sl_liner::cursor::CursorPosition;
-use sl_liner::vi::ViKeywordRule;
+use sl_liner::vi::{AlphanumericAndVariableKeywordRule, ViKeywordRule};
 use sl_liner::{keymap, EditorRulesBuilder, NewlineForBackslashAndOpenDelimRule};
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
@@ -144,7 +144,10 @@ fn main() {
                     }
                     "vi" => {
                         let mut vi = keymap::Vi::new();
-                        vi.set_keyword_rule(Box::new(ViKeywordWithKebabCase::new()));
+                        let vi_keywords = vec!["_", "-"];
+                        vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
+                            vi_keywords,
+                        )));
                         con.set_keymap(Box::new(vi));
                         println!("vi mode");
                     }
