@@ -415,7 +415,7 @@ impl History {
     /// Go through the history and try to find an index (newest to oldest) which starts the same
     /// as the new buffer given to this function as argument.  Starts at curr_position.  Does not wrap.
     pub fn get_newest_match(&self, curr_position: Option<usize>, new_buff: &str) -> Option<usize> {
-        let pos = curr_position.unwrap_or_else(|| self.buffers.len());
+        let pos = curr_position.unwrap_or(self.buffers.len());
         if pos > 0 {
             self.get_match((0..pos).rev(), new_buff)
         } else {

@@ -11,7 +11,7 @@ use sl_console::color;
 
 use sl_liner::cursor::CursorPosition;
 use sl_liner::vi::{AlphanumericAndVariableKeywordRule, ViKeywordRule};
-use sl_liner::{keymap, EditorRulesBuilder, NewlineForBackslashAndOpenDelimRule};
+use sl_liner::{keymap, EditorRulesBuilder, last_non_ws_char_was_not_backslash, NewlineRule, Buffer};
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen
@@ -76,6 +76,32 @@ impl Completer for CommentCompleter {
             if let Some(_) = val {}
         }
     }
+}
+
+pub struct NewlineForBackslashAndOpenDelimRule;
+
+impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
+        last_non_ws_char_was_not_backslash(buf) && check_balanced_delimiters(buf)
+    }
+}
+
+pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
+    let buf_vec = buf.range_graphemes_all();
+    let mut stack = vec![];
+    for c in buf_vec {
+        //TODO add double quote
+        match c {
+            "(" | "[" | "{" => stack.push(c),
+            ")" | "]" | "}" => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    //if the stack is empty, then we should evaluate the line, as there are no unbalanced
+    // delimiters.
+    stack.is_empty()
 }
 
 pub struct ViKeywordWithKebabCase {}

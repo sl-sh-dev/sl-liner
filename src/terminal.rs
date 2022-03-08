@@ -462,6 +462,7 @@ mod tests {
         let prompt = "&>";
 
         let rules = EditorRulesBuilder::default().build();
+        let cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello".to_owned());
         let autosuggestion = Buffer::from("hello hello hello".to_owned());
         let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();

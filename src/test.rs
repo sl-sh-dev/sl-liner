@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Write};
 
 use crate::cursor::CursorPosition;
-use crate::{cursor, editor_rules};
+use crate::editor_rules;
 
 use super::*;
 
