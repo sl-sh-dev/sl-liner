@@ -25,7 +25,7 @@ impl Context {
     pub fn new() -> Self {
         Context {
             history: History::new(),
-            rules: Box::new(EditorRulesBuilder::default().build()),
+            rules: Box::new(DefaultEditorRules::default()),
             buf: String::with_capacity(512),
             handler: Box::new(EmptyCompleter::new()),
             keymap: Box::new(keymap::Emacs::new()),

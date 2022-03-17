@@ -11,7 +11,9 @@ use sl_console::color;
 
 use sl_liner::cursor::CursorPosition;
 use sl_liner::vi::{AlphanumericAndVariableKeywordRule, ViKeywordRule};
-use sl_liner::{keymap, EditorRulesBuilder, last_non_ws_char_was_not_backslash, NewlineRule, Buffer};
+use sl_liner::{
+    keymap, last_non_ws_char_was_not_backslash, Buffer, DefaultEditorRules, NewlineRule,
+};
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen
@@ -133,9 +135,7 @@ impl ViKeywordRule for ViKeywordWithKebabCase {
 
 fn main() {
     let mut con = Context::new();
-    let editor_rules = EditorRulesBuilder::new()
-        .set_new_line_rule(Box::new(NewlineForBackslashAndOpenDelimRule {}))
-        .build();
+    let editor_rules = DefaultEditorRules::default();
     con.set_editor_rules(Box::new(editor_rules));
     con.set_completer(Box::new(CommentCompleter { inner: None }));
 
