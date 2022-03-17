@@ -6,6 +6,7 @@ pub trait Completer {
     fn on_event(&mut self, _event: Event) {}
 }
 
+/// Completer with no completions
 pub struct EmptyCompleter {
     empty: Vec<String>,
 }
@@ -30,6 +31,7 @@ impl Completer for EmptyCompleter {
     }
 }
 
+/// Completer that can be seeded with a list of prefixes..
 pub struct BasicCompleter {
     prefixes: Vec<String>,
 }
@@ -52,6 +54,7 @@ impl Completer for BasicCompleter {
     }
 }
 
+/// Completer for filenames in the current working_dir
 pub struct FilenameCompleter {
     working_dir: Option<PathBuf>,
     case_sensitive: bool,

@@ -1,3 +1,6 @@
+//! A readline-like library
+//! For more information refer to the [README](https://github.com/sl-sh-dev/sl-liner)
+//! as well as the examples/ directory for a demonstration of how to create and customize a Context.
 extern crate bytecount;
 extern crate sl_console;
 extern crate unicode_width;
@@ -18,7 +21,7 @@ mod buffer;
 pub use buffer::*;
 
 mod terminal;
-pub use terminal::*;
+use terminal::*;
 
 mod history;
 pub use history::*;

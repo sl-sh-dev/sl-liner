@@ -1,6 +1,7 @@
 use crate::Editor;
 use sl_console::event::Key;
 
+/// Event has context about the state of the editor and the EventKind and is consumed by Completer
 pub struct Event<'a, 'out: 'a> {
     pub editor: &'a mut Editor<'out>,
     pub kind: EventKind,

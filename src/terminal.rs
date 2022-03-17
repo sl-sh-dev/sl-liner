@@ -7,7 +7,7 @@ use std::fmt::Write;
 use std::io;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Metrics {
+pub(crate) struct Metrics {
     width: usize,
     prompt_width: usize,
     new_total_width: usize,
@@ -361,7 +361,7 @@ impl<'a> Terminal<'a> {
         Ok(())
     }
 
-    pub fn display(&mut self, metrics: Metrics, completion_lines: usize) -> io::Result<()> {
+    pub(crate) fn display(&mut self, metrics: Metrics, completion_lines: usize) -> io::Result<()> {
         // at the end of the line, move the cursor down a line
         if metrics.at_end_of_line() {
             self.buf.push_str("\r\n");

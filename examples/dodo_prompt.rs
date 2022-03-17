@@ -2,6 +2,7 @@ extern crate regex;
 extern crate sl_console;
 extern crate sl_liner;
 
+use std::collections::HashSet;
 use std::env::{args, current_dir};
 use std::io;
 use std::mem::replace;
@@ -92,19 +93,26 @@ impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
 pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
     let buf_vec = buf.range_graphemes_all();
     let mut stack = vec![];
+    let mut symmetric_delimiters = HashSet::new();
     for c in buf_vec {
-        //TODO add double quote
         match c {
             "(" | "[" | "{" => stack.push(c),
             ")" | "]" | "}" => {
                 stack.pop();
             }
+            "\"" => {
+                if symmetric_delimiters.contains(c) {
+                    symmetric_delimiters.remove(c);
+                } else {
+                    symmetric_delimiters.insert(c);
+                }
+            }
             _ => {}
         }
     }
-    //if the stack is empty, then we should evaluate the line, as there are no unbalanced
+    //if the stack and symmetric_delimiters set are empty, then we should evaluate the line, as there are no unbalanced
     // delimiters.
-    stack.is_empty()
+    stack.is_empty() && symmetric_delimiters.is_empty()
 }
 
 pub struct ViKeywordWithKebabCase {}

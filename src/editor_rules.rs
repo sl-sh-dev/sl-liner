@@ -1,11 +1,17 @@
+//! Provides [DefaultEditorRules] for editor behaviors with custom override function.
+//! See [NewlineRule] and [WordDivideRule], the traits that compose editor behaviors.
 use crate::Buffer;
 
+/// When the client inputs the newline character, '\n', the Editor can decide to *not* evalute the
+/// newline if the provided implementation of this trait returns false. Default prevents evaluate
+/// if the last non whitespace character is a backslash.
 pub trait NewlineRule {
     fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
         last_non_ws_char_was_not_backslash(buf)
     }
 }
 
+/// Default NewlineRule implementation.
 pub fn last_non_ws_char_was_not_backslash(buf: &Buffer) -> bool {
     let mut found_backslash = false;
     for x in buf.range_graphemes_all().rev() {
@@ -23,12 +29,15 @@ pub fn last_non_ws_char_was_not_backslash(buf: &Buffer) -> bool {
     !found_backslash
 }
 
+/// When the Editor is trying to place the term cursor it needs to know how to divide the words to
+/// determine its [CursorPosition] state.
 pub trait WordDivideRule {
     fn divide_words(&self, buf: &Buffer) -> Vec<(usize, usize)> {
         divide_words_by_space(buf)
     }
 }
 
+/// Default WordDivideRule implementation.
 pub fn divide_words_by_space(buf: &Buffer) -> Vec<(usize, usize)> {
     let mut res = Vec::new();
 
@@ -38,7 +47,6 @@ pub fn divide_words_by_space(buf: &Buffer) -> Vec<(usize, usize)> {
     let buf_vec = buf.range_graphemes_all();
     for (i, c) in buf_vec.enumerate() {
         if c == "\\" {
-            //TODO interaction with NewlineRule?
             just_had_backslash = true;
             continue;
         }
@@ -62,11 +70,15 @@ pub fn divide_words_by_space(buf: &Buffer) -> Vec<(usize, usize)> {
     res
 }
 
+/// Trait that implements all editor rule behaviors, a mechanism to allow modification of the
+/// library's behavior at runtime.
 pub trait EditorRules
 where
     Self: WordDivideRule + NewlineRule,
 {
 }
+
+/// Provides default editor behavior and provides custom override function.
 pub struct DefaultEditorRules<T, U>
 where
     T: WordDivideRule,
@@ -111,9 +123,11 @@ where
     }
 }
 
+/// Struct with default newline behavior
 pub struct DefaultNewlineRule;
 impl NewlineRule for DefaultNewlineRule {}
 
+/// Struct with default word divide behavior
 pub struct DefaultWordDivideRule;
 impl WordDivideRule for DefaultWordDivideRule {}
 

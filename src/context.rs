@@ -7,6 +7,7 @@ use super::*;
 
 pub type ColorClosure = Box<dyn FnMut(&str) -> String>;
 
+/// Primary interface to readline-like functionality
 pub struct Context {
     pub history: History,
     rules: Box<dyn EditorRules>,

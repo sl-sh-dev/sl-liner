@@ -1,3 +1,4 @@
+//! Interface for Vi and Emacs KeyMaps
 use crate::{Completer, Editor, Event, EventKind};
 use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io::{self, ErrorKind};

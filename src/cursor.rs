@@ -1,3 +1,4 @@
+//! Track current grapheme offset for terminal cursor
 use std::cmp;
 
 use crate::{Buffer, EditorRules};
