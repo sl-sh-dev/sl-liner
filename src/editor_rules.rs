@@ -98,6 +98,19 @@ where
 {
 }
 
+impl<T, U> DefaultEditorRules<T, U>
+where
+    T: WordDivideRule,
+    U: NewlineRule,
+{
+    pub fn custom(t: T, u: U) -> Self {
+        DefaultEditorRules {
+            word_divider_rule: t,
+            newline_rule: u,
+        }
+    }
+}
+
 pub struct DefaultNewlineRule;
 impl NewlineRule for DefaultNewlineRule {}
 

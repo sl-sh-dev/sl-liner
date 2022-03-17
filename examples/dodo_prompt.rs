@@ -12,7 +12,8 @@ use sl_console::color;
 use sl_liner::cursor::CursorPosition;
 use sl_liner::vi::{AlphanumericAndVariableKeywordRule, ViKeywordRule};
 use sl_liner::{
-    keymap, last_non_ws_char_was_not_backslash, Buffer, DefaultEditorRules, NewlineRule,
+    keymap, last_non_ws_char_was_not_backslash, Buffer, DefaultEditorRules, DefaultWordDivideRule,
+    NewlineRule,
 };
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
@@ -135,7 +136,10 @@ impl ViKeywordRule for ViKeywordWithKebabCase {
 
 fn main() {
     let mut con = Context::new();
-    let editor_rules = DefaultEditorRules::default();
+    let editor_rules = DefaultEditorRules::custom(
+        DefaultWordDivideRule {},
+        NewlineForBackslashAndOpenDelimRule {},
+    );
     con.set_editor_rules(Box::new(editor_rules));
     con.set_completer(Box::new(CommentCompleter { inner: None }));
 
