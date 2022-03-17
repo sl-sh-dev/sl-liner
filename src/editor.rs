@@ -850,7 +850,7 @@ impl<'a> From<Editor<'a>> for String {
 #[cfg(test)]
 mod tests {
     use crate::prompt::Prompt;
-    use crate::{EditorRulesBuilder, History};
+    use crate::{DefaultEditorRules, History};
 
     use super::*;
 
@@ -860,7 +860,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -883,7 +883,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -908,7 +908,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -934,7 +934,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -957,7 +957,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -980,7 +980,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -1003,7 +1003,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -1026,7 +1026,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -1049,7 +1049,7 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
@@ -1073,7 +1073,7 @@ mod tests {
         let mut history = History::new();
         let mut buf = String::with_capacity(512);
         let buffer = Buffer::from("\u{1f469}\u{200d}\u{1f4bb} start here_".to_owned());
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new_with_init_buffer(
             &mut out,
             Prompt::from("prompt"),

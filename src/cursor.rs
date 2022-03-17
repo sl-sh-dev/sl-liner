@@ -262,13 +262,13 @@ impl<'a> Cursor<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::EditorRulesBuilder;
+    use crate::DefaultEditorRules;
 
     use super::*;
 
     #[test]
     fn test_clamp_if_pos_is_past_move() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         let mut buf = Buffer::from("01234".to_owned());
@@ -293,7 +293,7 @@ mod tests {
 
     #[test]
     fn test_clear_exit_for_female_scientist() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         // put some emojis in some strings
@@ -319,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_insert_chars_between_graphemes() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
@@ -339,7 +339,7 @@ mod tests {
 
     #[test]
     fn test_move_cursor() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_insert_chars_before_cursor() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn test_insert_chars_after_cursor() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn test_clamp_pre_display_adjustments() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         let buf = Buffer::from("hello".to_owned());
@@ -396,7 +396,7 @@ mod tests {
 
     #[test]
     fn test_yank_and_paste() {
-        let rules = EditorRulesBuilder::default().build();
+        let rules = DefaultEditorRules::default();
         let mut cur = Cursor::new_with_divider(&rules);
 
         let mut buf = Buffer::from("hello hello".to_owned());
