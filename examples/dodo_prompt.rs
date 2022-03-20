@@ -2,9 +2,10 @@ extern crate regex;
 extern crate sl_console;
 extern crate sl_liner;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env::{args, current_dir};
 use std::io;
+use std::iter::FromIterator;
 use std::mem::replace;
 
 use regex::Regex;
@@ -82,7 +83,7 @@ impl Completer for CommentCompleter {
     }
 }
 
-pub struct NewlineForBackslashAndOpenDelimRule;
+pub struct NewlineForBackslashAndOpenDelimRule {}
 
 impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
     fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
@@ -90,29 +91,54 @@ impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
     }
 }
 
+fn map_right_to_left_delimiters<'a>(
+    delimiters: &Vec<(&'a str, &'a str)>,
+) -> HashMap<&'a str, &'a str> {
+    let mut delim_map = HashMap::new();
+    for (left, right) in delimiters {
+        delim_map.insert(*right, *left);
+    }
+    delim_map
+}
+
 pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
+    let delimiters = vec![("{", "}"), ("(", ")"), ("[", "]")];
+    let delim_map = map_right_to_left_delimiters(&delimiters);
+    let left_delimiters: HashSet<&str> =
+        HashSet::from_iter(delimiters.iter().map(|(left, _)| *left));
+    let right_delimiters: HashSet<&str> =
+        HashSet::from_iter(delimiters.iter().map(|(_, right)| *right));
+    let mut open_delims = HashMap::new();
     let buf_vec = buf.range_graphemes_all();
-    let mut stack = vec![];
-    let mut symmetric_delimiters = HashSet::new();
+    let mut outside_double_quotes = true;
     for c in buf_vec {
         match c {
-            "(" | "[" | "{" => stack.push(c),
-            ")" | "]" | "}" => {
-                stack.pop();
+            c if outside_double_quotes && left_delimiters.contains(c) => {
+                if let Some(&count) = open_delims.get(c) {
+                    open_delims.insert(c, count + 1);
+                } else {
+                    open_delims.insert(c, 1);
+                }
+            }
+            c if outside_double_quotes && right_delimiters.contains(c) => {
+                let opposite = delim_map.get(c);
+                if let Some(opposite) = opposite {
+                    if let Some(&count) = open_delims.get(opposite) {
+                        if count == 1 {
+                            open_delims.remove(opposite);
+                        } else {
+                            open_delims.insert(opposite, count - 1);
+                        }
+                    }
+                }
             }
             "\"" => {
-                if symmetric_delimiters.contains(c) {
-                    symmetric_delimiters.remove(c);
-                } else {
-                    symmetric_delimiters.insert(c);
-                }
+                outside_double_quotes = !outside_double_quotes;
             }
             _ => {}
         }
     }
-    //if the stack and symmetric_delimiters set are empty, then we should evaluate the line, as there are no unbalanced
-    // delimiters.
-    stack.is_empty() && symmetric_delimiters.is_empty()
+    outside_double_quotes && open_delims.is_empty()
 }
 
 pub struct ViKeywordWithKebabCase {}
