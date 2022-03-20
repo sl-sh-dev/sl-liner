@@ -5,7 +5,7 @@ use std::{cmp, mem};
 use sl_console::event::{Key, KeyCode, KeyMod};
 
 use crate::buffer::Buffer;
-use crate::Editor;
+use crate::{Editor, EditorRules};
 use crate::KeyMap;
 
 pub trait ViKeywordRule {
@@ -487,7 +487,7 @@ impl Vi {
         self.mode_stack.mode()
     }
 
-    fn set_mode<'a>(&mut self, mode: Mode, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn set_mode<'a, T: EditorRules>(&mut self, mode: Mode, ed: &mut Editor<'a, T>) -> io::Result<()> {
         use self::Mode::*;
         self.set_mode_preserve_last(mode, ed)?;
         if mode == Insert {
@@ -497,7 +497,7 @@ impl Vi {
         Ok(())
     }
 
-    fn set_editor_mode<'a>(&self, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn set_editor_mode<'a, T: EditorRules>(&self, ed: &mut Editor<'a, T>) -> io::Result<()> {
         use Mode::*;
         match self.mode() {
             Insert => {
@@ -529,7 +529,7 @@ impl Vi {
         ed.display_term()
     }
 
-    fn set_mode_preserve_last<'a>(&mut self, mode: Mode, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn set_mode_preserve_last<'a, T: EditorRules>(&mut self, mode: Mode, ed: &mut Editor<'a, T>) -> io::Result<()> {
         use self::Mode::*;
 
         ed.set_no_eol(mode == Normal);
@@ -543,10 +543,10 @@ impl Vi {
         Ok(())
     }
 
-    fn pop_mode_after_movement<'a>(
+    fn pop_mode_after_movement<'a, T: EditorRules>(
         &mut self,
         move_type: MoveType,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>
     ) -> io::Result<()> {
         use self::Mode::*;
         use self::MoveType::*;
@@ -596,7 +596,7 @@ impl Vi {
         self.set_editor_mode(ed)
     }
 
-    fn pop_mode<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn pop_mode<'a, T: EditorRules>(&mut self, ed: &mut Editor<'a, T>) -> io::Result<()> {
         use self::Mode::*;
 
         let last_mode = self.mode_stack.pop();
@@ -615,7 +615,7 @@ impl Vi {
     }
 
     /// Return to normal mode.
-    fn normal_mode_abort<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn normal_mode_abort<'a, T: EditorRules>(&mut self, ed: &mut Editor<'a, T>) -> io::Result<()> {
         self.mode_stack.clear();
         ed.set_no_eol(true);
         self.count = 0;
@@ -631,19 +631,19 @@ impl Vi {
     }
 
     /// Get the current count or the number of remaining chars in the buffer.
-    fn move_count_left<'a>(&self, ed: &Editor<'a>) -> usize {
+    fn move_count_left<'a, T: EditorRules>(&self, ed: &Editor<'a, T>) -> usize {
         cmp::min(ed.cursor(), self.move_count())
     }
 
     /// Get the current count or the number of remaining chars in the buffer.
-    fn move_count_right<'a>(&self, ed: &Editor<'a>) -> usize {
+    fn move_count_right<'a, T: EditorRules>(&self, ed: &Editor<'a, T>) -> usize {
         cmp::min(
             ed.current_buffer().num_graphemes() - ed.cursor(),
             self.move_count(),
         )
     }
 
-    fn repeat<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn repeat<'a, T: EditorRules>(&mut self, ed: &mut Editor<'a, T>) -> io::Result<()> {
         self.last_count = self.count;
         let keys = mem::take(&mut self.last_command);
 
@@ -667,7 +667,7 @@ impl Vi {
         Ok(())
     }
 
-    fn handle_key_common<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_common<'a, T: EditorRules>(&mut self, key: Key, ed: &mut Editor<'a, T>) -> io::Result<()> {
         match key.mods {
             Some(KeyMod::Ctrl) => {
                 if key.code == KeyCode::Char('l') {
@@ -692,7 +692,7 @@ impl Vi {
         }
     }
 
-    fn handle_key_insert<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_insert<'a, T: EditorRules>(&mut self, key: Key, ed: &mut Editor<'a, T>) -> io::Result<()> {
         match (key.code, key.mods) {
             (KeyCode::Esc, None) | (KeyCode::Char('['), Some(KeyMod::Ctrl)) => {
                 // perform any repeats
@@ -794,7 +794,7 @@ impl Vi {
         }
     }
 
-    fn handle_redo<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_redo<'a, T: EditorRules>(&mut self, ed: &mut Editor<'a, T>) -> io::Result<()> {
         let count = self.move_count();
         self.count = 0;
         for _ in 0..count {
@@ -807,7 +807,7 @@ impl Vi {
         Ok(())
     }
 
-    fn handle_key_normal<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_normal<'a, T: EditorRules>(&mut self, key: Key, ed: &mut Editor<'a, T>) -> io::Result<()> {
         use self::CharMovement::*;
         use self::Mode::*;
         use self::MoveType::*;
@@ -1039,7 +1039,7 @@ impl Vi {
         }
     }
 
-    fn handle_key_replace<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_replace<'a, T: EditorRules>(&mut self, key: Key, ed: &mut Editor<'a, T>) -> io::Result<()> {
         match key.code {
             KeyCode::Char(c) => {
                 // make sure there are enough chars to replace
@@ -1087,10 +1087,10 @@ impl Vi {
         };
     }
 
-    fn handle_key_delete_change_yank<'a>(
+    fn handle_key_delete_change_yank<'a, T: EditorRules>(
         &mut self,
         key: Key,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>,
     ) -> io::Result<()> {
         match (
             key,
@@ -1185,11 +1185,11 @@ impl Vi {
         }
     }
 
-    fn handle_key_move_to_char<'a>(
+    fn handle_key_move_to_char<'a, T: EditorRules>(
         &mut self,
         key: Key,
         movement: CharMovement,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>,
     ) -> io::Result<()> {
         use self::CharMovement::*;
         use self::MoveType::*;
@@ -1300,7 +1300,7 @@ impl Vi {
         }
     }
 
-    fn handle_key_g<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_g<'a, T: EditorRules>(&mut self, key: Key, ed: &mut Editor<'a, T>) -> io::Result<()> {
         use self::MoveType::*;
 
         let count = self.move_count();
@@ -1339,11 +1339,11 @@ impl Vi {
         Some(self.mode())
     }
 
-    fn handle_key_text_object<'a>(
+    fn handle_key_text_object<'a, T: EditorRules>(
         &mut self,
         key: Key,
         text_object: TextObjectMode,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>,
     ) -> io::Result<()> {
         self.pop_mode(ed)?;
 
@@ -1360,12 +1360,12 @@ impl Vi {
         }
     }
 
-    fn handle_text_object_movement_surround<'a>(
+    fn handle_text_object_movement_surround<'a, T: EditorRules>(
         &mut self,
         text_object: TextObjectMode,
         beg: char,
         end: char,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>,
     ) -> io::Result<()> {
         let count = self.move_count();
 
@@ -1446,10 +1446,10 @@ impl Vi {
         }
     }
 
-    fn handle_text_object_movement_word<'a>(
+    fn handle_text_object_movement_word<'a, T: EditorRules>(
         &mut self,
         text_object: TextObjectMode,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>,
     ) -> io::Result<()> {
         let count = self.move_count();
         if !ed.is_cursor_at_beginning_of_word_or_line() {
@@ -1486,29 +1486,29 @@ impl Vi {
         }
     }
 
-    fn move_word_ws_is_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_word_ws_is_word<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, true)
     }
 
-    fn move_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_word<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, false)
     }
 
-    fn move_word_ws(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_word_ws<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count, false)
     }
 
-    fn move_to_end_of_word_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_to_end_of_word_back<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Left, count, false)
     }
 
-    fn move_to_end_of_word_ws_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_to_end_of_word_ws_back<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count, false)
     }
 
-    fn vi_move_word(
+    fn vi_move_word<T: EditorRules>(
         &self,
-        ed: &mut Editor,
+        ed: &mut Editor<T>,
         move_mode: ViMoveMode,
         direction: ViMoveDir,
         count: usize,
@@ -1595,25 +1595,25 @@ impl Vi {
         ed.move_cursor_to(cursor)
     }
 
-    fn move_to_end_of_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_to_end_of_word<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Right, count)
     }
 
-    fn move_to_end_of_word_ws(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_to_end_of_word_ws<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count)
     }
 
-    fn move_word_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_word_back<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Left, count)
     }
 
-    fn move_word_ws_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+    fn move_word_ws_back<T: EditorRules>(&self, ed: &mut Editor<T>, count: usize) -> io::Result<()> {
         self.vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count)
     }
 
-    fn vi_move_word_end(
+    fn vi_move_word_end<T: EditorRules>(
         &self,
-        ed: &mut Editor,
+        ed: &mut Editor<T>,
         move_mode: ViMoveMode,
         direction: ViMoveDir,
         count: usize,
@@ -1679,7 +1679,7 @@ impl Vi {
 }
 
 impl KeyMap for Vi {
-    fn handle_key_core<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_core<'a, T: EditorRules>(&mut self, key: Key, ed: &mut Editor<'a, T>) -> io::Result<()> {
         match self.mode() {
             Mode::Normal => self.handle_key_normal(key, ed),
             Mode::Insert => self.handle_key_insert(key, ed),
@@ -1692,7 +1692,7 @@ impl KeyMap for Vi {
         }
     }
 
-    fn init<'a>(&mut self, ed: &mut Editor<'a>) {
+    fn init<'a, T: EditorRules>(&mut self, ed: &mut Editor<'a, T>) {
         self.mode_stack.clear();
         self.mode_stack.push(Mode::Insert);
         self.current_command.clear();
@@ -1718,7 +1718,7 @@ mod tests {
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
         keymap: &mut M,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>,
         keys: I,
     ) -> bool
     where
@@ -1743,7 +1743,7 @@ mod tests {
         false
     }
 
-    fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) -> bool
+    fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a, T>, keys: I) -> bool
     where
         I: IntoIterator<Item = &'b Key>,
     {

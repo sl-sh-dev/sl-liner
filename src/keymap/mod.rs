@@ -1,18 +1,18 @@
 //! Interface for Vi and Emacs KeyMaps
-use crate::{Completer, Editor, Event, EventKind};
+use crate::{Completer, Editor, EditorRules, Event, EventKind};
 use sl_console::event::{Key, KeyCode, KeyMod};
 use std::io::{self, ErrorKind};
 
 pub trait KeyMap {
     //: Default {
-    fn handle_key_core<'a>(&mut self, key: Key, editor: &mut Editor<'a>) -> io::Result<()>;
+    fn handle_key_core<'a, T: EditorRules>(&mut self, key: Key, editor: &mut Editor<'a, T>) -> io::Result<()>;
 
-    fn init<'a>(&mut self, _editor: &mut Editor<'a>) {}
+    fn init<'a, T: EditorRules>(&mut self, _editor: &mut Editor<'a, T>) {}
 
-    fn handle_key<'a>(
+    fn handle_key<'a, T: EditorRules>(
         &mut self,
         mut key: Key,
-        editor: &mut Editor<'a>,
+        editor: &mut Editor<'a, T>,
         handler: &mut dyn Completer,
     ) -> io::Result<bool> {
         let mut done = false;
@@ -88,7 +88,7 @@ mod tests {
     struct TestKeyMap;
 
     impl KeyMap for TestKeyMap {
-        fn handle_key_core<'a>(&mut self, _: Key, _: &mut Editor<'a>) -> io::Result<()> {
+        fn handle_key_core<'a, T:EditorRules>(&mut self, _: Key, _: &mut Editor<'a, T>) -> io::Result<()> {
             Ok(())
         }
     }

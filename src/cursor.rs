@@ -55,22 +55,22 @@ impl CursorPosition {
 /// and maintain the position on the terminal that the actual cursor needs to be
 /// drawn.
 #[derive(Clone)]
-pub struct Cursor<'a> {
+pub struct Cursor<'a, T: EditorRules> {
     // The location of the cursor. Note that the cursor does not lie on a char, but between chars.
     // So, if `cursor == 0` then the cursor is before the first char,
     // and if `cursor == 1` ten the cursor is after the first char and before the second char.
     curr_grapheme: usize,
     // function to determine how to split words, returns vector of tuples representing index
     // and length of word.
-    word_divider_fn: &'a dyn EditorRules,
+    word_divider_fn: T,
 
     // if set, the cursor will not be allow to move one past the end of the line, this is necessary
     // for Vi's normal mode.
     pub no_eol: bool,
 }
 
-impl<'a> Cursor<'a> {
-    pub fn new_with_divider(divider: &'a dyn EditorRules) -> Self {
+impl<'a, T> Cursor<'a, T> {
+    pub fn new_with_divider(divider: T) -> Self {
         Cursor {
             curr_grapheme: 0,
             word_divider_fn: divider,

@@ -4,7 +4,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::buffer::Buffer;
 use crate::cursor::CursorPosition;
-use crate::Editor;
+use crate::{Editor, EditorRules};
 use crate::KeyMap;
 
 /// Emacs keybindings for `Editor`. This is the default for `Context::read_line()`.
@@ -34,7 +34,7 @@ impl Emacs {
         Self::default()
     }
 
-    fn handle_ctrl_key<'a>(&mut self, c: char, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_ctrl_key<'a, T: EditorRules>(&mut self, c: char, ed: &mut Editor<'a, T>) -> io::Result<()> {
         match c {
             'l' => ed.clear(),
             'a' => ed.move_cursor_to_start_of_line(),
@@ -58,7 +58,7 @@ impl Emacs {
         }
     }
 
-    fn handle_alt_key<'a>(&mut self, c: char, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_alt_key<'a, T: EditorRules>(&mut self, c: char, ed: &mut Editor<'a, T>) -> io::Result<()> {
         match c {
             '<' => ed.move_to_start_of_history(),
             '>' => ed.move_to_end_of_history(),
@@ -74,7 +74,7 @@ impl Emacs {
         }
     }
 
-    fn handle_last_arg_fetch<'a>(&mut self, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_last_arg_fetch<'a, T: EditorRules>(&mut self, ed: &mut Editor<'a, T>) -> io::Result<()> {
         // Empty history means no last arg to fetch.
         if ed.history().is_empty() {
             return Ok(());
@@ -112,11 +112,7 @@ impl Emacs {
 }
 
 impl KeyMap for Emacs {
-    fn init<'a>(&mut self, _ed: &mut Editor<'a>) {
-        self.last_arg_fetch_index = None;
-    }
-
-    fn handle_key_core<'a>(&mut self, key: Key, ed: &mut Editor<'a>) -> io::Result<()> {
+    fn handle_key_core<'a, T: EditorRules>(&mut self, key: Key, ed: &mut Editor<'a, T>) -> io::Result<()> {
         match (key.code, key.mods) {
             (KeyCode::Char('.'), Some(KeyMod::Alt)) => {}
             _ => self.last_arg_fetch_index = None,
@@ -144,6 +140,10 @@ impl KeyMap for Emacs {
             _ => Ok(()),
         }
     }
+
+    fn init<'a, T: EditorRules>(&mut self, _ed: &mut Editor<'a, T>) {
+        self.last_arg_fetch_index = None;
+    }
 }
 
 #[derive(PartialEq, Clone, Copy)]
@@ -152,7 +152,7 @@ enum EmacsMoveDir {
     Right,
 }
 
-fn emacs_move_word(ed: &mut Editor, direction: EmacsMoveDir) -> io::Result<()> {
+fn emacs_move_word<T: EditorRules>(ed: &mut Editor<T>, direction: EmacsMoveDir) -> io::Result<()> {
     let (words, pos) = ed.get_words_and_cursor_position();
 
     let word_index = match pos {
@@ -198,7 +198,7 @@ mod tests {
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
         keymap: &mut M,
-        ed: &mut Editor<'a>,
+        ed: &mut Editor<'a, T>,
         keys: I,
     ) -> bool
     where
@@ -223,7 +223,7 @@ mod tests {
         false
     }
 
-    fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a>, keys: I) -> bool
+    fn simulate_keys<'a, 'b, M: KeyMap, I>(keymap: &mut M, ed: &mut Editor<'a, T>, keys: I) -> bool
     where
         I: IntoIterator<Item = &'b Key>,
     {

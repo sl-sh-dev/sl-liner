@@ -11,10 +11,10 @@ use crate::{Buffer, Cursor};
 use crate::{History, Metrics};
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
-pub struct Editor<'a> {
+pub struct Editor<'a, T: EditorRules> {
     prompt: Prompt,
     history: &'a mut History,
-    editor_rules: &'a dyn EditorRules,
+    editor_rules: T,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
@@ -76,14 +76,14 @@ macro_rules! cur_buf {
     };
 }
 
-impl<'a> Editor<'a> {
+impl<'a, T> Editor<'a, T> {
     pub fn new(
         out: &'a mut dyn io::Write,
         prompt: Prompt,
         f: Option<ColorClosure>,
         history: &'a mut History,
         buf: &'a mut String,
-        editor_rules: &'a dyn EditorRules,
+        editor_rules: T,
     ) -> io::Result<Self> {
         Editor::new_with_init_buffer(out, prompt, f, history, buf, Buffer::new(), editor_rules)
     }
@@ -95,7 +95,7 @@ impl<'a> Editor<'a> {
         history: &'a mut History,
         buf: &'a mut String,
         buffer: B,
-        editor_rules: &'a dyn EditorRules,
+        editor_rules: T,
     ) -> io::Result<Self> {
         let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
@@ -831,8 +831,8 @@ impl<'a> Editor<'a> {
     }
 }
 
-impl<'a> From<Editor<'a>> for String {
-    fn from(ed: Editor<'a>) -> String {
+impl<'a, T> From<Editor<'a, T>> for String {
+    fn from(ed: Editor<'a, T>) -> String {
         match ed.cur_history_loc {
             Some(i) => {
                 if ed.hist_buf_valid {
