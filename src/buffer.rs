@@ -776,13 +776,6 @@ mod tests {
     }
 
     #[test]
-    fn test_buffer_to_string_ignore_newline() {
-        let mut buf = Buffer::new();
-        buf.insert(0, ['h', 'e', '\\', '\n', 'l', 'l', 'o'].iter());
-        assert_eq!("he\\\nllo".to_owned(), String::from(buf));
-    }
-
-    #[test]
     fn test_contains() {
         let mut buf = Buffer::new();
         buf.insert(0, ['a', 'b', 'c', 'd', 'e', 'f', 'g'].iter());
