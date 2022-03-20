@@ -1,6 +1,6 @@
 use crate::context::ColorClosure;
 use crate::prompt::Prompt;
-use crate::{util, Buffer, Cursor};
+use crate::{util, Buffer, Cursor, EditorRules};
 use sl_console::{clear, color, cursor};
 use std::cmp::Ordering;
 use std::fmt::Write;
@@ -44,10 +44,10 @@ where
 }
 
 impl Metrics {
-    pub fn new(
+    pub fn new<T: EditorRules>(
         prompt: &str,
         buf: &Buffer,
-        cursor: &Cursor,
+        cursor: &Cursor<T>,
         autosuggestion: Option<&Buffer>,
     ) -> io::Result<Self> {
         let width = util::terminal_width()?;

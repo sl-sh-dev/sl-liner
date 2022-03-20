@@ -18,7 +18,7 @@ pub struct Editor<'a, T: EditorRules> {
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
-    cursor: Cursor<'a>,
+    cursor: Cursor<'a, T>,
 
     // Buffer for the new line (ie. not from editing history)
     new_buf: Buffer,
@@ -76,7 +76,7 @@ macro_rules! cur_buf {
     };
 }
 
-impl<'a, T> Editor<'a, T> {
+impl<'a, T> Editor<'a, T> where T: EditorRules {
     pub fn new(
         out: &'a mut dyn io::Write,
         prompt: Prompt,
@@ -831,7 +831,7 @@ impl<'a, T> Editor<'a, T> {
     }
 }
 
-impl<'a, T> From<Editor<'a, T>> for String {
+impl<'a, T> From<Editor<'a, T>> for String where T: EditorRules {
     fn from(ed: Editor<'a, T>) -> String {
         match ed.cur_history_loc {
             Some(i) => {

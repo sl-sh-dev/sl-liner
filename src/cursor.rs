@@ -62,15 +62,15 @@ pub struct Cursor<'a, T: EditorRules> {
     curr_grapheme: usize,
     // function to determine how to split words, returns vector of tuples representing index
     // and length of word.
-    word_divider_fn: T,
+    word_divider_fn: &'a T,
 
     // if set, the cursor will not be allow to move one past the end of the line, this is necessary
     // for Vi's normal mode.
     pub no_eol: bool,
 }
 
-impl<'a, T> Cursor<'a, T> {
-    pub fn new_with_divider(divider: T) -> Self {
+impl<'a, T> Cursor<'a, T> where T: EditorRules {
+    pub fn new_with_divider(divider: &'a T) -> Self {
         Cursor {
             curr_grapheme: 0,
             word_divider_fn: divider,

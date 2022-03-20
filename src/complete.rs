@@ -1,9 +1,10 @@
 use super::event::Event;
 use std::path::PathBuf;
+use crate::EditorRules;
 
 pub trait Completer {
     fn completions(&mut self, start: &str) -> Vec<String>;
-    fn on_event(&mut self, _event: Event) {}
+    fn on_event<T: EditorRules>(&mut self, _event: Event<T>) {}
 }
 
 /// Completer with no completions
