@@ -83,11 +83,15 @@ impl Completer for CommentCompleter {
     }
 }
 
-pub struct NewlineForBackslashAndOpenDelimRule {}
+pub struct NewlineForBackslashAndOpenDelimRule<'a> {
+    string_delimiter: &'a str,
+    delimiters: Vec<(&'a str, &'a str)>,
+}
 
-impl NewlineRule for NewlineForBackslashAndOpenDelimRule {
+impl NewlineRule for NewlineForBackslashAndOpenDelimRule<'_> {
     fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
-        last_non_ws_char_was_not_backslash(buf) && check_balanced_delimiters(buf)
+        last_non_ws_char_was_not_backslash(buf)
+            && check_balanced_delimiters(buf, &self.delimiters, &self.string_delimiter)
     }
 }
 
@@ -101,26 +105,29 @@ fn map_right_to_left_delimiters<'a>(
     delim_map
 }
 
-pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
-    let delimiters = vec![("{", "}"), ("(", ")"), ("[", "]")];
-    let delim_map = map_right_to_left_delimiters(&delimiters);
+pub fn check_balanced_delimiters(
+    buf: &Buffer,
+    delimiters: &Vec<(&str, &str)>,
+    string_delimiter: &str,
+) -> bool {
+    let delim_map = map_right_to_left_delimiters(delimiters);
     let left_delimiters: HashSet<&str> =
         HashSet::from_iter(delimiters.iter().map(|(left, _)| *left));
     let right_delimiters: HashSet<&str> =
         HashSet::from_iter(delimiters.iter().map(|(_, right)| *right));
     let mut open_delims = HashMap::new();
     let buf_vec = buf.range_graphemes_all();
-    let mut outside_double_quotes = true;
+    let mut outside_string_delimiter = true;
     for c in buf_vec {
         match c {
-            c if outside_double_quotes && left_delimiters.contains(c) => {
+            c if outside_string_delimiter && left_delimiters.contains(c) => {
                 if let Some(&count) = open_delims.get(c) {
                     open_delims.insert(c, count + 1);
                 } else {
                     open_delims.insert(c, 1);
                 }
             }
-            c if outside_double_quotes && right_delimiters.contains(c) => {
+            c if outside_string_delimiter && right_delimiters.contains(c) => {
                 let opposite = delim_map.get(c);
                 if let Some(opposite) = opposite {
                     if let Some(&count) = open_delims.get(opposite) {
@@ -132,13 +139,13 @@ pub fn check_balanced_delimiters(buf: &Buffer) -> bool {
                     }
                 }
             }
-            "\"" => {
-                outside_double_quotes = !outside_double_quotes;
+            _ if c == string_delimiter => {
+                outside_string_delimiter = !outside_string_delimiter;
             }
             _ => {}
         }
     }
-    outside_double_quotes && open_delims.is_empty()
+    outside_string_delimiter && open_delims.is_empty()
 }
 
 pub struct ViKeywordWithKebabCase {}
@@ -170,9 +177,14 @@ impl ViKeywordRule for ViKeywordWithKebabCase {
 
 fn main() {
     let mut con = Context::new();
+    let delimiters = vec![("{", "}"), ("(", ")"), ("[", "]")];
+    let string_delimiter = "\"";
     let editor_rules = DefaultEditorRules::custom(
         DefaultWordDivideRule {},
-        NewlineForBackslashAndOpenDelimRule {},
+        NewlineForBackslashAndOpenDelimRule {
+            delimiters,
+            string_delimiter,
+        },
     );
     con.set_editor_rules(Box::new(editor_rules));
     con.set_completer(Box::new(CommentCompleter { inner: None }));
