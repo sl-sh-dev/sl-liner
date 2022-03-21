@@ -1,3 +1,4 @@
+//! User-defined prompt.
 use std::fmt;
 
 /// User-defined prompt.

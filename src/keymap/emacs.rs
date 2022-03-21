@@ -193,8 +193,7 @@ fn emacs_move_word(ed: &mut Editor, direction: EmacsMoveDir) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::get_buffer_words;
-    use crate::{Completer, Editor, History, KeyMap, Prompt};
+    use crate::{Completer, DefaultEditorRules, Editor, History, KeyMap, Prompt};
     use sl_console::event::Key;
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
@@ -249,15 +248,15 @@ mod tests {
     fn enter_is_done() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let mut words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &mut words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -278,15 +277,15 @@ mod tests {
     fn move_cursor_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let mut words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &mut words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -308,15 +307,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let mut words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &mut words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -350,15 +349,15 @@ mod tests {
     fn cursor_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let mut words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &mut words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();
@@ -379,15 +378,15 @@ mod tests {
     fn ctrl_h() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let mut words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &mut words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Emacs::new();

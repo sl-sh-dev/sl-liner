@@ -8,6 +8,71 @@ use crate::buffer::Buffer;
 use crate::Editor;
 use crate::KeyMap;
 
+pub trait ViKeywordRule {
+    /// All alphanumeric characters and _ are considered valid for keywords in vi by default.
+    fn is_vi_keyword(&self, str: &str) -> bool {
+        let mut ret = false;
+        if str == "_" {
+            ret = true
+        } else if !str.trim().is_empty() {
+            for c in str.chars() {
+                if c.is_alphanumeric() {
+                    ret = true;
+                } else {
+                    ret = false;
+                    break;
+                }
+            }
+        }
+        ret
+    }
+}
+
+pub struct DefaultViKeywordRule;
+
+impl ViKeywordRule for DefaultViKeywordRule {}
+
+impl Default for DefaultViKeywordRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DefaultViKeywordRule {
+    pub fn new() -> Self {
+        DefaultViKeywordRule {}
+    }
+}
+
+pub struct AlphanumericAndVariableKeywordRule<'a> {
+    treat_as_keyword: Vec<&'a str>,
+}
+
+impl ViKeywordRule for AlphanumericAndVariableKeywordRule<'_> {
+    fn is_vi_keyword(&self, str: &str) -> bool {
+        let mut ret = false;
+        if self.treat_as_keyword.contains(&str) {
+            ret = true
+        } else if !str.trim().is_empty() {
+            for c in str.chars() {
+                if c.is_alphanumeric() {
+                    ret = true;
+                } else {
+                    ret = false;
+                    break;
+                }
+            }
+        }
+        ret
+    }
+}
+
+impl<'a> AlphanumericAndVariableKeywordRule<'a> {
+    pub fn new(treat_as_keyword: Vec<&'a str>) -> Self {
+        AlphanumericAndVariableKeywordRule { treat_as_keyword }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CharMovement {
     RightUntil,
@@ -224,202 +289,6 @@ impl ViMoveDir {
     }
 }
 
-//TODO make configurable
-/// All alphanumeric characters and _ are considered valid for keywords in vi by default.
-fn is_vi_keyword(str: &str) -> bool {
-    let mut ret = false;
-    if str == "_" {
-        ret = true
-    } else if !str.trim().is_empty() {
-        for c in str.chars() {
-            if c.is_alphanumeric() {
-                ret = true;
-            } else {
-                ret = false;
-                break;
-            }
-        }
-    }
-    ret
-}
-
-fn move_word_ws_is_word(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, true)
-}
-
-fn move_word(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, false)
-}
-
-fn move_word_ws(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count, false)
-}
-
-fn move_to_end_of_word_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Left, count, false)
-}
-
-fn move_to_end_of_word_ws_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count, false)
-}
-
-fn vi_move_word(
-    ed: &mut Editor,
-    move_mode: ViMoveMode,
-    direction: ViMoveDir,
-    count: usize,
-    ws_included_in_count: bool,
-) -> io::Result<()> {
-    #[derive(Clone, Copy)]
-    enum State {
-        Whitespace,
-        Keyword,
-        NonKeyword,
-    }
-
-    let mut cursor = ed.cursor();
-    'repeat: for _ in 0..count {
-        let buf = ed.current_buffer();
-        let mut state = match buf.grapheme_after(cursor) {
-            None => break,
-            Some(str) => match str {
-                str if str.trim().is_empty() => State::Whitespace,
-                str if is_vi_keyword(str) => State::Keyword,
-                _ => State::NonKeyword,
-            },
-        };
-
-        while direction.advance(&mut cursor, buf.num_graphemes()) {
-            let str = match buf.grapheme_after(cursor) {
-                Some(str) => str,
-                _ => break 'repeat,
-            };
-
-            // if ws_included_in_count is true we want to make sure we treat
-            // any contiguous string of whitespace appropriately towards
-            // the overall count, this means that at (NonKeyWord and Keyword)
-            // to Whitespace boundaries we need to break so the count loop
-            // increments one more time. The default behavior just cycles
-            // through Whitespace.
-            match state {
-                State::Whitespace => match str {
-                    str if str.trim().is_empty() => {}
-                    _ => {
-                        break;
-                    }
-                },
-                State::Keyword => match str {
-                    str if str.trim().is_empty() => {
-                        if ws_included_in_count {
-                            break;
-                        } else {
-                            state = State::Whitespace
-                        }
-                    }
-                    str if move_mode == ViMoveMode::Keyword && !is_vi_keyword(str) => break,
-                    _ => {}
-                },
-                State::NonKeyword => match str {
-                    str if str.trim().is_empty() => {
-                        if ws_included_in_count {
-                            break;
-                        } else {
-                            state = State::Whitespace
-                        }
-                    }
-                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => break,
-                    _ => {}
-                },
-            }
-        }
-    }
-
-    // default positioning of cursor when moving in this manner ends one
-    // position to the left of the desired positioning in vi when moving
-    // and treating whitespace as words for the purposed of text objects.
-    if ws_included_in_count && count > 0 {
-        cursor -= 1;
-    }
-    ed.move_cursor_to(cursor)
-}
-
-fn move_to_end_of_word(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Right, count)
-}
-
-fn move_to_end_of_word_ws(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count)
-}
-
-fn move_word_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Left, count)
-}
-
-fn move_word_ws_back(ed: &mut Editor, count: usize) -> io::Result<()> {
-    vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count)
-}
-
-fn vi_move_word_end(
-    ed: &mut Editor,
-    move_mode: ViMoveMode,
-    direction: ViMoveDir,
-    count: usize,
-) -> io::Result<()> {
-    enum State {
-        Whitespace,
-        EndOnWord,
-        EndOnOther,
-        EndOnWhitespace,
-    }
-
-    let mut cursor = ed.cursor();
-    'repeat: for _ in 0..count {
-        let buf = ed.current_buffer();
-        let mut state = State::Whitespace;
-
-        while direction.advance(&mut cursor, buf.num_graphemes()) {
-            let str = match buf.grapheme_after(cursor) {
-                Some(c) => c,
-                _ => break 'repeat,
-            };
-
-            match state {
-                State::Whitespace => match str {
-                    // skip initial whitespace
-                    str if str.trim().is_empty() => {}
-                    // if we are in keyword mode and found a keyword, stop on word
-                    str if move_mode == ViMoveMode::Keyword && is_vi_keyword(str) => {
-                        state = State::EndOnWord;
-                    }
-                    // not in keyword mode, stop on whitespace
-                    _ if move_mode == ViMoveMode::Whitespace => {
-                        state = State::EndOnWhitespace;
-                    }
-                    // in keyword mode, found non-whitespace non-keyword, stop on anything
-                    _ => {
-                        state = State::EndOnOther;
-                    }
-                },
-                State::EndOnWord if !is_vi_keyword(str) => {
-                    direction.go_back(&mut cursor, buf.num_graphemes());
-                    break;
-                }
-                State::EndOnWhitespace if str.trim().is_empty() => {
-                    direction.go_back(&mut cursor, buf.num_graphemes());
-                    break;
-                }
-                State::EndOnOther if str.trim().is_empty() || is_vi_keyword(str) => {
-                    direction.go_back(&mut cursor, buf.num_graphemes());
-                    break;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    ed.move_cursor_to(cursor)
-}
-
 fn find_char(buf: &Buffer, start: usize, ch: char, count: usize) -> Option<usize> {
     assert!(count > 0);
     let mut offset = None;
@@ -539,7 +408,6 @@ where
 /// // This will hang github actions on windows...
 /// //let res = context.read_line(Prompt::from("[prompt]$ "), None);
 /// ```
-#[derive(Clone)]
 pub struct Vi {
     mode_stack: ModeStack,
     current_command: Vec<Key>,
@@ -553,6 +421,7 @@ pub struct Vi {
     last_char_movement: Option<(char, CharMovement)>,
     esc_sequence: Option<(char, char, u32)>,
     last_insert_ms: u128,
+    keyword_rule: Box<dyn ViKeywordRule>,
     normal_prompt_prefix: Option<String>,
     normal_prompt_suffix: Option<String>,
     insert_prompt_prefix: Option<String>,
@@ -575,6 +444,7 @@ impl Default for Vi {
             last_char_movement: None,
             esc_sequence: None,
             last_insert_ms: 0,
+            keyword_rule: Box::new(DefaultViKeywordRule::new()),
             normal_prompt_prefix: None,
             normal_prompt_suffix: None,
             insert_prompt_prefix: None,
@@ -606,6 +476,10 @@ impl Vi {
 
     pub fn set_esc_sequence(&mut self, key1: char, key2: char, timeout_ms: u32) {
         self.esc_sequence = Some((key1, key2, timeout_ms));
+    }
+
+    pub fn set_keyword_rule(&mut self, keyword_rule: Box<dyn ViKeywordRule>) {
+        self.keyword_rule = keyword_rule;
     }
 
     /// Get the current mode.
@@ -1061,32 +935,32 @@ impl Vi {
                     KeyCode::Char(',') => self.handle_key_move_to_char(key, ReverseRepeat, ed),
                     KeyCode::Char('w') => {
                         let count = self.move_count();
-                        move_word(ed, count)?;
+                        self.move_word(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('W') => {
                         let count = self.move_count();
-                        move_word_ws(ed, count)?;
+                        self.move_word_ws(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('e') => {
                         let count = self.move_count();
-                        move_to_end_of_word(ed, count)?;
+                        self.move_to_end_of_word(ed, count)?;
                         self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('E') => {
                         let count = self.move_count();
-                        move_to_end_of_word_ws(ed, count)?;
+                        self.move_to_end_of_word_ws(ed, count)?;
                         self.pop_mode_after_movement(Inclusive, ed)
                     }
                     KeyCode::Char('b') => {
                         let count = self.move_count();
-                        move_word_back(ed, count)?;
+                        self.move_word_back(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('B') => {
                         let count = self.move_count();
-                        move_word_ws_back(ed, count)?;
+                        self.move_word_ws_back(ed, count)?;
                         self.pop_mode_after_movement(Exclusive, ed)
                     }
                     KeyCode::Char('g') => self.set_mode(Mode::G, ed),
@@ -1434,11 +1308,11 @@ impl Vi {
 
         let res = match key.code {
             KeyCode::Char('e') => {
-                move_to_end_of_word_back(ed, count)?;
+                self.move_to_end_of_word_back(ed, count)?;
                 self.pop_mode_after_movement(Inclusive, ed)
             }
             KeyCode::Char('E') => {
-                move_to_end_of_word_ws_back(ed, count)?;
+                self.move_to_end_of_word_ws_back(ed, count)?;
                 self.pop_mode_after_movement(Inclusive, ed)
             }
 
@@ -1580,8 +1454,8 @@ impl Vi {
         let count = self.move_count();
         if !ed.is_cursor_at_beginning_of_word_or_line() {
             match text_object {
-                TextObjectMode::Whole => move_word_ws_back(ed, 1)?,
-                TextObjectMode::Inner => move_word_back(ed, 1)?,
+                TextObjectMode::Whole => self.move_word_ws_back(ed, 1)?,
+                TextObjectMode::Inner => self.move_word_back(ed, 1)?,
             }
         }
         let mode = self.reset_curor_pos_for_command_mode(ed.cursor());
@@ -1589,14 +1463,14 @@ impl Vi {
             Some(mode) => {
                 let move_type = match text_object {
                     TextObjectMode::Whole => {
-                        move_word(ed, count)?;
+                        self.move_word(ed, count)?;
                         MoveType::Exclusive
                     }
                     TextObjectMode::Inner => {
                         if self.count > 1 {
-                            move_word_ws_is_word(ed, count)?;
+                            self.move_word_ws_is_word(ed, count)?;
                         } else {
-                            move_to_end_of_word(ed, count)?;
+                            self.move_to_end_of_word(ed, count)?;
                         }
                         MoveType::Inclusive
                     }
@@ -1610,6 +1484,197 @@ impl Vi {
             }
             None => self.normal_mode_abort(ed),
         }
+    }
+
+    fn move_word_ws_is_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, true)
+    }
+
+    fn move_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Right, count, false)
+    }
+
+    fn move_word_ws(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count, false)
+    }
+
+    fn move_to_end_of_word_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Keyword, ViMoveDir::Left, count, false)
+    }
+
+    fn move_to_end_of_word_ws_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count, false)
+    }
+
+    fn vi_move_word(
+        &self,
+        ed: &mut Editor,
+        move_mode: ViMoveMode,
+        direction: ViMoveDir,
+        count: usize,
+        ws_included_in_count: bool,
+    ) -> io::Result<()> {
+        #[derive(Clone, Copy)]
+        enum State {
+            Whitespace,
+            Keyword,
+            NonKeyword,
+        }
+
+        let mut cursor = ed.cursor();
+        'repeat: for _ in 0..count {
+            let buf = ed.current_buffer();
+            let mut state = match buf.grapheme_after(cursor) {
+                None => break,
+                Some(str) => match str {
+                    str if str.trim().is_empty() => State::Whitespace,
+                    str if self.keyword_rule.is_vi_keyword(str) => State::Keyword,
+                    _ => State::NonKeyword,
+                },
+            };
+
+            while direction.advance(&mut cursor, buf.num_graphemes()) {
+                let str = match buf.grapheme_after(cursor) {
+                    Some(str) => str,
+                    _ => break 'repeat,
+                };
+
+                // if ws_included_in_count is true we want to make sure we treat
+                // any contiguous string of whitespace appropriately towards
+                // the overall count, this means that at (NonKeyWord and Keyword)
+                // to Whitespace boundaries we need to break so the count loop
+                // increments one more time. The default behavior just cycles
+                // through Whitespace.
+                match state {
+                    State::Whitespace => match str {
+                        str if str.trim().is_empty() => {}
+                        _ => {
+                            break;
+                        }
+                    },
+                    State::Keyword => match str {
+                        str if str.trim().is_empty() => {
+                            if ws_included_in_count {
+                                break;
+                            } else {
+                                state = State::Whitespace
+                            }
+                        }
+                        str if move_mode == ViMoveMode::Keyword
+                            && !self.keyword_rule.is_vi_keyword(str) =>
+                        {
+                            break
+                        }
+                        _ => {}
+                    },
+                    State::NonKeyword => match str {
+                        str if str.trim().is_empty() => {
+                            if ws_included_in_count {
+                                break;
+                            } else {
+                                state = State::Whitespace
+                            }
+                        }
+                        str if move_mode == ViMoveMode::Keyword
+                            && self.keyword_rule.is_vi_keyword(str) =>
+                        {
+                            break
+                        }
+                        _ => {}
+                    },
+                }
+            }
+        }
+
+        // default positioning of cursor when moving in this manner ends one
+        // position to the left of the desired positioning in vi when moving
+        // and treating whitespace as words for the purposed of text objects.
+        if ws_included_in_count && count > 0 {
+            cursor -= 1;
+        }
+        ed.move_cursor_to(cursor)
+    }
+
+    fn move_to_end_of_word(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Right, count)
+    }
+
+    fn move_to_end_of_word_ws(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Right, count)
+    }
+
+    fn move_word_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Keyword, ViMoveDir::Left, count)
+    }
+
+    fn move_word_ws_back(&self, ed: &mut Editor, count: usize) -> io::Result<()> {
+        self.vi_move_word_end(ed, ViMoveMode::Whitespace, ViMoveDir::Left, count)
+    }
+
+    fn vi_move_word_end(
+        &self,
+        ed: &mut Editor,
+        move_mode: ViMoveMode,
+        direction: ViMoveDir,
+        count: usize,
+    ) -> io::Result<()> {
+        enum State {
+            Whitespace,
+            EndOnWord,
+            EndOnOther,
+            EndOnWhitespace,
+        }
+
+        let mut cursor = ed.cursor();
+        'repeat: for _ in 0..count {
+            let buf = ed.current_buffer();
+            let mut state = State::Whitespace;
+
+            while direction.advance(&mut cursor, buf.num_graphemes()) {
+                let str = match buf.grapheme_after(cursor) {
+                    Some(c) => c,
+                    _ => break 'repeat,
+                };
+
+                match state {
+                    State::Whitespace => match str {
+                        // skip initial whitespace
+                        str if str.trim().is_empty() => {}
+                        // if we are in keyword mode and found a keyword, stop on word
+                        str if move_mode == ViMoveMode::Keyword
+                            && self.keyword_rule.is_vi_keyword(str) =>
+                        {
+                            state = State::EndOnWord;
+                        }
+                        // not in keyword mode, stop on whitespace
+                        _ if move_mode == ViMoveMode::Whitespace => {
+                            state = State::EndOnWhitespace;
+                        }
+                        // in keyword mode, found non-whitespace non-keyword, stop on anything
+                        _ => {
+                            state = State::EndOnOther;
+                        }
+                    },
+                    State::EndOnWord if !self.keyword_rule.is_vi_keyword(str) => {
+                        direction.go_back(&mut cursor, buf.num_graphemes());
+                        break;
+                    }
+                    State::EndOnWhitespace if str.trim().is_empty() => {
+                        direction.go_back(&mut cursor, buf.num_graphemes());
+                        break;
+                    }
+                    State::EndOnOther
+                        if str.trim().is_empty() || self.keyword_rule.is_vi_keyword(str) =>
+                    {
+                        direction.go_back(&mut cursor, buf.num_graphemes());
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        ed.move_cursor_to(cursor)
     }
 }
 
@@ -1649,8 +1714,7 @@ impl KeyMap for Vi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::get_buffer_words;
-    use crate::{Buffer, Completer, Editor, History, KeyMap, Prompt};
+    use crate::{Buffer, Completer, DefaultEditorRules, Editor, History, KeyMap, Prompt};
 
     fn simulate_key_codes<'a, 'b, M: KeyMap, I>(
         keymap: &mut M,
@@ -1704,15 +1768,15 @@ mod tests {
     fn enter_is_done() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1734,15 +1798,15 @@ mod tests {
     fn move_cursor_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1764,15 +1828,15 @@ mod tests {
     fn cursor_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1798,15 +1862,15 @@ mod tests {
     fn move_cursor_start_end() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1836,15 +1900,15 @@ mod tests {
     fn vi_initial_insert() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1872,15 +1936,15 @@ mod tests {
     fn vi_left_right_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1910,15 +1974,15 @@ mod tests {
     fn vi_no_eol() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1946,15 +2010,15 @@ mod tests {
     fn vi_switch_from_insert() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -1990,15 +2054,15 @@ mod tests {
         history.push("data hostory").unwrap();
         history.push("data history").unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2030,15 +2094,15 @@ mod tests {
         history.push("data one").unwrap();
         history.push("skip2").unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2071,15 +2135,15 @@ mod tests {
         history.push("data pat one").unwrap();
         history.push("skip2").unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2162,15 +2226,15 @@ mod tests {
     fn vi_normal_delete() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2197,22 +2261,21 @@ mod tests {
     fn vi_change_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
         map.init(&mut ed);
         ed.insert_str_after_cursor("data data data").unwrap();
         assert_eq!(ed.cursor(), 14);
-
         simulate_key_codes(
             &mut map,
             &mut ed,
@@ -2236,15 +2299,15 @@ mod tests {
     fn vi_change_paste_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2276,15 +2339,15 @@ mod tests {
     fn vi_delete_paste_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2313,15 +2376,15 @@ mod tests {
     fn vi_delete_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2350,15 +2413,15 @@ mod tests {
     fn vi_delete_with_multi_paste() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2388,15 +2451,15 @@ mod tests {
     fn vi_delete_with_multi_paste_backwards() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2426,15 +2489,15 @@ mod tests {
     fn vi_yank_paste_with_text_objects() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2464,15 +2527,15 @@ mod tests {
     fn vi_2delete_paste_with_text_object_aw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2502,15 +2565,15 @@ mod tests {
     fn vi_2delete_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2540,15 +2603,15 @@ mod tests {
     fn vi_2change_paste_with_text_object_aw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2581,15 +2644,15 @@ mod tests {
     fn vi_2change_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2622,15 +2685,15 @@ mod tests {
     fn vi_3yank_paste_with_text_object_aw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2660,15 +2723,15 @@ mod tests {
     fn vi_2yank_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2698,15 +2761,15 @@ mod tests {
     fn vi_4yank_paste_with_text_object_iw() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2736,15 +2799,15 @@ mod tests {
     fn vi_delete_paste_multi_key_esc_sequence() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2780,15 +2843,15 @@ mod tests {
     fn vi_delete_paste() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2818,15 +2881,15 @@ mod tests {
     fn vi_yank_right() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2854,15 +2917,15 @@ mod tests {
     fn vi_yank_2h() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2890,15 +2953,15 @@ mod tests {
     fn vi_2d_l() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2927,15 +2990,15 @@ mod tests {
     fn vi_yank_h() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2962,15 +3025,15 @@ mod tests {
     fn vi_yank_upper_f() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -2998,15 +3061,15 @@ mod tests {
     fn vi_yank_f() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3035,15 +3098,15 @@ mod tests {
     fn vi_yank_t() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3072,15 +3135,15 @@ mod tests {
     fn vi_yank_upper_t() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3108,15 +3171,15 @@ mod tests {
     fn vi_yank_e() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3144,15 +3207,15 @@ mod tests {
     fn vi_change_paste_backward() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3189,15 +3252,15 @@ mod tests {
     fn vi_delete_paste_backward() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3232,15 +3295,15 @@ mod tests {
     fn vi_delete_paste_words() {
         let mut history = History::new();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3276,15 +3339,15 @@ mod tests {
         {
             let mut history = History::new();
             let mut out = Vec::new();
-            let words = Box::new(get_buffer_words);
             let mut buf = String::with_capacity(512);
+            let rules = DefaultEditorRules::default();
             let mut ed = Editor::new(
                 &mut out,
                 Prompt::from("prompt"),
                 None,
                 &mut history,
-                &words,
                 &mut buf,
+                &rules,
             )
             .unwrap();
             let mut map = Vi::new();
@@ -3320,15 +3383,15 @@ mod tests {
     fn vi_substitute_command() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3355,15 +3418,15 @@ mod tests {
     fn substitute_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3391,15 +3454,15 @@ mod tests {
     fn substitute_with_count_repeat() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3432,15 +3495,15 @@ mod tests {
     fn vi_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3467,15 +3530,15 @@ mod tests {
     fn vi_count_overflow() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3563,15 +3626,15 @@ mod tests {
     fn vi_count_overflow_zero() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3654,15 +3717,15 @@ mod tests {
     fn vi_count_cancel() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3689,15 +3752,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3727,15 +3790,15 @@ mod tests {
     fn vi_dot_command() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3761,15 +3824,15 @@ mod tests {
     fn vi_dot_command_repeat() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3795,15 +3858,15 @@ mod tests {
     fn vi_dot_command_repeat_multiple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3831,15 +3894,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3868,15 +3931,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3905,15 +3968,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3946,15 +4009,15 @@ mod tests {
     fn move_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -3973,15 +4036,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4011,15 +4074,15 @@ mod tests {
     fn movement_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4041,15 +4104,15 @@ mod tests {
     fn movement_with_count_then_insert() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4079,15 +4142,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4116,15 +4179,15 @@ mod tests {
     fn basic_replace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4146,15 +4209,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4185,15 +4248,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4223,15 +4286,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4260,15 +4323,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4300,15 +4363,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4342,15 +4405,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4380,15 +4443,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4420,15 +4483,15 @@ mod tests {
     fn move_count_right() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4450,15 +4513,15 @@ mod tests {
     fn move_count_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4480,15 +4543,15 @@ mod tests {
     fn dot_x_delete() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4516,15 +4579,15 @@ mod tests {
     fn delete_line() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4546,15 +4609,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4586,15 +4649,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4624,15 +4687,15 @@ mod tests {
     fn delete_char_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4653,15 +4716,15 @@ mod tests {
     fn delete_chars_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4689,15 +4752,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4725,15 +4788,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4762,15 +4825,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4799,15 +4862,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4834,15 +4897,15 @@ mod tests {
     fn delete_until_end_shift_d() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4864,15 +4927,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4900,15 +4963,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4938,15 +5001,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -4975,15 +5038,15 @@ mod tests {
     fn move_to_end_of_word_simple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -4993,8 +5056,8 @@ mod tests {
         let end_pos = ed.cursor();
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
-
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5002,15 +5065,15 @@ mod tests {
     fn move_to_end_of_word_comma() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5023,9 +5086,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5033,15 +5097,15 @@ mod tests {
     fn move_to_end_of_word_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5054,9 +5118,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5064,15 +5129,15 @@ mod tests {
     fn move_to_end_of_word_whitespace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5087,7 +5152,8 @@ mod tests {
         ed.move_cursor_to(start_pos).unwrap();
         assert_eq!(ed.cursor(), 8);
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), 17);
     }
 
@@ -5095,15 +5161,15 @@ mod tests {
     fn move_to_end_of_word_whitespace_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5116,9 +5182,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5126,15 +5193,15 @@ mod tests {
     fn move_to_end_of_word_ws_simple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5144,8 +5211,8 @@ mod tests {
         let end_pos = ed.cursor();
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
-
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5153,15 +5220,15 @@ mod tests {
     fn move_to_end_of_word_ws_comma() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5174,9 +5241,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5184,15 +5252,15 @@ mod tests {
     fn move_to_end_of_word_ws_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5202,7 +5270,8 @@ mod tests {
         let end_pos = ed.cursor();
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5210,15 +5279,15 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5229,7 +5298,8 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5237,15 +5307,15 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5258,9 +5328,10 @@ mod tests {
         ed.insert_str_after_cursor("e words").unwrap();
         ed.move_cursor_to(start_pos).unwrap();
 
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos1);
-        super::move_to_end_of_word_ws(&mut ed, 1).unwrap();
+        vi.move_to_end_of_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), end_pos2);
     }
 
@@ -5268,15 +5339,15 @@ mod tests {
     fn move_word_simple() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5287,15 +5358,16 @@ mod tests {
         ed.insert_str_after_cursor("some words").unwrap();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
     }
 
@@ -5303,15 +5375,15 @@ mod tests {
     fn move_word_whitespace() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5321,15 +5393,16 @@ mod tests {
         let pos2 = ed.cursor();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
     }
 
@@ -5337,15 +5410,15 @@ mod tests {
     fn move_word_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5355,13 +5428,14 @@ mod tests {
         let pos2 = ed.cursor();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
     }
 
@@ -5369,15 +5443,15 @@ mod tests {
     fn move_word_whitespace_nonkeywords() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5389,15 +5463,16 @@ mod tests {
         let pos3 = ed.cursor();
         ed.move_cursor_to_start_of_line().unwrap();
 
-        super::move_word(&mut ed, 1).unwrap();
+        let vi = Vi::new();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos3);
     }
 
@@ -5405,15 +5480,15 @@ mod tests {
     fn move_word_and_back() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5430,46 +5505,47 @@ mod tests {
 
         // make sure move_word() and move_word_back() are reflections of eachother
 
+        let vi = Vi::new();
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos3);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word(&mut ed, 1).unwrap();
+        vi.move_word(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos5);
 
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos3);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_back(&mut ed, 1).unwrap();
+        vi.move_word_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), 0);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word_ws(&mut ed, 1).unwrap();
+        vi.move_word_ws(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos5);
 
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos4);
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws_back(&mut ed, 1).unwrap();
+        vi.move_word_ws_back(&mut ed, 1).unwrap();
         assert_eq!(ed.cursor(), 0);
     }
 
@@ -5477,15 +5553,15 @@ mod tests {
     fn move_word_and_back_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5498,27 +5574,28 @@ mod tests {
         ed.insert_str_after_cursor("words").unwrap();
         let pos3 = ed.cursor();
 
+        let vi = Vi::new();
         // make sure move_word() and move_word_back() are reflections of eachother
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word(&mut ed, 3).unwrap();
+        vi.move_word(&mut ed, 3).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word(&mut ed, 2).unwrap();
+        vi.move_word(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos3);
 
-        super::move_word_back(&mut ed, 2).unwrap();
+        vi.move_word_back(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos2);
-        super::move_word_back(&mut ed, 3).unwrap();
+        vi.move_word_back(&mut ed, 3).unwrap();
         assert_eq!(ed.cursor(), 0);
 
         ed.move_cursor_to_start_of_line().unwrap();
-        super::move_word_ws(&mut ed, 2).unwrap();
+        vi.move_word_ws(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws(&mut ed, 2).unwrap();
+        vi.move_word_ws(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos3);
 
-        super::move_word_ws_back(&mut ed, 2).unwrap();
+        vi.move_word_ws_back(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), pos1);
-        super::move_word_ws_back(&mut ed, 2).unwrap();
+        vi.move_word_ws_back(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), 0);
     }
 
@@ -5526,15 +5603,15 @@ mod tests {
     fn move_to_end_of_word_ws_whitespace_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -5546,7 +5623,8 @@ mod tests {
         ed.insert_str_after_cursor("s and some").unwrap();
 
         ed.move_cursor_to(start_pos).unwrap();
-        super::move_to_end_of_word_ws(&mut ed, 2).unwrap();
+        let vi = Vi::new();
+        vi.move_to_end_of_word_ws(&mut ed, 2).unwrap();
         assert_eq!(ed.cursor(), end_pos);
     }
 
@@ -5556,15 +5634,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5592,15 +5670,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5630,15 +5708,15 @@ mod tests {
     fn change_char_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5666,15 +5744,15 @@ mod tests {
     fn change_chars_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5702,15 +5780,15 @@ mod tests {
     fn change_char_right() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5739,15 +5817,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5781,15 +5859,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5823,15 +5901,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5861,15 +5939,15 @@ mod tests {
     fn change_until_end_shift_c() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5898,15 +5976,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5938,15 +6016,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -5980,15 +6058,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6024,15 +6102,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6065,15 +6143,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6106,15 +6184,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6152,15 +6230,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6186,15 +6264,15 @@ mod tests {
     fn test_t_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6221,15 +6299,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6256,15 +6334,15 @@ mod tests {
     fn test_t_movement_then_normal() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6292,15 +6370,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6329,15 +6407,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6368,15 +6446,15 @@ mod tests {
     fn test_f_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6402,15 +6480,15 @@ mod tests {
     fn test_cap_t_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6436,15 +6514,15 @@ mod tests {
     fn test_cap_f_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6470,15 +6548,15 @@ mod tests {
     fn test_semi_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6505,15 +6583,15 @@ mod tests {
     fn test_comma_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6541,15 +6619,15 @@ mod tests {
     fn test_semi_delete() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6579,15 +6657,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6617,15 +6695,15 @@ mod tests {
     fn test_find_char() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6637,15 +6715,15 @@ mod tests {
     fn test_find_char_with_start() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6657,15 +6735,15 @@ mod tests {
     fn test_find_char_unicode() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
@@ -6678,15 +6756,15 @@ mod tests {
     fn test_find_char_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6698,15 +6776,15 @@ mod tests {
     fn test_find_char_not_found() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6718,15 +6796,15 @@ mod tests {
     fn test_find_char_rev() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6741,15 +6819,15 @@ mod tests {
     fn test_find_char_rev_with_start() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6764,15 +6842,15 @@ mod tests {
     fn test_find_char_rev_unicode() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abc\u{938}\u{94d}\u{924}\u{947}abc")
@@ -6788,15 +6866,15 @@ mod tests {
     fn test_find_char_rev_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcabc").unwrap();
@@ -6811,15 +6889,15 @@ mod tests {
     fn test_find_char_rev_not_found() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("abcdefg").unwrap();
@@ -6831,15 +6909,15 @@ mod tests {
     fn test_undo_with_counts() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6868,15 +6946,15 @@ mod tests {
     fn test_redo_with_counts() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6910,15 +6988,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6952,15 +7030,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -6991,15 +7069,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7032,15 +7110,15 @@ mod tests {
         let mut out = Vec::new();
         let mut history = History::new();
         history.push(Buffer::from("insert-xxx")).unwrap();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7087,15 +7165,15 @@ mod tests {
         let mut history = History::new();
         history.push(Buffer::from("")).unwrap();
         let mut out = Vec::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7130,15 +7208,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7178,15 +7256,15 @@ mod tests {
     fn undo_3x() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7215,15 +7293,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7263,15 +7341,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7305,15 +7383,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7350,15 +7428,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7397,15 +7475,15 @@ mod tests {
         let mut out = Vec::new();
 
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7433,15 +7511,15 @@ mod tests {
     fn tilde_basic() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7457,15 +7535,15 @@ mod tests {
     fn tilde_basic2() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7485,15 +7563,15 @@ mod tests {
     fn tilde_move() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7519,15 +7597,15 @@ mod tests {
     fn tilde_repeat() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7547,15 +7625,15 @@ mod tests {
     fn tilde_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7582,15 +7660,15 @@ mod tests {
     fn tilde_count_short() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7616,15 +7694,15 @@ mod tests {
     fn tilde_nocase() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7650,15 +7728,15 @@ mod tests {
     fn ctrl_h() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7679,15 +7757,15 @@ mod tests {
     fn repeat_char_move_no_char() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7706,15 +7784,15 @@ mod tests {
     fn test_yank_and_put_back() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7741,15 +7819,15 @@ mod tests {
     fn test_delete_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7777,15 +7855,15 @@ mod tests {
     fn test_delete_surround_empty_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7812,15 +7890,15 @@ mod tests {
     fn test_delete_surround_text_object_paste() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7850,15 +7928,15 @@ mod tests {
     fn test_delete_surround_text_object_over_match_character_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7886,15 +7964,15 @@ mod tests {
     fn test_delete_surround_text_object_over_match_character_no_match() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7922,15 +8000,15 @@ mod tests {
     fn test_yank_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7961,15 +8039,15 @@ mod tests {
     fn test_change_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -7996,15 +8074,15 @@ mod tests {
     fn test_change_and_insert_surround_text_object() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8039,15 +8117,15 @@ mod tests {
     fn test_yank_and_delete_surround_xml() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8086,15 +8164,15 @@ mod tests {
     fn test_do_not_match_asymmetrical_surround_objects() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8122,15 +8200,15 @@ mod tests {
     fn test_do_not_match_unbalanced_asymmetrical_surround_objects_close() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8158,15 +8236,15 @@ mod tests {
     fn test_do_not_match_unbalanced_asymmetrical_surround_objects_open() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8193,15 +8271,15 @@ mod tests {
     fn test_do_not_match_surround_balanced_text_objects_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();
@@ -8231,15 +8309,15 @@ mod tests {
     fn test_match_surround_balanced_text_objects_with_count() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         let mut map = Vi::new();

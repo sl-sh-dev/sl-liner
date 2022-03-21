@@ -6,16 +6,15 @@ use crate::context::ColorClosure;
 use crate::cursor::CursorPosition;
 use crate::event::*;
 use crate::prompt::Prompt;
-use crate::{util, Terminal};
+use crate::{util, Completer, EditorRules, Terminal};
 use crate::{Buffer, Cursor};
 use crate::{History, Metrics};
-
-use super::complete::Completer;
 
 /// The core line editor. Displays and provides editing for history and the new buffer.
 pub struct Editor<'a> {
     prompt: Prompt,
     history: &'a mut History,
+    editor_rules: &'a dyn EditorRules,
 
     // w/ buffer and pos/count directives maintain the location of the terminal's
     // cursor
@@ -83,10 +82,10 @@ impl<'a> Editor<'a> {
         prompt: Prompt,
         f: Option<ColorClosure>,
         history: &'a mut History,
-        word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
+        editor_rules: &'a dyn EditorRules,
     ) -> io::Result<Self> {
-        Editor::new_with_init_buffer(out, prompt, f, history, word_divider_fn, buf, Buffer::new())
+        Editor::new_with_init_buffer(out, prompt, f, history, buf, Buffer::new(), editor_rules)
     }
 
     pub fn new_with_init_buffer<B: Into<Buffer>>(
@@ -94,15 +93,16 @@ impl<'a> Editor<'a> {
         prompt: Prompt,
         f: Option<ColorClosure>,
         history: &'a mut History,
-        word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
         buf: &'a mut String,
         buffer: B,
+        editor_rules: &'a dyn EditorRules,
     ) -> io::Result<Self> {
         let mut term = Terminal::new(f, buf, out);
         let prompt = term.make_prompt(prompt)?;
         let mut ed = Editor {
             prompt,
-            cursor: Cursor::new(word_divider_fn),
+            editor_rules,
+            cursor: Cursor::new_with_divider(&*editor_rules),
             new_buf: buffer.into(),
             hist_buf: Buffer::new(),
             hist_buf_valid: false,
@@ -177,19 +177,18 @@ impl<'a> Editor<'a> {
             return Ok(false);
         }
 
-        let last_char = cur_buf!(self).last();
-        if last_char == Some("\\") {
-            let buf = cur_buf_mut!(self);
-            buf.push('\n');
-            self.cursor.move_cursor_to_end_of_line(buf);
-            self.display_term()?;
-            Ok(false)
-        } else {
+        let buf = cur_buf_mut!(self);
+        if self.editor_rules.evaluate_on_newline(buf) {
             self.cursor.move_cursor_to_end_of_line(cur_buf!(self));
             self.display_term_with_autosuggest(false)?;
             self.term.write_newline()?;
             self.show_completions_hint = None;
             Ok(true)
+        } else {
+            buf.push('\n');
+            self.cursor.move_cursor_to_end_of_line(buf);
+            self.display_term()?;
+            Ok(false)
         }
     }
 
@@ -850,9 +849,8 @@ impl<'a> From<Editor<'a>> for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::context::get_buffer_words;
     use crate::prompt::Prompt;
-    use crate::History;
+    use crate::{DefaultEditorRules, History};
 
     use super::*;
 
@@ -861,15 +859,15 @@ mod tests {
     fn delete_all_after_cursor_undo() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -884,15 +882,15 @@ mod tests {
     fn move_cursor_multiline() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("let\\").unwrap();
@@ -909,15 +907,15 @@ mod tests {
     fn move_cursor_left() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("let").unwrap();
@@ -935,15 +933,15 @@ mod tests {
     fn test_handle_newline() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
 
@@ -958,15 +956,15 @@ mod tests {
     fn cursor_movement() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -981,15 +979,15 @@ mod tests {
     fn delete_until_backwards() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1004,15 +1002,15 @@ mod tests {
     fn delete_until_forwards() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1027,15 +1025,15 @@ mod tests {
     fn delete_until() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1050,15 +1048,15 @@ mod tests {
     fn delete_until_inclusive() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();
@@ -1073,17 +1071,17 @@ mod tests {
     fn test_cursor_when_init_buffer_is_not_empty() {
         let mut out = Vec::new();
         let mut history = History::new();
-        let words = Box::new(get_buffer_words);
         let mut buf = String::with_capacity(512);
         let buffer = Buffer::from("\u{1f469}\u{200d}\u{1f4bb} start here_".to_owned());
+        let rules = DefaultEditorRules::default();
         let mut ed = Editor::new_with_init_buffer(
             &mut out,
             Prompt::from("prompt"),
             None,
             &mut history,
-            &words,
             &mut buf,
             buffer,
+            &rules,
         )
         .unwrap();
         ed.insert_str_after_cursor("right").unwrap();

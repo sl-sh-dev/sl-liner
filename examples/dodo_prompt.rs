@@ -2,15 +2,21 @@ extern crate regex;
 extern crate sl_console;
 extern crate sl_liner;
 
+use std::collections::{HashMap, HashSet};
 use std::env::{args, current_dir};
 use std::io;
+use std::iter::FromIterator;
 use std::mem::replace;
 
 use regex::Regex;
 use sl_console::color;
 
 use sl_liner::cursor::CursorPosition;
-use sl_liner::keymap;
+use sl_liner::vi::{AlphanumericAndVariableKeywordRule, ViKeywordRule};
+use sl_liner::{
+    keymap, last_non_ws_char_was_not_backslash, Buffer, DefaultEditorRules, DefaultWordDivideRule,
+    NewlineRule,
+};
 use sl_liner::{Completer, Context, Event, EventKind, FilenameCompleter, Prompt};
 
 // This prints out the text back onto the screen
@@ -77,8 +83,110 @@ impl Completer for CommentCompleter {
     }
 }
 
+pub struct NewlineForBackslashAndOpenDelimRule<'a> {
+    string_delimiter: &'a str,
+    delimiters: Vec<(&'a str, &'a str)>,
+}
+
+impl NewlineRule for NewlineForBackslashAndOpenDelimRule<'_> {
+    fn evaluate_on_newline(&self, buf: &Buffer) -> bool {
+        last_non_ws_char_was_not_backslash(buf)
+            && check_balanced_delimiters(buf, &self.delimiters, &self.string_delimiter)
+    }
+}
+
+fn map_right_to_left_delimiters<'a>(
+    delimiters: &Vec<(&'a str, &'a str)>,
+) -> HashMap<&'a str, &'a str> {
+    let mut delim_map = HashMap::new();
+    for (left, right) in delimiters {
+        delim_map.insert(*right, *left);
+    }
+    delim_map
+}
+
+pub fn check_balanced_delimiters(
+    buf: &Buffer,
+    delimiters: &Vec<(&str, &str)>,
+    string_delimiter: &str,
+) -> bool {
+    let delim_map = map_right_to_left_delimiters(delimiters);
+    let left_delimiters: HashSet<&str> =
+        HashSet::from_iter(delimiters.iter().map(|(left, _)| *left));
+    let right_delimiters: HashSet<&str> =
+        HashSet::from_iter(delimiters.iter().map(|(_, right)| *right));
+    let mut open_delims = HashMap::new();
+    let buf_vec = buf.range_graphemes_all();
+    let mut outside_string_delimiter = true;
+    for c in buf_vec {
+        match c {
+            c if outside_string_delimiter && left_delimiters.contains(c) => {
+                if let Some(&count) = open_delims.get(c) {
+                    open_delims.insert(c, count + 1);
+                } else {
+                    open_delims.insert(c, 1);
+                }
+            }
+            c if outside_string_delimiter && right_delimiters.contains(c) => {
+                let opposite = delim_map.get(c);
+                if let Some(opposite) = opposite {
+                    if let Some(&count) = open_delims.get(opposite) {
+                        if count == 1 {
+                            open_delims.remove(opposite);
+                        } else {
+                            open_delims.insert(opposite, count - 1);
+                        }
+                    }
+                }
+            }
+            _ if c == string_delimiter => {
+                outside_string_delimiter = !outside_string_delimiter;
+            }
+            _ => {}
+        }
+    }
+    outside_string_delimiter && open_delims.is_empty()
+}
+
+pub struct ViKeywordWithKebabCase {}
+
+impl ViKeywordWithKebabCase {
+    pub fn new() -> Self {
+        ViKeywordWithKebabCase {}
+    }
+}
+
+impl ViKeywordRule for ViKeywordWithKebabCase {
+    fn is_vi_keyword(&self, str: &str) -> bool {
+        let mut ret = false;
+        if str == "_" || str == "-" {
+            ret = true
+        } else if !str.trim().is_empty() {
+            for c in str.chars() {
+                if c.is_alphanumeric() {
+                    ret = true;
+                } else {
+                    ret = false;
+                    break;
+                }
+            }
+        }
+        ret
+    }
+}
+
 fn main() {
     let mut con = Context::new();
+    let delimiters = vec![("{", "}"), ("(", ")"), ("[", "]")];
+    let string_delimiter = "\"";
+    let editor_rules = DefaultEditorRules::custom(
+        DefaultWordDivideRule {},
+        NewlineForBackslashAndOpenDelimRule {
+            delimiters,
+            string_delimiter,
+        },
+    );
+    con.set_editor_rules(Box::new(editor_rules));
     con.set_completer(Box::new(CommentCompleter { inner: None }));
 
     let history_file = match args().nth(1) {
@@ -111,7 +219,12 @@ fn main() {
                         println!("emacs mode");
                     }
                     "vi" => {
-                        con.set_keymap(Box::new(keymap::Vi::new()));
+                        let mut vi = keymap::Vi::new();
+                        let vi_keywords = vec!["_", "-"];
+                        vi.set_keyword_rule(Box::new(AlphanumericAndVariableKeywordRule::new(
+                            vi_keywords,
+                        )));
+                        con.set_keymap(Box::new(vi));
                         println!("vi mode");
                     }
                     "exit" => {

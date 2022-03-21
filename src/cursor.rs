@@ -1,5 +1,7 @@
-use crate::Buffer;
+//! Track current grapheme offset for terminal cursor
 use std::cmp;
+
+use crate::{Buffer, EditorRules};
 
 /// Represents the position of the cursor relative to words in the buffer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,7 +62,7 @@ pub struct Cursor<'a> {
     curr_grapheme: usize,
     // function to determine how to split words, returns vector of tuples representing index
     // and length of word.
-    word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>,
+    word_divider_fn: &'a dyn EditorRules,
 
     // if set, the cursor will not be allow to move one past the end of the line, this is necessary
     // for Vi's normal mode.
@@ -68,10 +70,10 @@ pub struct Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
-    pub fn new(word_divider_fn: &'a dyn Fn(&Buffer) -> Vec<(usize, usize)>) -> Self {
+    pub fn new_with_divider(divider: &'a dyn EditorRules) -> Self {
         Cursor {
             curr_grapheme: 0,
-            word_divider_fn,
+            word_divider_fn: divider,
             no_eol: false,
         }
     }
@@ -103,8 +105,7 @@ impl<'a> Cursor<'a> {
         &self,
         buf: &Buffer,
     ) -> (Vec<(usize, usize)>, CursorPosition) {
-        let word_fn = &self.word_divider_fn;
-        let words = word_fn(buf);
+        let words = self.word_divider_fn.divide_words(buf);
         let pos = CursorPosition::get(self.curr_grapheme, &words);
         (words, pos)
     }
@@ -261,13 +262,14 @@ impl<'a> Cursor<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::DefaultEditorRules;
+
     use super::*;
-    use crate::get_buffer_words;
 
     #[test]
     fn test_clamp_if_pos_is_past_move() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         let mut buf = Buffer::from("01234".to_owned());
         cur.move_cursor_to(&buf, 100);
@@ -291,8 +293,8 @@ mod tests {
 
     #[test]
     fn test_clear_exit_for_female_scientist() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         // put some emojis in some strings
         let male_scientist = "\u{1f468}\u{200d}\u{1f52c}".to_owned();
@@ -317,8 +319,8 @@ mod tests {
 
     #[test]
     fn test_insert_chars_between_graphemes() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
         let useful_tools = "\u{1f5a5}\u{fe0f}\u{1d4e2}\u{2aff} \u{1d05e} \
@@ -337,8 +339,8 @@ mod tests {
 
     #[test]
     fn test_move_cursor() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
         let str = format!("{}{}", female_technologist, female_technologist);
@@ -350,8 +352,8 @@ mod tests {
 
     #[test]
     fn test_insert_chars_before_cursor() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
         let useful_tools = "\u{1f5a5}\u{fe0f}\u{1d4e2}\u{2aff} \u{1d05e} \
@@ -366,8 +368,8 @@ mod tests {
 
     #[test]
     fn test_insert_chars_after_cursor() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         let female_technologist = "\u{1f469}\u{200d}\u{1f4bb}".to_owned();
         let useful_tools = "\u{1f5a5}\u{fe0f}\u{1d4e2}\u{2aff} \u{1d05e} \
@@ -383,8 +385,8 @@ mod tests {
 
     #[test]
     fn test_clamp_pre_display_adjustments() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         let buf = Buffer::from("hello".to_owned());
         cur.curr_grapheme = 8;
@@ -394,8 +396,8 @@ mod tests {
 
     #[test]
     fn test_yank_and_paste() {
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
 
         let mut buf = Buffer::from("hello hello".to_owned());
         cur.move_cursor_to(&buf, 6);

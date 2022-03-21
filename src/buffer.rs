@@ -75,17 +75,7 @@ impl Eq for Buffer {}
 
 impl From<Buffer> for String {
     fn from(buf: Buffer) -> Self {
-        let mut to = String::new();
-        let mut buf_iter = buf.data.chars().peekable();
-        while let Some(ch) = buf_iter.next() {
-            if ch == '\\' && buf_iter.peek() == Some(&'\n') {
-                // '\\' followed by newline, ignore both.
-                buf_iter.next();
-                continue;
-            }
-            to.push(ch);
-        }
-        to
+        buf.data
     }
 }
 
@@ -783,13 +773,6 @@ mod tests {
         let mut buf3 = Buffer::new();
         buf3.insert(0, ['x', 'y', 'z'].iter());
         assert_eq!(buf2.eq(&buf3), true);
-    }
-
-    #[test]
-    fn test_buffer_to_string_ignore_newline() {
-        let mut buf = Buffer::new();
-        buf.insert(0, ['h', 'e', '\\', '\n', 'l', 'l', 'o'].iter());
-        assert_eq!("hello".to_owned(), String::from(buf));
     }
 
     #[test]

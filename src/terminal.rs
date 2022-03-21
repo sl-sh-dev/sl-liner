@@ -7,7 +7,7 @@ use std::fmt::Write;
 use std::io;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Metrics {
+pub(crate) struct Metrics {
     width: usize,
     prompt_width: usize,
     new_total_width: usize,
@@ -361,7 +361,7 @@ impl<'a> Terminal<'a> {
         Ok(())
     }
 
-    pub fn display(&mut self, metrics: Metrics, completion_lines: usize) -> io::Result<()> {
+    pub(crate) fn display(&mut self, metrics: Metrics, completion_lines: usize) -> io::Result<()> {
         // at the end of the line, move the cursor down a line
         if metrics.at_end_of_line() {
             self.buf.push_str("\r\n");
@@ -421,14 +421,14 @@ impl<'a> Terminal<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::get_buffer_words;
+    use crate::DefaultEditorRules;
 
     #[test]
     fn test_metrics_cursor_beg_no_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let cur = Cursor::new_with_divider(&rules);
 
         let buf = Buffer::from("hello hello".to_owned());
         let autosuggestion = Buffer::default();
@@ -444,8 +444,8 @@ mod tests {
     fn test_metrics_cursor_end_no_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("".to_owned());
@@ -461,8 +461,8 @@ mod tests {
     fn test_metrics_cursor_beg_with_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello".to_owned());
         let autosuggestion = Buffer::from("hello hello hello".to_owned());
         let m = Metrics::new(prompt, &buf, &cur, Some(&autosuggestion)).unwrap();
@@ -477,8 +477,8 @@ mod tests {
     fn test_metrics_cursor_end_with_autosuggestion() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("hello hello hello".to_owned());
@@ -494,8 +494,8 @@ mod tests {
     fn test_metrics_cursor_multiline() {
         let prompt = "&>";
 
-        let word_divider_fcn = &Box::new(get_buffer_words);
-        let mut cur = Cursor::new(word_divider_fcn);
+        let rules = DefaultEditorRules::default();
+        let mut cur = Cursor::new_with_divider(&rules);
         let buf = Buffer::from("hello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\nhello hello\n".to_owned());
         cur.move_cursor_to_end_of_line(&buf);
         let autosuggestion = Buffer::from("".to_owned());
